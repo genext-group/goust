@@ -9,6 +9,7 @@ const COR: Record<Tarefa['status'], 'default' | 'accent' | 'success' | 'danger' 
   'na fila': 'default',
   listando: 'accent',
   baixando: 'accent',
+  'comentários': 'accent',
   concluído: 'success',
   erro: 'danger',
   cancelado: 'warning',
@@ -29,7 +30,7 @@ const descreverModo = (t: Tarefa) => {
   )
 }
 
-export const ativa = (t: Tarefa) => ['na fila', 'listando', 'baixando'].includes(t.status)
+export const ativa = (t: Tarefa) => ['na fila', 'listando', 'baixando', 'comentários'].includes(t.status)
 
 export function TelaDownloads({ tarefas, aoMudar }: { tarefas: Tarefa[]; aoMudar: () => void }) {
   const nuvem = useNuvem()
@@ -148,6 +149,7 @@ function LinhaTarefa({ t, aoMudar }: { t: Tarefa; aoMudar: () => void }) {
         )}
         <span>{t.baixados} {nuvem ? 'catalogados' : 'baixados'}</span>
         {t.pulados > 0 && <span>{t.pulados} já existiam</span>}
+        {!!t.comentarios && <span>{t.comentarios} comentários</span>}
         {t.erros > 0 && <span className="text-danger">{t.erros} erros</span>}
         {t.logs.length > 0 && <span className="truncate">{t.logs[t.logs.length - 1].slice(9)}</span>}
       </div>

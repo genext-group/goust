@@ -1,6 +1,8 @@
 """Análise de um vídeo: transcrição do áudio + quadros-chave + legenda + métricas → JSON."""
 import base64
 import tempfile
+
+from curl_cffi import requests
 from pathlib import Path
 from typing import Literal
 
@@ -23,7 +25,7 @@ class Gancho(BaseModel):
 class AnaliseVideo(BaseModel):
     resumo: str
     gancho: Gancho
-    formato: Literal["talking_head", "tutorial_tela", "demonstracao_produto", "depoimento", "esquete_humor",
+    formato: Literal["carrossel_educativo", "carrossel_storytelling", "foto_unica", "talking_head", "tutorial_tela", "demonstracao_produto", "depoimento", "esquete_humor",
                      "trend_meme", "bastidores", "storytelling", "lista_dicas", "entrevista_podcast",
                      "anuncio_produzido", "ugc_influenciador", "slides_texto", "outro"]
     pilar: str
@@ -91,6 +93,8 @@ def analisar(v, metricas_conta=None, forcar=False):
     existente = obter(v["plataforma"], v["id"])
     if existente and not forcar and existente.get("versao") == VERSAO:
         return existente
+    if v.get("tipo") in ("carrossel", "foto"):
+        return _analisar_imagens(v, metricas_conta)
 
     # local: o arquivo baixado; nuvem: baixa só para analisar e apaga em seguida
     local = PASTA_DOWNLOADS / v["plataforma"] / v["conta"] / v["arquivo"] if v.get("arquivo") else None
@@ -128,6 +132,63 @@ def analisar(v, metricas_conta=None, forcar=False):
         "transcricao": transcricao,
         **analise.model_dump(),
     }
+    pid = catalogo.post_id(v["plataforma"], v["id"])
+    if pid:
+        db.executar("""insert into analises_video (post_id, versao, dados) values (%s, %s, %s)
+                       on conflict (post_id) do update set versao = excluded.versao, dados = excluded.dados, criado_em = now()""",
+                    pid, VERSAO, resultado)
+    return resultado
+
+
+def _imagens_do_post(v):
+    """Slides do carrossel (ou a foto). Os links da CDN expiram, então pede a versão atual à API de dados;
+    sem a API, usa a capa guardada."""
+    from ..fontes import scrapecreators
+    from .. import armazenamento
+    urls = []
+    if scrapecreators.ativo() and v["plataforma"] == "instagram":
+        try:
+            urls = scrapecreators.post_instagram(v["id"])[:8]
+        except Exception:
+            urls = []
+    imagens = []
+    for u in urls:
+        try:
+            r = requests.get(u, impersonate="chrome", timeout=30)
+            if r.status_code == 200:
+                imagens.append(base64.b64encode(r.content).decode())
+        except Exception:
+            pass
+    if not imagens:
+        capa = armazenamento.imagem_ler(midia.chave_thumb(v["plataforma"], v["id"]))
+        if capa:
+            imagens = [base64.b64encode(capa).decode()]
+    return imagens
+
+
+def _analisar_imagens(v, metricas_conta):
+    """Carrossel ou foto: lê os slides + legenda + métricas (sem áudio)."""
+    imagens = _imagens_do_post(v)
+    if not imagens:
+        raise RuntimeError("Não foi possível obter as imagens do post.")
+    rel = ""
+    if metricas_conta and v.get("likes") and metricas_conta.get("mediana_likes"):
+        rel = f" Curtidas = {v['likes'] / metricas_conta['mediana_likes']:.1f}x a mediana da conta."
+    texto = "\n".join([
+        f"Post do tipo {v['tipo'].upper()} com {len(imagens)} imagem(ns), em ordem (a primeira é a capa = o gancho).",
+        f"Conta: @{v['conta']} ({v['plataforma']}) · publicado em {v['data'] or 'data desconhecida'}",
+        f"Curtidas: {v.get('likes')} · comentários: {v.get('comentarios')}.{rel}",
+        "",
+        "Legenda:",
+        (v.get("legenda") or "(sem legenda)")[:2500],
+        "",
+        "Não há áudio: 'frase_ou_texto' do gancho é o texto da capa; 'texto_na_tela' lista os textos dos slides.",
+    ])
+    conteudo = [{"role": "user", "content": [{"type": "input_text", "text": texto}] + [
+        {"type": "input_image", "image_url": f"data:image/jpeg;base64,{q}", "detail": "low"} for q in imagens]}]
+    analise = cliente.estruturado("video", INSTRUCOES, conteudo, AnaliseVideo, esforco="low")
+    resultado = {"versao": VERSAO, "plataforma": v["plataforma"], "conta": v["conta"], "id": v["id"],
+                 "duracao": None, "transcricao": "", "tipo": v["tipo"], **analise.model_dump()}
     pid = catalogo.post_id(v["plataforma"], v["id"])
     if pid:
         db.executar("""insert into analises_video (post_id, versao, dados) values (%s, %s, %s)

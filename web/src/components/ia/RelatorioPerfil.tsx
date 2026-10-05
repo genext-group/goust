@@ -79,6 +79,48 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
         </div>
       </Secao>
 
+      {/* Perfil, cadência e voz do público (relatórios a partir da versão 2) */}
+      {(rel.perfil_e_bio?.length || rel.cadencia) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {!!rel.perfil_e_bio?.length && (
+            <Secao titulo="Perfil e bio" icone={<Target />} descricao="Bio, links e chamada para ação do perfil.">
+              <ListaItens secao="perfil_e_bio" itens={rel.perfil_e_bio} />
+            </Secao>
+          )}
+          {rel.cadencia && (
+            <Secao titulo="Cadência" icone={<ChartLine />} descricao="Quando publicam e quando performa melhor (horário de Brasília).">
+              <ul className="divide-y linha-fina [&>li]:linha-fina">
+                <Insight secao="cadencia" texto={rel.cadencia.resumo} />
+              </ul>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Rotulos titulo="Melhores dias" itens={rel.cadencia.melhores_dias} />
+                <Rotulos titulo="Melhores horários" itens={rel.cadencia.melhores_horarios} />
+              </div>
+              <p className="mt-3 rounded-xl border-l-2 border-accent bg-surface-secondary px-3 py-2 text-sm leading-relaxed">
+                <span className="font-medium text-accent">Para você: </span>{rel.cadencia.frequencia_recomendada}
+              </p>
+            </Secao>
+          )}
+        </div>
+      )}
+
+      {rel.voz_do_publico && (
+        <Secao titulo="Voz do público" icone={<Comments />}
+          descricao="O que as pessoas perguntam, objetam, pedem e elogiam nos comentários. Matéria-prima de roteiro.">
+          <p className="mb-2 text-[15px] leading-relaxed">{rel.voz_do_publico.sentimento_geral}</p>
+          <div className="grid gap-x-8 lg:grid-cols-2">
+            {([['duvidas', 'Dúvidas'], ['objecoes', 'Objeções'], ['pedidos', 'Pedidos'], ['elogios', 'Elogios']] as const).map(([k, nome]) =>
+              rel.voz_do_publico![k].length ? (
+                <div key={k} className="mt-3">
+                  <p className="text-xs tracking-wide text-muted uppercase">{nome}</p>
+                  <ListaItens secao={`voz.${k}`} itens={rel.voz_do_publico![k]} />
+                </div>
+              ) : null,
+            )}
+          </div>
+        </Secao>
+      )}
+
       {/* O que diz */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Secao titulo="Mensagens centrais" icone={<Megaphone />}><ListaItens secao="mensagens_centrais" itens={rel.mensagens_centrais} /></Secao>
@@ -159,6 +201,17 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
       <p className="pb-4 text-center text-xs text-muted">
         Baseado em {r.videos_analisados.length} vídeos analisados (áudio, imagem e legenda). Passe o mouse num insight para avaliá-lo.
       </p>
+    </div>
+  )
+}
+
+function Rotulos({ titulo, itens }: { titulo: string; itens: string[] }) {
+  return (
+    <div>
+      <p className="text-xs tracking-wide text-muted uppercase">{titulo}</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {itens.map((x) => <span key={x} className="rounded-full bg-surface-secondary px-2.5 py-1 text-sm">{x}</span>)}
+      </div>
     </div>
   )
 }

@@ -80,9 +80,27 @@ class Notas(BaseModel):
     justificativa: str
 
 
+class Cadencia(BaseModel):
+    resumo: str
+    melhores_dias: list[str]
+    melhores_horarios: list[str]
+    frequencia_recomendada: str
+
+
+class VozDoPublico(BaseModel):
+    sentimento_geral: str
+    duvidas: list[Item]
+    objecoes: list[Item]
+    pedidos: list[Item]
+    elogios: list[Item]
+
+
 class Relatorio(BaseModel):
     resumo_executivo: str
     posicionamento: Posicionamento
+    perfil_e_bio: list[Item]
+    cadencia: Cadencia
+    voz_do_publico: VozDoPublico
     mensagens_centrais: list[Item]
     dores_e_desejos: list[Item]
     provas_e_argumentos: list[Item]
@@ -116,7 +134,17 @@ Como escrever:
 - 'mudancas_desde_ultima_analise': compare com o relatório anterior se houver; senão compare os últimos 30 dias
   com o período anterior. Se não houver mudança relevante, devolva lista vazia.
 - 'notas' de 0 a 10.
-- Pilares: agrupe os rótulos 'pilar' dos vídeos em 3 a 7 pilares; participação somando cerca de 100."""
+- Pilares: agrupe os rótulos 'pilar' dos vídeos em 3 a 7 pilares; participação somando cerca de 100.
+- Os posts podem ser Reels/vídeos, carrosséis ou fotos: compare o desempenho de cada tipo (o "Mix de formatos"
+  traz contagem e medianas) e diga o que o concorrente faz em cada um.
+- 'perfil_e_bio': avalie bio, links e CTA do perfil (clareza da proposta, prova, chamada para ação, para onde o
+  link leva) e o que o usuário pode aprender ou fazer melhor. Lista vazia se não houver dados do perfil.
+- 'cadencia': use a tabela de dias/horários (horário de Brasília) para dizer quando publicam e quando performa
+  melhor; recomende uma frequência para o USUÁRIO competir.
+- 'voz_do_publico': leia os comentários reais. Agrupe em dúvidas, objeções, pedidos e elogios, cada item com
+  uma frase-resumo + um exemplo literal entre aspas, e em 'videos' os ids dos posts onde apareceram. São a
+  matéria-prima de roteiros: deixe claro o que o público quer saber e o que o impede de comprar. Sem comentários,
+  devolva listas vazias e sentimento_geral "sem dados"."""
 
 
 # ---------------------------------------------------------------- métricas
@@ -142,6 +170,37 @@ def metricas(videos):
         "mediana_engajamento": _mediana([v["engajamento"] for v in videos]),
         "duracao_mediana_s": _mediana([v["duracao"] for v in videos]),
     }
+
+
+DIAS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def mix_e_cadencia(videos):
+    """Contagem e desempenho por tipo de post, e posts/desempenho por dia da semana e faixa de horário (BRT)."""
+    from datetime import timedelta
+    mix = {}
+    for tipo in sorted({v.get("tipo") or "video" for v in videos}):
+        vs = [v for v in videos if (v.get("tipo") or "video") == tipo]
+        mix[tipo] = {"posts": len(vs), "mediana_views": _mediana([v["views"] for v in vs]),
+                     "mediana_likes": _mediana([v["likes"] for v in vs]),
+                     "mediana_comentarios": _mediana([v["comentarios"] for v in vs])}
+    dias, faixas = {}, {}
+    for v in videos:
+        if len(v["data"]) < 16:
+            continue
+        brt = datetime.fromisoformat(v["data"]) - timedelta(hours=3)
+        for chave, tabela in ((DIAS[brt.weekday()], dias), (f"{brt.hour // 3 * 3:02d}h-{brt.hour // 3 * 3 + 3:02d}h", faixas)):
+            tabela.setdefault(chave, []).append(v["likes"] or 0)
+    resumo = lambda t: {k: {"posts": len(x), "mediana_likes": _mediana(x)} for k, x in sorted(t.items())}
+    return {"mix_de_formatos": mix, "por_dia_da_semana": resumo(dias), "por_horario": resumo(faixas)}
+
+
+def _comentarios_para_prompt(plataforma, conta, limite=150):
+    cid = catalogo.conta_id(plataforma, conta, criar=False)
+    if not cid:
+        return []
+    return [f"[{c['codigo']}] ({c['likes'] or 0} curtidas) {' '.join((c['texto'] or '').split())[:220]}"
+            for c in catalogo.comentarios_da_conta(cid, limite)]
 
 
 def _selecionar(videos):
@@ -237,10 +296,21 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=N
     progresso("Escrevendo o relatório estratégico", 0, 1)
     anterior = obter(plataforma, conta)
     perfil = biblioteca.perfis().get(f"{plataforma}/{conta}") or {}
+    conta_db = db.um("select perfil from contas where plataforma = %s and conta = %s", plataforma, conta) or {}
+    dados_perfil = conta_db.get("perfil") or {}
+    cid = catalogo.conta_id(plataforma, conta)
+    seguidores_hist = [f"{r['dia']}: {r['seguidores']}" for r in catalogo.evolucao_seguidores(cid)][-30:]
+    comentarios = _comentarios_para_prompt(plataforma, conta)
     entrada = (
         memoria.contexto()
         + f"\n\n## Perfil analisado\n@{conta} no {plataforma} · nome: {perfil.get('nome')} · seguidores: {perfil.get('seguidores')}"
-        + f"\nMétricas da conta (todos os {met['videos']} vídeos baixados): {json.dumps(met, ensure_ascii=False)}"
+        + (f"\nBio: {dados_perfil.get('bio')!r} · categoria: {dados_perfil.get('categoria')} · links: "
+           + json.dumps(dados_perfil.get("links") or [], ensure_ascii=False) if dados_perfil else "")
+        + (f"\nEvolução de seguidores: {', '.join(seguidores_hist)}" if len(seguidores_hist) > 1 else "")
+        + f"\nMétricas da conta (todos os {met['videos']} posts catalogados): {json.dumps(met, ensure_ascii=False)}"
+        + f"\nMix de formatos e cadência (horário de Brasília): {json.dumps(mix_e_cadencia(todos), ensure_ascii=False)}"
+        + (f"\n\n## Comentários do público ({len(comentarios)}, mais curtidos primeiro; [id do post])\n" + "\n".join(comentarios)
+           if comentarios else "\n\n## Comentários do público\n(nenhum coletado)")
         + (f"\n\n## Relatório anterior ({anterior['gerado'][:10]})\n"
            + json.dumps({k: anterior["relatorio"][k] for k in ("resumo_executivo", "posicionamento", "pilares", "pontos_fortes", "pontos_fracos")}, ensure_ascii=False)
            if anterior else "")

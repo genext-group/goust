@@ -11,6 +11,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.networking.impersonate import ImpersonateTarget
 
 from . import biblioteca, catalogo, contexto, db, execucao, instagram, tiktok
+from .fontes import scrapecreators
 from .armazenamento import NUVEM
 from .filtros import Cancelado, aplicar_filtro, ler_metadados, pasta_conta, salvar_metadados
 
@@ -85,7 +86,7 @@ def executar(tid, prazo=None):
         if t["status"] == "na fila":
             _listar(t)
         falta = _baixar_pendentes(t, prazo)
-        if falta:
+        if falta or _coletar_comentarios(t, prazo):
             return True
         t["status"] = "concluído"
         if t["opcoes"].get("modo") != "link":
@@ -197,6 +198,41 @@ def _baixar_pendentes(t, prazo):
                 return True
     if t["opcoes"].get("modo") == "link" and t["baixados"] + t["pulados"]:
         _log(t, "Vídeo salvo na biblioteca.")
+    return False
+
+
+POSTS_COM_COMENTARIOS = 15  # por conta: os posts com mais comentários
+COMENTARIOS_POR_POST = 40
+
+
+def _coletar_comentarios(t, prazo):
+    """Voz do público: comentários dos posts mais comentados da conta (só com a API de dados)."""
+    if not scrapecreators.ativo() or t["opcoes"].get("modo") == "link":
+        return False
+    cid = catalogo.conta_id(t["plataforma"], t["conta"], criar=False)
+    ja = db.um("select count(*) as n from posts where conta_id = %s and extra ? 'comentarios_coletados'", cid)["n"]
+    faltam = db.todos("""select codigo, url from posts where conta_id = %s and coalesce(comentarios, 0) > 0
+                         and not (extra ? 'comentarios_coletados') order by comentarios desc limit %s""",
+                      cid, max(0, POSTS_COM_COMENTARIOS - ja))
+    if faltam and t["status"] != "comentários":
+        t["status"] = "comentários"
+        _log(t, f"Coletando comentários de {len(faltam)} posts...")
+        _gravar(t)
+    for p in faltam:
+        if _cancelado(t):
+            raise Cancelado()
+        try:
+            n = catalogo.salvar_comentarios(t["plataforma"], p["codigo"],
+                                            scrapecreators.comentarios(t["plataforma"], p["url"], COMENTARIOS_POR_POST))
+            t["comentarios"] = t.get("comentarios", 0) + n
+        except Exception as e:
+            catalogo.salvar_comentarios(t["plataforma"], p["codigo"], [])  # marca para não tentar de novo
+            _log(t, f"Sem comentários de {p['codigo']}: {str(e)[:120]}")
+        _gravar(t)
+        if prazo and time.time() > prazo:
+            return True
+    if faltam:
+        _log(t, f"{t.get('comentarios', 0)} comentários coletados.")
     return False
 
 

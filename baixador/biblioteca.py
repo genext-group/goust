@@ -127,7 +127,8 @@ def atualizar_perfil(plataforma, conta, forcar=False):
                 versao = int(time.time())
         except Exception:
             pass
-    catalogo.atualizar_perfil(plataforma, conta, nome=p.get("nome"), seguidores=p.get("seguidores"), foto_versao=versao)
+    catalogo.atualizar_perfil(plataforma, conta, nome=p.get("nome"), seguidores=p.get("seguidores"), foto_versao=versao,
+                              perfil=p.get("perfil"))
 
 
 def atualizar_perfis_em_segundo_plano(contas):

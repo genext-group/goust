@@ -16,6 +16,7 @@ from curl_cffi import requests
 from yt_dlp import YoutubeDL
 
 from . import instagram_descoberta as descoberta
+from .fontes import scrapecreators
 from .armazenamento import NUVEM
 from .midia import FFMPEG, salvar_capa
 from .filtros import (MAX_FIXADOS, PASTA_DADOS, Cancelado, data_inicio_ts,
@@ -117,7 +118,12 @@ def _pagina_publica(conta, sub=""):
 
 
 def perfil_publico(conta):
-    """Nome, foto e seguidores, para os cards do painel (melhor esforço)."""
+    """Nome, foto, seguidores e (com a API de dados) bio, links e categoria."""
+    if scrapecreators.ativo():
+        try:
+            return scrapecreators.perfil_instagram(conta)
+        except Exception:
+            pass
     html = _pagina_publica(conta)
 
     def campo(padrao):
@@ -283,6 +289,9 @@ def _listar_com_login(conta, opcoes, log, cancelado, conhecido):
 
 
 def listar(conta, opcoes, log, cancelado, conhecido=lambda _id: False):
+    if scrapecreators.ativo():  # API de dados: histórico completo, todos os tipos de post, com views
+        return scrapecreators.posts_instagram(conta, opcoes, log, cancelado, conhecido,
+                                              data_inicio_ts(opcoes), quantos_listar(opcoes))
     if sessao_ativa():
         try:
             return _listar_com_login(conta, opcoes, log, cancelado, conhecido)
@@ -294,7 +303,7 @@ def listar(conta, opcoes, log, cancelado, conhecido=lambda _id: False):
 # ---------------------------------------------------------------- download
 
 def baixar(item, pasta, cancelado):
-    if NUVEM:  # online o vídeo não é guardado: só a capa vira miniatura
+    if NUVEM or item.get("tipo") in ("carrossel", "foto"):  # sem vídeo para baixar: a capa vira miniatura
         return salvar_capa("instagram", item)
     destino = pasta / nome_arquivo(item)
     if destino.exists():

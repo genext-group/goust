@@ -188,6 +188,14 @@ def api_biblioteca():
     return jsonify(biblioteca.videos())
 
 
+@app.get("/api/comentarios/<plataforma>/<vid>")
+@protegido
+def api_comentarios(plataforma, vid):
+    from baixador import catalogo
+    return jsonify([{**c, "publicado_em": c["publicado_em"].isoformat() if c["publicado_em"] else None}
+                    for c in catalogo.comentarios(plataforma, vid)])
+
+
 @app.get("/media/<plataforma>/<conta>/<arquivo>")
 @so_local
 def media(plataforma, conta, arquivo):

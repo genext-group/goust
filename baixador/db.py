@@ -121,6 +121,32 @@ create table if not exists tarefas (
 );
 create index if not exists tarefas_usuario on tarefas (usuario_id, tipo, id desc);
 
+create table if not exists comentarios (
+  id bigserial primary key,
+  post_id bigint not null references posts(id) on delete cascade,
+  externo_id text not null,
+  texto text,
+  likes bigint,
+  respostas bigint,
+  publicado_em timestamptz,
+  unique (post_id, externo_id)
+);
+create index if not exists comentarios_post on comentarios (post_id, likes desc nulls last);
+
+create table if not exists metricas_posts (
+  post_id bigint not null references posts(id) on delete cascade,
+  dia date not null,
+  views bigint, likes bigint, comentarios bigint,
+  primary key (post_id, dia)
+);
+
+create table if not exists metricas_contas (
+  conta_id bigint not null references contas(id) on delete cascade,
+  dia date not null,
+  seguidores bigint, posts bigint,
+  primary key (conta_id, dia)
+);
+
 create table if not exists uso (
   usuario_id text not null references usuarios(id) on update cascade on delete cascade,
   mes text not null,

@@ -1,7 +1,7 @@
 import { Button, Label, ListBox, Modal, SearchField, Select, Skeleton, ToggleButton, ToggleButtonGroup } from '@heroui/react'
 import { ArrowDownToLine, ArrowUpRightFromSquare, Comment, Eye, FolderOpen, Heart, Play, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, baixarArquivo, ia, urlEmbed, urlThumb, type AnaliseVideo, type Conta, type Plataforma, type Video } from '../api'
+import { api, baixarArquivo, ia, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Plataforma, type Video } from '../api'
 import { useNuvem } from '../ambiente'
 import { NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
 import { fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
@@ -201,6 +201,11 @@ function CartaoVideo({ v, nome, onAbrir }: { v: Video; nome?: string; onAbrir: (
           onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+        {(v.tipo === 'carrossel' || v.tipo === 'foto') && (
+          <span className="absolute top-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">
+            {v.tipo === 'carrossel' ? 'Carrossel' : 'Foto'}
+          </span>
+        )}
         <div className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
           <span className="grid size-12 place-items-center rounded-full bg-white/25 text-white backdrop-blur-md">
             <Play className="size-5" />
@@ -209,7 +214,7 @@ function CartaoVideo({ v, nome, onAbrir }: { v: Video; nome?: string; onAbrir: (
         <div className="num absolute inset-x-0 bottom-0 flex items-center justify-between p-2.5 text-xs font-medium text-white">
           <span className="flex items-center gap-1">
             <Eye className="size-3.5" />
-            {fmtNum(v.views)}
+            {v.views != null ? fmtNum(v.views) : `♥ ${fmtNum(v.likes)}`}
           </span>
           {v.duracao != null && <span>{fmtDuracao(v.duracao)}</span>}
         </div>
@@ -262,6 +267,7 @@ export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nom
                   </p>
                 )}
                 <AnaliseIA video={video} />
+                <Comentarios video={video} />
                 <div className="flex-1">
                   <p className="mb-1 text-xs tracking-wide text-muted uppercase">Legenda</p>
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{video.legenda || 'Sem legenda.'}</p>
@@ -273,10 +279,12 @@ export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nom
                       Abrir no {NOME_PLATAFORMA[video.plataforma]}
                     </Button>
                   )}
-                  <Button size="sm" variant="tertiary" onPress={() => baixarArquivo(video)}>
-                    <ArrowDownToLine />
-                    Baixar
-                  </Button>
+                  {(video.tipo ?? 'video') !== 'carrossel' && video.tipo !== 'foto' && (
+                    <Button size="sm" variant="tertiary" onPress={() => baixarArquivo(video)}>
+                      <ArrowDownToLine />
+                      Baixar
+                    </Button>
+                  )}
                   {!nuvem && (
                     <Button
                       size="sm"
@@ -299,7 +307,7 @@ export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nom
 
 const NOME_FORMATO: Record<string, string> = {
   talking_head: 'Pessoa falando para a câmera', tutorial_tela: 'Tutorial de tela', demonstracao_produto: 'Demonstração do produto',
-  depoimento: 'Depoimento', esquete_humor: 'Esquete de humor', trend_meme: 'Trend/meme', bastidores: 'Bastidores',
+  depoimento: 'Depoimento', carrossel_educativo: 'Carrossel educativo', carrossel_storytelling: 'Carrossel de história', foto_unica: 'Foto', esquete_humor: 'Esquete de humor', trend_meme: 'Trend/meme', bastidores: 'Bastidores',
   storytelling: 'Storytelling', lista_dicas: 'Lista de dicas', entrevista_podcast: 'Entrevista/podcast',
   anuncio_produzido: 'Anúncio produzido', ugc_influenciador: 'UGC/influenciador', slides_texto: 'Slides de texto', outro: 'Outro',
 }
@@ -360,6 +368,31 @@ function AnaliseIA({ video }: { video: Video }) {
         </details>
       )}
     </div>
+  )
+}
+
+/** Comentários coletados do post (os mais curtidos primeiro). */
+function Comentarios({ video }: { video: Video }) {
+  const [lista, setLista] = useState<Comentario[] | null>(null)
+  useEffect(() => {
+    setLista(null)
+    api.comentarios(video.plataforma, video.id).then(setLista).catch(() => setLista([]))
+  }, [video.plataforma, video.id])
+  if (!lista?.length) return null
+  return (
+    <details className="rounded-2xl bg-surface-secondary p-4" open>
+      <summary className="cursor-pointer text-xs font-medium tracking-wide text-muted uppercase">
+        Comentários ({lista.length})
+      </summary>
+      <ul className="mt-3 max-h-72 space-y-2.5 overflow-y-auto pr-1">
+        {lista.map((c, i) => (
+          <li key={i} className="text-sm leading-relaxed">
+            {c.texto}
+            {!!c.likes && <span className="num ml-1.5 text-xs text-muted">♥ {fmtNum(c.likes)}</span>}
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 

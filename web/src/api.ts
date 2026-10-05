@@ -33,7 +33,8 @@ export interface Tarefa {
   plataforma: Plataforma
   conta: string
   opcoes: Opcoes
-  status: 'na fila' | 'listando' | 'baixando' | 'concluído' | 'erro' | 'cancelado'
+  status: 'na fila' | 'listando' | 'baixando' | 'comentários' | 'concluído' | 'erro' | 'cancelado'
+  comentarios?: number
   total: number
   baixados: number
   pulados: number
@@ -59,7 +60,10 @@ export interface Video {
   tamanho: number
   url_thumb: string
   url_video: string | null
+  tipo?: 'reel' | 'video' | 'carrossel' | 'foto'
 }
+
+export interface Comentario { texto: string; likes: number | null; respostas: number | null; publicado_em: string | null }
 
 export interface StatusInstagram {
   nuvem?: boolean
@@ -100,6 +104,7 @@ export const api = {
   cancelar: (id: number) => req(`/api/tarefas/${id}/cancelar`, { method: 'POST' }),
   limpar: () => req('/api/tarefas/limpar', { method: 'POST' }),
   biblioteca: () => req<Video[]>('/api/biblioteca'),
+  comentarios: (p: Plataforma, id: string) => req<Comentario[]>(`/api/comentarios/${p}/${encodeURIComponent(id)}`),
   abrirPasta: (alvo: { plataforma?: string; conta?: string; arquivo?: string } = {}) =>
     req('/api/abrir-pasta', { body: alvo }),
   instagram: () => req<StatusInstagram>('/api/instagram'),
@@ -118,7 +123,7 @@ export async function baixarArquivo(v: Video) {
 export const urlEmbed = (v: Video) =>
   v.plataforma === 'tiktok'
     ? `https://www.tiktok.com/player/v1/${v.id}?autoplay=1&rel=0&description=0&music_info=0`
-    : `https://www.instagram.com/reel/${v.id}/embed/`
+    : `https://www.instagram.com/p/${v.id}/embed/`
 
 /** Interpreta o que o usuário colou: vídeo avulso, perfil ou @. */
 export function interpretarEntrada(texto: string): { tipo: 'video' | 'perfil' | 'arroba'; plataforma?: Plataforma } {
@@ -139,6 +144,9 @@ export interface Ideia { titulo: string; gancho: string; formato: string; roteir
 
 export interface Relatorio {
   resumo_executivo: string
+  perfil_e_bio?: Item[]
+  cadencia?: { resumo: string; melhores_dias: string[]; melhores_horarios: string[]; frequencia_recomendada: string }
+  voz_do_publico?: { sentimento_geral: string; duvidas: Item[]; objecoes: Item[]; pedidos: Item[]; elogios: Item[] }
   posicionamento: { proposta_de_valor: string; publico_alvo: string; categoria_percebida: string; diferenciais: string[]; tom_de_voz: string; arquetipo: string }
   mensagens_centrais: Item[]
   dores_e_desejos: Item[]

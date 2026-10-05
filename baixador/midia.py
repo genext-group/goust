@@ -39,7 +39,8 @@ def duracao(video):
 
 
 def chave_thumb(plataforma, vid):
-    return f"thumb:{plataforma}/{vid}"
+    # na nuvem é chave do Redis; no modo local vira caminho de arquivo (":" não vale no Windows)
+    return f"thumb:{plataforma}/{vid}" if NUVEM else f"dados/thumbs/{plataforma}/{vid}.jpg"
 
 
 def salvar_capa(plataforma, item):
