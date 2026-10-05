@@ -36,13 +36,32 @@ QUALIDADES = {"rascunho": "low", "padrao": "medium", "alta": "high"}
 
 # ---------------------------------------------------------------- arquivos
 
+def _no_redis():
+    """O banco é compartilhado entre o modo local e a nuvem; as imagens vão para o Redis sempre que ele existe,
+    para quem gerou no computador ver as mesmas imagens online."""
+    return NUVEM or bool(os.getenv("UPSTASH_REDIS_REST_URL") or os.getenv("KV_REST_API_URL"))
+
+
 def _chave(nome):
-    return f"img:{nome}" if NUVEM else f"dados/imagens/{nome}"
+    return f"img:{nome}" if _no_redis() else f"dados/imagens/{nome}"
+
+
+def _gravar_bytes(nome, dados):
+    if _no_redis():
+        armazenamento.redis().set(_chave(nome), base64.b64encode(dados).decode())
+    else:
+        armazenamento.imagem_gravar(_chave(nome), dados)
 
 
 def ler_arquivo(nome):
     if not nome or "/" in nome or ".." in nome:
         return None
+    if _no_redis():
+        v = armazenamento.redis().get(_chave(nome))
+        if v:
+            return base64.b64decode(v)
+        local = armazenamento.RAIZ / "dados" / "imagens" / nome  # geradas antes desta mudança
+        return local.read_bytes() if local.exists() else None
     return armazenamento.imagem_ler(_chave(nome))
 
 
@@ -59,7 +78,7 @@ def _normalizar(dados, lado=1024):
 
 def _gravar(dados, ext):
     nome = f"{secrets.token_hex(12)}.{ext}"
-    armazenamento.imagem_gravar(_chave(nome), dados)
+    _gravar_bytes(nome, dados)
     return nome
 
 
