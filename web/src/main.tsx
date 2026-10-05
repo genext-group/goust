@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './animacoes.css'
 import App from './App.tsx'
 import { toast } from '@heroui/react'
 import { tocar } from './sons'

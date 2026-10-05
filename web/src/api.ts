@@ -228,7 +228,9 @@ export interface AnaliseVideo {
 
 export interface TarefaIA {
   id: number
-  tipo: 'perfil' | 'mercado' | 'estrategia'
+  tipo: 'perfil' | 'mercado' | 'estrategia' | 'imagem' | 'estilo' | 'calendario' | 'roteiro'
+  params?: Record<string, unknown>
+  resultado?: Record<string, unknown> | null
   plataforma: Plataforma | null
   conta: string | null
   status: 'na fila' | 'rodando' | 'concluído' | 'erro'
@@ -236,6 +238,8 @@ export interface TarefaIA {
   feito: number
   total: number
   erro: string | null
+  criada?: number
+  fim?: number | null
 }
 
 export interface Regra { id?: string; texto: string; origem: 'manual' | 'feedback' }
@@ -306,4 +310,86 @@ export interface RegistroEstrategia {
   perfis_proprios: string[]
   concorrentes: string[]
   estrategia: Estrategia
+}
+
+// ---------------------------------------------------------------- pastas, criação e primeira configuração
+
+export interface Pasta { id: number; nome: string; sistema: string | null; cor: string | null; posts: number }
+export interface Cor { hex: string; uso: string }
+export interface GuiaEstilo {
+  resumo: string; paleta: Cor[]; tipografia: string; composicao: string; fotografia_ou_ilustracao: string
+  iluminacao_e_textura: string; elementos_graficos: string[]; clima: string; regras: string[]; evitar: string[]; nao_copiar?: string[]; prompt_base: string
+}
+export interface Estilo { id: number; nome: string; guia: GuiaEstilo | null; refs: { id: number; url: string; origem: string }[] }
+export interface FormatoImagem { id: string; tamanho: string; nome: string }
+export interface Imagem {
+  id: number; url: string; prompt: string; estilo_id: number | null; estilo: string | null; conteudo_id: number | null
+  formato: string; qualidade: string; favorita: boolean; criado: string
+}
+export type StatusConteudo = 'ideia' | 'roteiro' | 'produzindo' | 'pronto' | 'publicado'
+export interface Roteiro {
+  ganchos: { texto: string; estilo: string }[]; duracao_segundos: number
+  cenas: { tempo: string; fala: string; visual: string; texto_na_tela: string }[]
+  slides: { titulo: string; texto: string; visual: string }[]
+  legenda: string; hashtags: string[]; cta: string; dicas_de_gravacao: string[]; por_que_vai_funcionar: string
+  prompt_da_capa: string; referencias: string[]; gerado: string
+}
+export interface Conteudo {
+  id: number; titulo: string; formato: string | null; pilar: string | null; data: string | null; status: StatusConteudo
+  dados: { gancho?: string; ideia?: string; objetivo?: string; cta?: string; inspirado_em?: string[]; notas?: string }
+  roteiro: Roteiro | null; atualizado: string
+}
+export interface Sugestao { plataforma: Plataforma; conta: string; nome: string; por_que: string }
+export interface Eu { id: string; email: string | null; nome: string | null; onboarding: boolean; piloto: { estrategia?: boolean; calendario?: boolean } }
+
+async function enviarArquivos<T>(url: string, arquivos: File[]): Promise<T> {
+  const token = obterToken ? await obterToken() : null
+  const form = new FormData()
+  arquivos.forEach((a) => form.append('arquivo', a))
+  const r = await fetch(url, { method: 'POST', body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.erro || `Erro ${r.status}`)
+  return j as T
+}
+
+export const pastas = {
+  listar: () => req<{ pastas: Pasta[]; mapa: Record<string, number[]> }>('/api/pastas'),
+  criar: (nome: string) => req<Pasta[]>('/api/pastas', { body: { nome } }),
+  renomear: (id: number, nome: string) => req<Pasta[]>(`/api/pastas/${id}`, { method: 'PUT', body: { nome } }),
+  apagar: (id: number) => req<Pasta[]>(`/api/pastas/${id}`, { method: 'DELETE' }),
+  colocar: (id: number, v: Pick<Video, 'plataforma' | 'id'>, dentro: boolean) =>
+    req(`/api/pastas/${id}/posts`, { body: { plataforma: v.plataforma, id: v.id, dentro } }),
+  favoritar: (v: Pick<Video, 'plataforma' | 'id'>, favorito: boolean) =>
+    req('/api/favorito', { body: { plataforma: v.plataforma, id: v.id, favorito } }),
+}
+
+export const criacao = {
+  estilos: () => req<{ estilos: Estilo[]; formatos: FormatoImagem[] }>('/api/estilos'),
+  criarEstilo: (nome: string) => req<{ id: number; estilos: Estilo[] }>('/api/estilos', { body: { nome } }),
+  renomearEstilo: (id: number, nome: string) => req<Estilo[]>(`/api/estilos/${id}`, { method: 'PUT', body: { nome } }),
+  apagarEstilo: (id: number) => req<Estilo[]>(`/api/estilos/${id}`, { method: 'DELETE' }),
+  enviarRefs: (id: number, arquivos: File[]) => enviarArquivos<Estilo[]>(`/api/estilos/${id}/refs`, arquivos),
+  refDoPost: (id: number, v: Pick<Video, 'plataforma' | 'id'>) => req<Estilo[]>(`/api/estilos/${id}/refs`, { body: { plataforma: v.plataforma, id: v.id } }),
+  refDaImagem: (id: number, imagem_id: number) => req<Estilo[]>(`/api/estilos/${id}/refs`, { body: { imagem_id } }),
+  removerRef: (id: number, ref: number) => req<Estilo[]>(`/api/estilos/${id}/refs/${ref}`, { method: 'DELETE' }),
+  analisarEstilo: (id: number) => req<TarefaIA>(`/api/estilos/${id}/analisar`, { method: 'POST' }),
+  imagens: () => req<Imagem[]>('/api/imagens'),
+  gerarImagem: (p: { pedido: string; estilo_id?: number | null; formato: string; qualidade: string; quantidade: number; conteudo_id?: number | null }) =>
+    req<TarefaIA[]>('/api/imagens', { body: p }),
+  favoritarImagem: (id: number, favorita: boolean) => req(`/api/imagens/${id}`, { method: 'PUT', body: { favorita } }),
+  apagarImagem: (id: number) => req(`/api/imagens/${id}`, { method: 'DELETE' }),
+  conteudos: () => req<Conteudo[]>('/api/conteudos'),
+  criarConteudo: (c: Partial<Conteudo> & { gancho?: string; ideia?: string; roteiro_base?: string[]; inspirado_em?: string[] }) =>
+    req<Conteudo>('/api/conteudos', { body: c }),
+  atualizarConteudo: (id: number, c: Partial<Conteudo>) => req<Conteudo>(`/api/conteudos/${id}`, { method: 'PUT', body: c }),
+  apagarConteudo: (id: number) => req(`/api/conteudos/${id}`, { method: 'DELETE' }),
+  gerarCalendario: (semanas: number, inicio?: string) => req<TarefaIA>('/api/conteudos/calendario', { body: { semanas, inicio } }),
+  gerarRoteiro: (id: number, pedido = '') => req<TarefaIA>(`/api/conteudos/${id}/roteiro`, { body: { pedido } }),
+}
+
+export const inicio = {
+  eu: () => req<Eu>('/api/eu'),
+  config: (c: { onboarding?: boolean }) => req('/api/eu/config', { method: 'PUT', body: c }),
+  sugerirConcorrentes: (descricao = '') => req<Sugestao[]>('/api/ia/sugerir-concorrentes', { body: { descricao } }),
+  piloto: (p: { estrategia?: boolean; calendario?: boolean } = {}) => req('/api/piloto', { body: p }),
 }

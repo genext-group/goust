@@ -1,4 +1,8 @@
-import type { Ideia, Oportunidade } from '../../api'
+import { Button, toast } from '@heroui/react'
+import { Calendar, Check } from '@gravity-ui/icons'
+import { useState } from 'react'
+import { criacao, type Ideia, type Oportunidade } from '../../api'
+import { tocar } from '../../sons'
 import { Evidencias, Feedback, SeloPrioridade, semAspas, TextoComVideos } from './Compartilhado'
 
 export function ListaOportunidades({ secao, itens }: { secao: string; itens: Oportunidade[] }) {
@@ -48,8 +52,28 @@ export function ListaIdeias({ secao, itens }: { secao: string; itens: Ideia[] })
             ))}
           </ol>
           <Evidencias ids={i.inspirado_em} max={3} />
+          <ParaCalendario ideia={i} />
         </article>
       ))}
     </div>
+  )
+}
+
+/** Manda a ideia para o calendário (aba Criar), sem data, para a pessoa arrastar para o dia. */
+function ParaCalendario({ ideia }: { ideia: Ideia }) {
+  const [feito, setFeito] = useState(false)
+  const formato = /carross/i.test(ideia.formato) ? 'carrossel' : /foto|imagem/i.test(ideia.formato) ? 'foto' : /story/i.test(ideia.formato) ? 'story' : 'reel'
+  const mandar = async () => {
+    try {
+      await criacao.criarConteudo({ titulo: ideia.titulo, formato, gancho: ideia.gancho, ideia: ideia.roteiro.join(' '), inspirado_em: ideia.inspirado_em })
+      setFeito(true)
+      tocar('pasta')
+      toast.success('Ideia no calendário', { description: 'Está em Criar → Calendário, em "Ideias sem data".' })
+    } catch (e) { toast.danger('Não deu', { description: (e as Error).message }) }
+  }
+  return (
+    <Button size="sm" variant={feito ? 'ghost' : 'tertiary'} className="mt-3 self-start" isDisabled={feito} onPress={mandar}>
+      {feito ? <><Check /> No calendário</> : <><Calendar /> Adicionar ao calendário</>}
+    </Button>
   )
 }

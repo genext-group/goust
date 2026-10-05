@@ -12,7 +12,7 @@ from .. import db, execucao
 from .. import tarefas as downloads
 from ..armazenamento import NUVEM
 from ..execucao import Continuar
-from . import estrategia, mercado, perfil
+from . import conteudo, estrategia, imagens, mercado, perfil
 
 ATIVOS = ("na fila", "rodando")
 
@@ -33,12 +33,19 @@ def listar():
     return [{**r["dados"], "id": r["id"]} for r in linhas]
 
 
-def enfileirar(tipo, plataforma=None, conta=None):
-    for t in listar():  # evita duplicar a mesma análise na fila
-        if t["tipo"] == tipo and t["plataforma"] == plataforma and t["conta"] == conta and t["status"] in ATIVOS:
-            return t
-    dados = {"tipo": tipo, "plataforma": plataforma, "conta": conta, "status": "na fila", "etapa": "Aguardando",
-             "feito": 0, "total": 0, "erro": None, "criada": time.time(), "fim": None}
+UNICAS = ("perfil", "mercado", "estrategia", "calendario", "estilo", "roteiro")  # não duplicam na fila
+
+
+def enfileirar(tipo, plataforma=None, conta=None, params=None):
+    params = params or {}
+    if tipo in UNICAS:
+        for t in listar():  # evita duplicar a mesma tarefa na fila
+            if (t["tipo"] == tipo and t["plataforma"] == plataforma and t["conta"] == conta
+                    and t.get("params", {}).get("alvo") == params.get("alvo") and t["status"] in ATIVOS):
+                return t
+    dados = {"tipo": tipo, "plataforma": plataforma, "conta": conta, "params": params, "resultado": None,
+             "status": "na fila", "etapa": "Aguardando", "feito": 0, "total": 0, "erro": None,
+             "criada": time.time(), "fim": None}
     r = db.um("insert into tarefas (usuario_id, tipo, status, dados) values (%s, 'ia', 'na fila', %s) returning id",
               ctx.usuario(), dados)
     execucao.despachar("ia", r["id"], faixa="ia")
@@ -65,6 +72,16 @@ def executar(tid, prazo=None):
             perfil.gerar(t["plataforma"], t["conta"], progresso, prazo)
         elif t["tipo"] == "estrategia":
             estrategia.gerar(progresso)
+        elif t["tipo"] == "imagem":
+            p = t["params"]
+            t["resultado"] = {"imagem": imagens.gerar(p.get("pedido"), p.get("estilo_id"), p.get("formato", "post"),
+                                                      p.get("qualidade", "padrao"), p.get("conteudo_id"), progresso)}
+        elif t["tipo"] == "estilo":
+            imagens.analisar_estilo(t["params"]["alvo"], progresso)
+        elif t["tipo"] == "calendario":
+            t["resultado"] = conteudo.gerar_calendario(t["params"].get("semanas", 2), t["params"].get("inicio"), progresso)
+        elif t["tipo"] == "roteiro":
+            conteudo.gerar_roteiro(t["params"]["alvo"], t["params"].get("pedido", ""), progresso)
         else:
             mercado.gerar(progresso)
         t["status"] = "concluído"
@@ -78,10 +95,54 @@ def executar(tid, prazo=None):
             traceback.print_exc()
     t["fim"] = time.time()
     _gravar(t)
+    if t["status"] == "concluído":
+        try:
+            encadear()
+        except Exception:
+            traceback.print_exc()
     return False
 
 
 execucao.registrar("ia", executar)
+
+
+# ---------------------------------------------------------------- piloto automático (primeira configuração)
+
+def _config_geral(usuario_id):
+    r = db.um("select config from usuarios where id = %s", usuario_id)
+    return r["config"] if r else {}
+
+
+def ligar_piloto(estrategia_=True, calendario=True):
+    """Ao terminar a configuração inicial: quando as análises acabarem, gera a estratégia e depois o calendário."""
+    db.executar("update usuarios set config = jsonb_set(config, '{piloto}', %s) where id = %s",
+                {"estrategia": estrategia_, "calendario": calendario}, ctx.usuario())
+    encadear()
+
+
+def _desligar(chave):
+    db.executar("update usuarios set config = config #- %s where id = %s", ["piloto", chave], ctx.usuario())
+
+
+def encadear():
+    """Dá o próximo passo do piloto automático, se não houver coleta ou análise em andamento."""
+    piloto = _config_geral(ctx.usuario()).get("piloto") or {}
+    if not piloto.get("estrategia") and not piloto.get("calendario"):
+        return
+    ocupado = db.um("""select 1 from tarefas where usuario_id = %s and status in ('na fila', 'rodando', 'listando',
+                       'baixando', 'comentários') and (tipo = 'download' or dados->>'tipo' in ('perfil', 'estrategia'))
+                       limit 1""", ctx.usuario())
+    if ocupado:
+        return
+    if piloto.get("estrategia"):
+        _desligar("estrategia")
+        if estrategia.versoes() or any(perfil.versoes(c["plataforma"], c["conta"]) for c in estrategia.contas_por_papel()[1]):
+            enfileirar("estrategia")
+        return
+    if piloto.get("calendario"):
+        _desligar("calendario")
+        if estrategia.versoes():
+            enfileirar("calendario", params={"semanas": 2})
 
 
 # ---------------------------------------------------------------- monitoramento (por usuário)

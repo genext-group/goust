@@ -1,7 +1,11 @@
 import { Button, Label, ListBox, Modal, SearchField, Select, ToggleButton, ToggleButtonGroup } from '@heroui/react'
-import { ArrowDownToLine, ArrowUpRightFromSquare, Comment, Eye, FolderOpen, Heart, Play, Sparkles } from '@gravity-ui/icons'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, baixarArquivo, ia, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Plataforma, type Video } from '../api'
+import { toast } from '@heroui/react'
+import { ArrowDownToLine, ArrowUpRightFromSquare, Comment, Eye, Folder, FolderOpen, FolderPlus, Heart, HeartFill, Palette, Pencil, Play, Plus, Sparkles, TrashBin } from '@gravity-ui/icons'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { api, baixarArquivo, criacao, ia, pastas as apiPastas, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Estilo, type Pasta, type Plataforma, type Video } from '../api'
+import { Explosao } from '../components/AnimProcessos'
+import { Menu } from '../components/Menu'
+import { tocar } from '../sons'
 import { useNuvem } from '../ambiente'
 import { NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
 import { fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
@@ -25,10 +29,45 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
   const [limite, setLimite] = useState(POR_PAGINA)
   const [aberto, setAberto] = useState<Video | null>(null)
   const sentinela = useRef<HTMLDivElement>(null)
+  const [pastas, setPastas] = useState<Pasta[]>([])
+  const [mapa, setMapa] = useState<Record<string, number[]>>({})
+  const [pastaSel, setPastaSel] = useState<number | null>(null)
+  const [novaPasta, setNovaPasta] = useState<string | null>(null)
 
   useEffect(() => {
     api.biblioteca().then(setVideos).catch(() => setVideos([]))
   }, [versao])
+  const carregarPastas = useCallback(() => apiPastas.listar().then((r) => { setPastas(r.pastas); setMapa(r.mapa) }).catch(() => {}), [])
+  useEffect(() => { carregarPastas() }, [carregarPastas])
+  const favoritos = pastas.find((p) => p.sistema === 'favoritos')
+
+  /** Põe ou tira o post da pasta, com resposta imediata na tela. */
+  const colocar = async (v: Video, pasta: Pasta, dentro: boolean) => {
+    const k = `${v.plataforma}/${v.id}`
+    setMapa((m) => ({ ...m, [k]: dentro ? [...(m[k] ?? []), pasta.id] : (m[k] ?? []).filter((x) => x !== pasta.id) }))
+    setPastas((ps) => ps.map((p) => (p.id === pasta.id ? { ...p, posts: p.posts + (dentro ? 1 : -1) } : p)))
+    tocar(pasta.sistema ? (dentro ? 'favorito' : 'clique') : 'pasta')
+    try {
+      await (pasta.sistema ? apiPastas.favoritar(v, dentro) : apiPastas.colocar(pasta.id, v, dentro))
+    } catch { carregarPastas() }
+  }
+  const criarPasta = async (nome: string, comPost?: Video) => {
+    if (!nome.trim()) return
+    const lista = await apiPastas.criar(nome)
+    setPastas(lista)
+    setNovaPasta(null)
+    const nova = lista.at(-1)
+    if (comPost && nova) colocar(comPost, nova, true)
+  }
+  const renomearPasta = async (p: Pasta) => {
+    const nome = window.prompt('Novo nome da pasta', p.nome)
+    if (nome?.trim()) setPastas(await apiPastas.renomear(p.id, nome))
+  }
+  const apagarPasta = async (p: Pasta) => {
+    setPastas(await apiPastas.apagar(p.id))
+    setPastaSel(null)
+    carregarPastas()
+  }
 
   const nomes = useMemo(() => Object.fromEntries(contas.map((c) => [`${c.plataforma}/${c.conta}`, c.perfil?.nome || c.nome])), [contas])
   const contasComVideo = useMemo(() => {
@@ -44,6 +83,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
       (v) =>
         (plataforma === 'todas' || v.plataforma === plataforma) &&
         (conta === 'todas' || `${v.plataforma}/${v.conta}` === conta) &&
+        (pastaSel === null || (mapa[`${v.plataforma}/${v.id}`] ?? []).includes(pastaSel)) &&
         (!q || v.legenda.toLowerCase().includes(q) || v.conta.toLowerCase().includes(q)),
     )
     const por = (f: (v: Video) => number) => (a: Video, b: Video) => f(b) - f(a)
@@ -55,9 +95,9 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
       engajamento: por((v) => v.engajamento ?? -1),
     }[ordem]
     return [...lista].sort(ord)
-  }, [videos, busca, plataforma, conta, ordem])
+  }, [videos, busca, plataforma, conta, ordem, pastaSel, mapa])
 
-  useEffect(() => setLimite(POR_PAGINA), [busca, plataforma, conta, ordem])
+  useEffect(() => setLimite(POR_PAGINA), [busca, plataforma, conta, ordem, pastaSel])
 
   // rolagem infinita
   useEffect(() => {
@@ -86,6 +126,37 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
           <Resumo rotulo="Views somadas" valor={fmtNum(totalViews)} />
           <Resumo rotulo="Engajamento médio" valor={mediaEng == null ? '—' : `${mediaEng.toFixed(1)}%`} />
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <ChipPasta ativo={pastaSel === null} onPress={() => setPastaSel(null)}>Todos os posts</ChipPasta>
+        {pastas.map((p) => (
+          <div key={p.id} className="flex items-center">
+            <ChipPasta ativo={pastaSel === p.id} onPress={() => setPastaSel(p.id)}>
+              {p.sistema ? <HeartFill className="size-3.5 text-[#ff4d6d]" /> : <Folder className="size-3.5" />}
+              {p.nome} <span className="num text-xs text-muted">{p.posts}</span>
+            </ChipPasta>
+            {pastaSel === p.id && !p.sistema && (
+              <Menu gatilho={(abrir) => (
+                <button onClick={abrir} aria-label="Opções da pasta" className="ml-0.5 grid size-7 place-items-center rounded-full text-muted hover:bg-surface-secondary hover:text-foreground">⋯</button>
+              )} itens={[
+                { id: 'r', rotulo: 'Renomear', icone: <Pencil />, aoEscolher: () => renomearPasta(p) },
+                { id: 'a', rotulo: 'Apagar pasta', icone: <TrashBin />, perigo: true, aoEscolher: () => apagarPasta(p) },
+              ]} />
+            )}
+          </div>
+        ))}
+        {novaPasta === null ? (
+          <button onClick={() => setNovaPasta('')} className="flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1.5 text-sm text-muted linha-fina hover:text-foreground">
+            <FolderPlus className="size-3.5" /> Nova pasta
+          </button>
+        ) : (
+          <form onSubmit={(e) => { e.preventDefault(); criarPasta(novaPasta) }} className="flex items-center gap-1">
+            <input autoFocus value={novaPasta} onChange={(e) => setNovaPasta(e.target.value)} onBlur={() => !novaPasta.trim() && setNovaPasta(null)}
+              placeholder="Nome da pasta" className="h-8 w-40 rounded-full bg-surface-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-accent/40" />
+            <Button size="sm" type="submit" isDisabled={!novaPasta.trim()}>Criar</Button>
+          </form>
+        )}
       </div>
 
       <div className="vidro sticky top-16 z-20 -mx-2 flex flex-wrap items-center gap-2 rounded-2xl px-2 py-2">
@@ -164,18 +235,24 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
         </div>
       ) : filtrados.length === 0 ? (
         <div className="cartao py-20 text-center text-muted">
-          {videos.length ? 'Nada encontrado com esses filtros.' : 'Nenhum vídeo baixado ainda.'}
+          {pastaSel !== null && pastas.find((p) => p.id === pastaSel)?.sistema
+            ? 'Toque no coração de um post para guardá-lo aqui.'
+            : pastaSel !== null ? 'Pasta vazia. Use o ícone de pasta nos posts para adicionar.'
+              : videos.length ? 'Nada encontrado com esses filtros.' : 'Nenhum vídeo baixado ainda.'}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
           {filtrados.slice(0, limite).map((v) => (
-            <CartaoVideo key={`${v.plataforma}/${v.id}`} v={v} nome={nomes[`${v.plataforma}/${v.conta}`]} onAbrir={() => setAberto(v)} />
+            <CartaoVideo key={`${v.plataforma}/${v.id}`} v={v} nome={nomes[`${v.plataforma}/${v.conta}`]} onAbrir={() => setAberto(v)}
+              pastas={pastas} dentro={mapa[`${v.plataforma}/${v.id}`] ?? []} favoritos={favoritos}
+              aoColocar={(p, d) => colocar(v, p, d)} aoNovaPasta={() => { const n = window.prompt('Nome da nova pasta'); if (n) criarPasta(n, v) }} />
           ))}
         </div>
       )}
       <div ref={sentinela} />
 
-      <ModalVideo video={aberto} nome={aberto ? nomes[`${aberto.plataforma}/${aberto.conta}`] : undefined} onFechar={() => setAberto(null)} />
+      <ModalVideo video={aberto} nome={aberto ? nomes[`${aberto.plataforma}/${aberto.conta}`] : undefined} onFechar={() => setAberto(null)}
+        aoMudarPastas={carregarPastas} />
     </div>
   )
 }
@@ -189,48 +266,72 @@ function Resumo({ rotulo, valor }: { rotulo: string; valor: string }) {
   )
 }
 
-function CartaoVideo({ v, nome, onAbrir }: { v: Video; nome?: string; onAbrir: () => void }) {
+function ChipPasta({ ativo, onPress, children }: { ativo: boolean; onPress: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onAbrir} className="group text-left outline-none">
-      <div className="relative aspect-[9/16] overflow-hidden rounded-2xl bg-surface-secondary ring-accent transition-shadow group-focus-visible:ring-2">
-        <img
-          src={urlThumb(v)}
-          alt=""
-          loading="lazy"
-          className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-          onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        {(v.tipo === 'carrossel' || v.tipo === 'foto') && (
-          <span className="absolute top-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">
-            {v.tipo === 'carrossel' ? 'Carrossel' : 'Foto'}
-          </span>
-        )}
-        <div className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-          <span className="grid size-12 place-items-center rounded-full bg-white/25 text-white backdrop-blur-md">
-            <Play className="size-5" />
-          </span>
-        </div>
-        <div className="num absolute inset-x-0 bottom-0 flex items-center justify-between p-2.5 text-xs font-medium text-white">
-          <span className="flex items-center gap-1">
-            <Eye className="size-3.5" />
-            {v.views != null ? fmtNum(v.views) : `♥ ${fmtNum(v.likes)}`}
-          </span>
-          {v.duracao != null && <span>{fmtDuracao(v.duracao)}</span>}
-        </div>
-      </div>
-      <div className="mt-2 px-0.5">
-        <p className="truncate text-sm font-medium">{nome ?? `@${v.conta}`}</p>
-        <p className="num truncate text-xs text-muted">
-          {fmtData(v.data)}
-          {v.engajamento != null && ` · ${v.engajamento.toFixed(1)}% eng.`}
-        </p>
-      </div>
+    <button onClick={onPress}
+      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${ativo ? 'bg-surface font-medium shadow-sm ring-1 ring-[var(--hairline)]' : 'text-muted hover:text-foreground'}`}>
+      {children}
     </button>
   )
 }
 
-export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nome?: string; onFechar: () => void }) {
+function CartaoVideo({ v, nome, onAbrir, pastas, dentro, favoritos, aoColocar, aoNovaPasta }: {
+  v: Video; nome?: string; onAbrir: () => void; pastas: Pasta[]; dentro: number[]; favoritos?: Pasta
+  aoColocar: (p: Pasta, dentro: boolean) => void; aoNovaPasta: () => void
+}) {
+  const fav = !!favoritos && dentro.includes(favoritos.id)
+  const [festa, setFesta] = useState(0)
+  const minhas = pastas.filter((p) => !p.sistema)
+  const emPasta = dentro.some((id) => minhas.some((p) => p.id === id))
+  return (
+    <div className="group relative">
+      <button onClick={onAbrir} className="block w-full text-left outline-none">
+        <div className="relative aspect-[9/16] overflow-hidden rounded-2xl bg-surface-secondary ring-accent transition-shadow group-focus-visible:ring-2">
+          <img src={urlThumb(v)} alt="" loading="lazy"
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+          {(v.tipo === 'carrossel' || v.tipo === 'foto') && (
+            <span className="absolute top-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">
+              {v.tipo === 'carrossel' ? 'Carrossel' : 'Foto'}
+            </span>
+          )}
+          <div className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="grid size-12 place-items-center rounded-full bg-white/25 text-white backdrop-blur-md"><Play className="size-5" /></span>
+          </div>
+          <div className="num absolute inset-x-0 bottom-0 flex items-center justify-between p-2.5 text-xs font-medium text-white">
+            <span className="flex items-center gap-1"><Eye className="size-3.5" />{v.views != null ? fmtNum(v.views) : `♥ ${fmtNum(v.likes)}`}</span>
+            {v.duracao != null && <span>{fmtDuracao(v.duracao)}</span>}
+          </div>
+        </div>
+        <div className="mt-2 px-0.5">
+          <p className="truncate text-sm font-medium">{nome ?? `@${v.conta}`}</p>
+          <p className="num truncate text-xs text-muted">{fmtData(v.data)}{v.engajamento != null && ` · ${v.engajamento.toFixed(1)}% eng.`}</p>
+        </div>
+      </button>
+      <div className="absolute top-2 right-2 flex flex-col gap-1.5">
+        {favoritos && (
+          <button aria-label={fav ? 'Tirar dos favoritos' : 'Favoritar'} onClick={() => { if (!fav) setFesta(Date.now()); aoColocar(favoritos, !fav) }}
+            className={`relative grid size-8 place-items-center rounded-full backdrop-blur-md transition-all hover:scale-110 ${fav ? 'bg-white text-[#ff4d6d] opacity-100' : 'bg-black/45 text-white opacity-0 group-hover:opacity-100 max-sm:opacity-100'}`}>
+            {fav ? <HeartFill key={festa} className="anim-coracao size-4" /> : <Heart className="size-4" />}
+            {festa > 0 && fav && <span key={`e${festa}`} className="pointer-events-none absolute -inset-4"><Explosao tamanho={64} cor="#ff4d6d" /></span>}
+          </button>
+        )}
+        <Menu titulo="Guardar na pasta" gatilho={(abrir) => (
+          <button aria-label="Guardar na pasta" onClick={abrir}
+            className={`grid size-8 place-items-center rounded-full bg-black/45 text-white backdrop-blur-md transition-all hover:scale-110 ${emPasta ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 max-sm:opacity-100'}`}>
+            <Folder className="size-4" />
+          </button>
+        )} itens={[
+          ...minhas.map((p) => ({ id: p.id, rotulo: p.nome, icone: <Folder />, marcado: dentro.includes(p.id), aoEscolher: () => aoColocar(p, !dentro.includes(p.id)) })),
+          { id: 'nova', rotulo: 'Nova pasta…', icone: <Plus />, aoEscolher: aoNovaPasta },
+        ]} />
+      </div>
+    </div>
+  )
+}
+
+export function ModalVideo({ video, nome, onFechar, aoMudarPastas }: { video: Video | null; nome?: string; onFechar: () => void; aoMudarPastas?: () => void }) {
   const nuvem = useNuvem()
   return (
     <Modal.Backdrop isOpen={!!video} onOpenChange={(v) => !v && onFechar()}>
@@ -266,6 +367,7 @@ export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nom
                     (curtidas + comentários ÷ views).
                   </p>
                 )}
+                <AcoesPost video={video} aoMudarPastas={aoMudarPastas} />
                 <AnaliseIA video={video} />
                 <Comentarios video={video} />
                 <div className="flex-1">
@@ -413,6 +515,52 @@ function Estat({ icone, rotulo, valor }: { icone: React.ReactNode; rotulo: strin
         {rotulo}
       </div>
       <p className="num mt-1 font-semibold">{valor}</p>
+    </div>
+  )
+}
+
+
+/** Favoritar, guardar em pasta e usar como referência de estilo visual (dentro do modal do post). */
+function AcoesPost({ video, aoMudarPastas }: { video: Video; aoMudarPastas?: () => void }) {
+  const [pastas, setPastas] = useState<Pasta[]>([])
+  const [dentro, setDentro] = useState<number[]>([])
+  const [estilos, setEstilos] = useState<Estilo[]>([])
+  const k = `${video.plataforma}/${video.id}`
+  useEffect(() => {
+    apiPastas.listar().then((r) => { setPastas(r.pastas); setDentro(r.mapa[k] ?? []) }).catch(() => {})
+    criacao.estilos().then((r) => setEstilos(r.estilos)).catch(() => {})
+  }, [k])
+  const fav = pastas.find((p) => p.sistema)
+  const minhas = pastas.filter((p) => !p.sistema)
+  const alternar = async (p: Pasta) => {
+    const vai = !dentro.includes(p.id)
+    setDentro((d) => (vai ? [...d, p.id] : d.filter((x) => x !== p.id)))
+    tocar(p.sistema ? (vai ? 'favorito' : 'clique') : 'pasta')
+    await (p.sistema ? apiPastas.favoritar(video, vai) : apiPastas.colocar(p.id, video, vai)).catch(() => {})
+    aoMudarPastas?.()
+  }
+  const referencia = async (e: Estilo | null) => {
+    try {
+      const id = e?.id ?? (await criacao.criarEstilo(`Estilo de @${video.conta}`)).id
+      await criacao.refDoPost(id, video)
+      tocar('pasta')
+      toast.success(e ? `Adicionado ao estilo "${e.nome}"` : 'Novo estilo criado com este post', { description: 'Veja em Criar → Estilos visuais.' })
+    } catch (err) { toast.danger('Não deu', { description: (err as Error).message }) }
+  }
+  const favorito = !!fav && dentro.includes(fav.id)
+  return (
+    <div className="flex flex-wrap gap-2">
+      {fav && (
+        <Button size="sm" variant="tertiary" onPress={() => alternar(fav)}>
+          {favorito ? <HeartFill className="anim-coracao text-[#ff4d6d]" /> : <Heart />} {favorito ? 'Favorito' : 'Favoritar'}
+        </Button>
+      )}
+      <Menu titulo="Guardar na pasta" alinhar="esquerda" gatilho={(abrir) => <Button size="sm" variant="tertiary" onPress={abrir}><Folder /> Pasta</Button>}
+        itens={minhas.length ? minhas.map((p) => ({ id: p.id, rotulo: p.nome, icone: <Folder />, marcado: dentro.includes(p.id), aoEscolher: () => alternar(p) }))
+          : [{ id: 'x', rotulo: 'Crie pastas na Biblioteca', aoEscolher: () => {} }]} />
+      <Menu titulo="Usar como referência visual" alinhar="esquerda" gatilho={(abrir) => <Button size="sm" variant="tertiary" onPress={abrir}><Palette /> Referência de estilo</Button>}
+        itens={[...estilos.map((e) => ({ id: e.id, rotulo: e.nome, icone: <Palette />, aoEscolher: () => referencia(e) })),
+          { id: 'novo', rotulo: 'Novo estilo com este post', icone: <Plus />, aoEscolher: () => referencia(null) }]} />
     </div>
   )
 }

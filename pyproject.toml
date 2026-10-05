@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.0",
     "upstash-redis>=1.4",
     "imageio-ffmpeg>=0.6",
+    "pillow>=11",
     "vercel>=0.11",
     "psycopg[binary]>=3.2",
     "psycopg_pool>=3.2",

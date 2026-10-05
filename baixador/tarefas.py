@@ -104,6 +104,11 @@ def executar(tid, prazo=None):
     t["fim"] = time.time()
     t.pop("_pendentes", None)
     _gravar(t)
+    try:  # piloto automático da primeira configuração (estratégia e calendário quando tudo terminar)
+        from .ia import tarefas_ia
+        tarefas_ia.encadear()
+    except Exception:
+        pass
     return False
 
 

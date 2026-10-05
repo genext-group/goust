@@ -165,6 +165,70 @@ create table if not exists uso (
   segundos_audio bigint not null default 0,
   primary key (usuario_id, mes, modelo)
 );
+
+create table if not exists pastas (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  nome text not null,
+  sistema text,
+  cor text,
+  criado_em timestamptz not null default now()
+);
+create unique index if not exists pastas_sistema on pastas (usuario_id, sistema) where sistema is not null;
+
+create table if not exists pastas_posts (
+  pasta_id bigint not null references pastas(id) on delete cascade,
+  post_id bigint not null references posts(id) on delete cascade,
+  criado_em timestamptz not null default now(),
+  primary key (pasta_id, post_id)
+);
+
+create table if not exists estilos (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  nome text not null,
+  guia jsonb,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists estilo_refs (
+  id bigserial primary key,
+  estilo_id bigint not null references estilos(id) on delete cascade,
+  chave text not null,
+  origem text not null,
+  post_id bigint references posts(id) on delete set null,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists imagens (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  chave text,
+  prompt text not null,
+  estilo_id bigint references estilos(id) on delete set null,
+  conteudo_id bigint,
+  formato text,
+  qualidade text,
+  modelo text,
+  favorita boolean not null default false,
+  criado_em timestamptz not null default now()
+);
+create index if not exists imagens_usuario on imagens (usuario_id, id desc);
+
+create table if not exists conteudos (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  titulo text not null,
+  formato text,
+  pilar text,
+  data date,
+  status text not null default 'ideia',
+  dados jsonb not null default '{}',
+  roteiro jsonb,
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+create index if not exists conteudos_usuario on conteudos (usuario_id, data);
 """
 
 

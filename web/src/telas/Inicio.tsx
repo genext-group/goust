@@ -2,12 +2,12 @@ import { Button } from '@heroui/react'
 import { ArrowRight } from '@gravity-ui/icons'
 import { CheckDesenhado, Radar } from '../components/Animacoes'
 import { useEffect, useState, type CSSProperties } from 'react'
-import { ia, type Conta, type Marca, type ResumoRelatorio, type Tarefa } from '../api'
+import { criacao, ia, type Conta, type Marca, type ResumoRelatorio, type Tarefa } from '../api'
 import { aura, auraMarca } from '../aura'
 import { AvatarConta } from '../components/Avatar'
 import { fmtNum, fmtRelativo } from '../formato'
 
-type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'downloads'
+type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'criar' | 'downloads'
 
 interface Props {
   contas: Conta[]
@@ -15,16 +15,18 @@ interface Props {
   irPara: (a: Aba) => void
 }
 
-export function TelaInicio({ contas, tarefas, irPara }: Props) {
+export function TelaInicio({ contas, irPara }: Props) {
   const [relatorios, setRelatorios] = useState<Record<string, ResumoRelatorio> | null>(null)
   const [marca, setMarca] = useState<Marca | null>(null)
   const [temEstrategia, setTemEstrategia] = useState(false)
+  const [planejados, setPlanejados] = useState(0)
   const [nome, setNome] = useState<string>('')
 
   useEffect(() => {
     ia.relatorios().then(setRelatorios).catch(() => setRelatorios({}))
     ia.marca().then(setMarca).catch(() => {})
     ia.estrategia().then((e) => setTemEstrategia(!!e.estrategia)).catch(() => {})
+    criacao.conteudos().then((c) => setPlanejados(c.length)).catch(() => {})
   }, [])
   useEffect(() => { setNome(marca?.nome || '') }, [marca])
 
@@ -33,7 +35,6 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
   const analisados = concorrentes.filter((c) => relatorios?.[`${c.plataforma}/${c.conta}`]).length
   const camposBrief = marca ? Object.values(marca).filter((v) => v?.trim()).length : 0
   const posts = contas.reduce((s, c) => s + (c.videos || 0), 0)
-  const ativas = tarefas.filter((t) => ['na fila', 'listando', 'baixando', 'comentários'].includes(t.status)).length
 
   const passos: { titulo: string; texto: string; feito: boolean; ir: Aba; acao: string }[] = [
     { titulo: 'Conecte seu perfil', texto: 'A IA analisa o seu perfil com o mesmo motor dos concorrentes.', feito: proprias.length > 0, ir: 'meuperfil', acao: 'Conectar' },
@@ -41,6 +42,7 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
     { titulo: 'Escolha seus concorrentes', texto: 'Quem você quer acompanhar de perto.', feito: concorrentes.length >= 3, ir: 'contas', acao: 'Adicionar' },
     { titulo: 'Analise o mercado', texto: 'Posicionamento, ganchos, comentários e o que performa.', feito: analisados > 0, ir: 'inteligencia', acao: 'Analisar' },
     { titulo: 'Gere sua estratégia', texto: 'Diagnóstico, pilares, metas e as primeiras ideias.', feito: temEstrategia, ir: 'meuperfil', acao: 'Gerar' },
+    { titulo: 'Planeje e crie', texto: 'Calendário, roteiros e imagens no seu estilo.', feito: planejados > 0, ir: 'criar', acao: 'Planejar' },
   ]
   const proximo = passos.findIndex((p) => !p.feito)
   const feitos = passos.filter((p) => p.feito).length
@@ -74,7 +76,7 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
             <div className="h-full rounded-full botao-sinal transition-all" style={{ width: `${(feitos / passos.length) * 100}%` }} />
           </div>
         </div>
-        <ol className="cascata grid gap-2 md:grid-cols-5">
+        <ol className="cascata grid gap-2 md:grid-cols-3 lg:grid-cols-6">
           {passos.map((p, i) => {
             const atual = i === proximo
             return (
@@ -101,9 +103,9 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
           ['Concorrentes', fmtNum(concorrentes.length), 'contas' as Aba],
           ['Posts catalogados', fmtNum(posts), 'biblioteca' as Aba],
           ['Análises de IA', fmtNum(Object.keys(relatorios ?? {}).length), 'inteligencia' as Aba],
-          ['Em andamento', fmtNum(ativas), 'downloads' as Aba],
+          ['No calendário', fmtNum(planejados), 'criar' as Aba],
         ].map(([rotulo, valor, ir], i) => (
-          <button key={rotulo as string} style={{ '--i': i + 5 } as CSSProperties} onClick={() => irPara(ir as Aba)} className="cartao p-5 text-left transition-transform hover:-translate-y-0.5">
+          <button key={rotulo as string} style={{ '--i': i + 6 } as CSSProperties} onClick={() => irPara(ir as Aba)} className="cartao p-5 text-left transition-transform hover:-translate-y-0.5">
             <p className="text-xs text-muted">{rotulo}</p>
             <p className="num titulo-display mt-1 text-3xl font-semibold">{valor}</p>
           </button>
@@ -130,7 +132,7 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
               return (
                 <button key={chave} onClick={() => irPara('inteligencia')}
                   className="flex gap-4 rounded-2xl bg-surface-secondary/70 p-4 text-left transition-colors hover:bg-surface-secondary">
-                  <div className="aura grid size-14 shrink-0 place-items-center rounded-2xl" style={aura(chave)}>
+                  <div className="aura grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl" style={aura(chave)}>
                     {c && <AvatarConta conta={c} tamanho="sm" />}
                   </div>
                   <div className="min-w-0 flex-1">

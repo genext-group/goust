@@ -1,20 +1,23 @@
 import { Button, Toast } from '@heroui/react'
-import { House, Moon, Person, Persons, Picture, Sparkles, Sun, Thunderbolt, Volume, VolumeXmark } from '@gravity-ui/icons'
+import { House, MagicWand, Moon, Person, Persons, Picture, Sparkles, Sun, Volume, VolumeXmark } from '@gravity-ui/icons'
 import { ClerkProvider, Show, SignIn, UserButton, useAuth } from '@clerk/react'
 import { ptBR } from '@clerk/localizations'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { api, definirObtencaoToken, type Ambiente, type Conta, type Tarefa } from './api'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { api, definirObtencaoToken, ia, inicio, type Ambiente, type Conta, type Eu, type Tarefa, type TarefaIA } from './api'
+import { AtividadeContexto, CentralAtividade, processos, useSonsDosProcessos } from './components/Atividade'
+import { BoasVindas } from './telas/BoasVindas'
+import { TelaCriar } from './telas/Criar'
 import { AmbienteContexto } from './ambiente'
 import { LogoAnimado, TelaCarregando } from './components/Animacoes'
 import { aoMudarSons, definirSons, instalarSonsDeClique, sonsLigados, tocar } from './sons'
 import { TelaBiblioteca } from './telas/Biblioteca'
 import { TelaContas } from './telas/Contas'
-import { TelaDownloads, ativa } from './telas/Downloads'
+import { TelaDownloads } from './telas/Downloads'
 import { TelaInteligencia } from './telas/Inteligencia'
 import { TelaMeuPerfil } from './telas/MeuPerfil'
 import { TelaInicio } from './telas/Inicio'
 
-type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'downloads'
+type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'criar' | 'downloads'
 
 /** Verifica o ambiente. Online: login pelo Clerk (cada criador vê só os próprios dados). Local: direto. */
 export default function App() {
@@ -85,17 +88,34 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
 
   const carregarContas = useCallback(() => api.contas().then(setContas).catch(() => {}), [])
   const carregarTarefas = useCallback(() => api.tarefas().then(setTarefas).catch(() => {}), [])
+  const [tarefasIA, setTarefasIA] = useState<TarefaIA[]>([])
+  const carregarIA = useCallback(() => ia.tarefas().then(setTarefasIA).catch(() => {}), [])
+  const recarregar = useCallback(() => { carregarTarefas(); carregarIA() }, [carregarTarefas, carregarIA])
+  const [eu, setEu] = useState<Eu | null>(null)
+  const [contasCarregadas, setContasCarregadas] = useState(false)
 
   useEffect(() => {
-    carregarContas()
-    carregarTarefas()
-    // online cada consulta custa um comando no Redis gratuito: consulta menos e só com a aba visível
-    const t = setInterval(() => { if (!document.hidden) carregarTarefas() }, nuvem ? 4000 : 1500)
+    api.contas().then(setContas).catch(() => {}).finally(() => setContasCarregadas(true))
+    inicio.eu().then(setEu).catch(() => {})
+    recarregar()
+    // consulta só com a aba visível; mais rápido quando há algo rodando
+    const t = setInterval(() => { if (!document.hidden) recarregar() }, nuvem ? 3000 : 1500)
     return () => clearInterval(t)
-  }, [carregarContas, carregarTarefas, nuvem])
+  }, [recarregar, nuvem])
+
+  // a primeira configuração aparece para quem chega sem nada e só some quando a pessoa termina
+  const [emBoasVindas, setEmBoasVindas] = useState(false)
+  const decidido = useRef(false)
+  useEffect(() => {
+    if (decidido.current || !contasCarregadas || eu === null) return
+    decidido.current = true
+    setEmBoasVindas(!eu.onboarding && contas.length === 0)
+  }, [contasCarregadas, eu, contas.length])
+
+  useSonsDosProcessos(tarefas, tarefasIA)
+  const lista = useMemo(() => processos(tarefas, tarefasIA, carregarTarefas), [tarefas, tarefasIA, carregarTarefas])
 
   // quando um download termina, atualiza contadores e biblioteca
-  const emAndamento = tarefas.filter(ativa).length
   const baixadosTotal = tarefas.reduce((s, t) => s + t.baixados, 0)
   useEffect(() => {
     if (concluidasAntes.current !== null && concluidasAntes.current !== baixadosTotal) {
@@ -122,17 +142,14 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
     { id: 'contas', nome: 'Concorrentes', icone: <Persons /> },
     { id: 'inteligencia', nome: 'Inteligência', icone: <Sparkles /> },
     { id: 'biblioteca', nome: 'Biblioteca', icone: <Picture /> },
-    {
-      id: 'downloads', nome: 'Atividade', icone: <Thunderbolt />,
-      extra: emAndamento > 0 ? <span className="num grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-foreground">{emAndamento}</span> : null,
-    },
+    { id: 'criar', nome: 'Criar', icone: <MagicWand /> },
   ]
   const irPara = (a: Aba) => {
     if (a !== aba) tocar('navegar')
     setAba(a)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  const aoBaixar = () => (carregarTarefas(), irPara('downloads'))
+  const aoBaixar = () => recarregar() // o progresso aparece na central de atividade
 
   const tela = {
     inicio: <TelaInicio contas={contas} tarefas={tarefas} irPara={irPara} />,
@@ -141,12 +158,25 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
     contas: <TelaContas contas={contas} setContas={setContas} aoBaixar={aoBaixar} />,
     inteligencia: <TelaInteligencia contas={contas} versaoBiblioteca={versaoBiblioteca} />,
     biblioteca: <TelaBiblioteca contas={contas} versao={versaoBiblioteca} />,
+    criar: <TelaCriar contas={contas} versaoBiblioteca={versaoBiblioteca} />,
     downloads: <TelaDownloads tarefas={tarefas} aoMudar={carregarTarefas} />,
   }[aba]
 
+  const contexto = { downloads: tarefas, ia: tarefasIA, recarregar }
+  if (emBoasVindas) {
+    return (
+      <AtividadeContexto.Provider value={contexto}>
+        <Toast.Provider placement="top end" />
+        <BoasVindas contas={contas} setContas={setContas} aoTerminar={() => { setEmBoasVindas(false); irPara('inicio') }} />
+      </AtividadeContexto.Provider>
+    )
+  }
+
   return (
+    <AtividadeContexto.Provider value={contexto}>
     <div className="ambiente min-h-screen overflow-x-clip">
       <Toast.Provider placement="top end" />
+      <CentralAtividade lista={lista} irPara={(d) => irPara(d)} />
 
       <header className="vidro sticky top-0 z-40 border-b linha-fina">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-8">
@@ -172,9 +202,10 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
       </header>
 
       <main className="min-w-0">
-        <div key={aba} className="troca-pagina mx-auto w-full min-w-0 max-w-6xl px-4 pt-8 pb-16 sm:px-8">{tela}</div>
+        <div key={aba} className="troca-pagina mx-auto w-full min-w-0 max-w-6xl px-4 pt-8 pb-28 sm:px-8">{tela}</div>
       </main>
     </div>
+    </AtividadeContexto.Provider>
   )
 }
 

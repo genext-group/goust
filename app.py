@@ -14,7 +14,7 @@ from curl_cffi import requests as http
 from flask import (Flask, Response, abort, jsonify, request, send_file, send_from_directory,
                    stream_with_context)
 
-from baixador import auth, biblioteca, contexto, db, instagram, midia, tarefas
+from baixador import auth, biblioteca, contexto, db, instagram, midia, pastas, tarefas
 from baixador.armazenamento import NUVEM, RAIZ
 from baixador.filtros import PASTA_DOWNLOADS, normalizar_conta
 from baixador.ia import chat as ia_chat
@@ -23,6 +23,8 @@ from baixador.ia import memoria as ia_memoria
 from baixador.ia import mercado as ia_mercado
 from baixador.ia import perfil as ia_perfil
 from baixador.ia import tarefas_ia as ia_tarefas
+from baixador.ia import conteudo as ia_conteudo
+from baixador.ia import imagens as ia_imagens
 from baixador.ia import video as ia_video
 
 PUBLICO = RAIZ / "public"
@@ -76,7 +78,9 @@ def api_ambiente():
 @app.get("/api/eu")
 @protegido
 def api_eu():
-    return jsonify(db.um("select id, email, nome from usuarios where id = %s", contexto.usuario()))
+    u = db.um("select id, email, nome, config from usuarios where id = %s", contexto.usuario())
+    config = u.pop("config") or {}
+    return jsonify({**u, "onboarding": bool(config.get("onboarding")), "piloto": config.get("piloto") or {}})
 
 
 # ---------------------------------------------------------------- contas
@@ -446,6 +450,224 @@ def api_cron_monitorar():
     if request.headers.get("Authorization") != f"Bearer {os.getenv('CRON_SECRET', '')}" or not os.getenv("CRON_SECRET"):
         return jsonify(erro="não autorizado"), 401
     ia_tarefas.monitorar_todos(ler_contas)
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- pastas e favoritos (biblioteca)
+
+def _erro(f, *a, **k):
+    try:
+        return jsonify(f(*a, **k))
+    except ValueError as e:
+        return jsonify(erro=str(e)), 400
+
+
+@app.get("/api/pastas")
+@protegido
+def api_pastas():
+    return jsonify(pastas=pastas.listar(), mapa=pastas.mapa_do_usuario())
+
+
+@app.post("/api/pastas")
+@protegido
+def api_criar_pasta():
+    d = request.json or {}
+    return _erro(pastas.criar, d.get("nome"), d.get("cor"))
+
+
+@app.put("/api/pastas/<int:pid>")
+@protegido
+def api_renomear_pasta(pid):
+    d = request.json or {}
+    return _erro(pastas.renomear, pid, d.get("nome", ""), d.get("cor"))
+
+
+@app.delete("/api/pastas/<int:pid>")
+@protegido
+def api_apagar_pasta(pid):
+    return _erro(pastas.apagar, pid)
+
+
+@app.post("/api/pastas/<int:pid>/posts")
+@protegido
+def api_pasta_post(pid):
+    d = request.json or {}
+    return _erro(lambda: (pastas.colocar(pid, d["plataforma"], d["id"], d.get("dentro", True)), True)[1])
+
+
+@app.post("/api/favorito")
+@protegido
+def api_favorito():
+    d = request.json or {}
+    return _erro(lambda: (pastas.favoritar(d["plataforma"], d["id"], d.get("favorito", True)), True)[1])
+
+
+# ---------------------------------------------------------------- criação: estilos visuais e imagens
+
+@app.get("/img/<nome>")
+def img(nome):
+    """Imagens geradas e referências de estilo (o nome é aleatório e longo: funciona como link privado)."""
+    dados = ia_imagens.ler_arquivo(nome)
+    if not dados:
+        abort(404)
+    tipo = "image/webp" if nome.endswith(".webp") else "image/jpeg"
+    return Response(dados, mimetype=tipo, headers={"Cache-Control": "private, max-age=31536000, immutable"})
+
+
+@app.get("/api/estilos")
+@protegido
+def api_estilos():
+    return jsonify(estilos=ia_imagens.listar_estilos(), formatos=ia_imagens.formatos())
+
+
+@app.post("/api/estilos")
+@protegido
+def api_criar_estilo():
+    return jsonify(id=ia_imagens.criar_estilo((request.json or {}).get("nome")), estilos=ia_imagens.listar_estilos())
+
+
+@app.put("/api/estilos/<int:eid>")
+@protegido
+def api_renomear_estilo(eid):
+    return _erro(lambda: (ia_imagens.renomear_estilo(eid, (request.json or {}).get("nome", "")), ia_imagens.listar_estilos())[1])
+
+
+@app.delete("/api/estilos/<int:eid>")
+@protegido
+def api_apagar_estilo(eid):
+    return _erro(lambda: (ia_imagens.apagar_estilo(eid), ia_imagens.listar_estilos())[1])
+
+
+@app.post("/api/estilos/<int:eid>/refs")
+@protegido
+def api_ref_estilo(eid):
+    """Upload (multipart 'arquivo', vários) ou post da biblioteca (JSON {plataforma, id})."""
+    def fazer():
+        if request.files:
+            arquivos = request.files.getlist("arquivo")
+            for a in arquivos:
+                ia_imagens.adicionar_upload(eid, a.read())
+        else:
+            d = request.json or {}
+            if d.get("imagem_id"):
+                ia_imagens.imagem_para_referencia(d["imagem_id"], eid)
+            else:
+                ia_imagens.adicionar_post(eid, d["plataforma"], d["id"])
+        return ia_imagens.listar_estilos()
+    return _erro(fazer)
+
+
+@app.delete("/api/estilos/<int:eid>/refs/<int:rid>")
+@protegido
+def api_remover_ref(eid, rid):
+    return _erro(lambda: (ia_imagens.remover_ref(eid, rid), ia_imagens.listar_estilos())[1])
+
+
+@app.post("/api/estilos/<int:eid>/analisar")
+@protegido
+def api_analisar_estilo(eid):
+    return jsonify(ia_tarefas.enfileirar("estilo", params={"alvo": eid}))
+
+
+@app.get("/api/imagens")
+@protegido
+def api_imagens():
+    return jsonify(ia_imagens.listar_imagens())
+
+
+@app.post("/api/imagens")
+@protegido
+def api_gerar_imagem():
+    d = request.json or {}
+    if not (d.get("pedido") or "").strip():
+        return jsonify(erro="Descreva a imagem que você quer."), 400
+    params = {k: d.get(k) for k in ("pedido", "estilo_id", "formato", "qualidade", "conteudo_id")}
+    quantidade = max(1, min(int(d.get("quantidade") or 1), 4))
+    return jsonify([ia_tarefas.enfileirar("imagem", params=params) for _ in range(quantidade)])
+
+
+@app.put("/api/imagens/<int:iid>")
+@protegido
+def api_favoritar_imagem(iid):
+    ia_imagens.favoritar_imagem(iid, (request.json or {}).get("favorita"))
+    return jsonify(ok=True)
+
+
+@app.delete("/api/imagens/<int:iid>")
+@protegido
+def api_apagar_imagem(iid):
+    ia_imagens.apagar_imagem(iid)
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- criação: calendário e roteiros
+
+@app.get("/api/conteudos")
+@protegido
+def api_conteudos():
+    return jsonify(ia_conteudo.listar())
+
+
+@app.post("/api/conteudos")
+@protegido
+def api_criar_conteudo():
+    return _erro(ia_conteudo.criar, request.json or {})
+
+
+@app.put("/api/conteudos/<int:cid>")
+@protegido
+def api_atualizar_conteudo(cid):
+    return _erro(ia_conteudo.atualizar, cid, request.json or {})
+
+
+@app.delete("/api/conteudos/<int:cid>")
+@protegido
+def api_apagar_conteudo(cid):
+    ia_conteudo.apagar(cid)
+    return jsonify(ok=True)
+
+
+@app.post("/api/conteudos/calendario")
+@protegido
+def api_gerar_calendario():
+    d = request.json or {}
+    return jsonify(ia_tarefas.enfileirar("calendario", params={"semanas": d.get("semanas", 2), "inicio": d.get("inicio")}))
+
+
+@app.post("/api/conteudos/<int:cid>/roteiro")
+@protegido
+def api_gerar_roteiro(cid):
+    return jsonify(ia_tarefas.enfileirar("roteiro", params={"alvo": cid, "pedido": (request.json or {}).get("pedido", "")}))
+
+
+# ---------------------------------------------------------------- primeira configuração
+
+@app.post("/api/ia/sugerir-concorrentes")
+@protegido
+def api_sugerir_concorrentes():
+    try:
+        return jsonify(ia_conteudo.sugerir_concorrentes((request.json or {}).get("descricao", "")))
+    except ValueError as e:
+        return jsonify(erro=str(e)), 400
+    except Exception as e:
+        return jsonify(erro=f"A pesquisa falhou: {e}"), 500
+
+
+@app.post("/api/piloto")
+@protegido
+def api_piloto():
+    d = request.json or {}
+    ia_tarefas.ligar_piloto(d.get("estrategia", True), d.get("calendario", True))
+    return jsonify(ok=True)
+
+
+@app.put("/api/eu/config")
+@protegido
+def api_eu_config():
+    """Preferências simples do usuário (ex.: onboarding concluído)."""
+    d = {k: v for k, v in (request.json or {}).items() if k in ("onboarding",)}
+    if d:
+        db.executar("update usuarios set config = config || %s where id = %s", d, contexto.usuario())
     return jsonify(ok=True)
 
 
