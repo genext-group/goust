@@ -33,7 +33,7 @@ def listar():
     return [{**r["dados"], "id": r["id"]} for r in linhas]
 
 
-UNICAS = ("perfil", "mercado", "estrategia", "calendario", "estilo", "roteiro")  # não duplicam na fila
+UNICAS = ("perfil", "mercado", "estrategia", "calendario", "estilo", "roteiro", "inteligencia")  # não duplicam na fila
 
 
 def enfileirar(tipo, plataforma=None, conta=None, params=None):
@@ -80,6 +80,9 @@ def executar(tid, prazo=None):
             imagens.analisar_estilo(t["params"]["alvo"], progresso)
         elif t["tipo"] == "calendario":
             t["resultado"] = conteudo.gerar_calendario(t["params"].get("semanas", 2), t["params"].get("inicio"), progresso)
+        elif t["tipo"] == "inteligencia":
+            from ..inteligencia import rotina
+            t["resultado"] = rotina.rotina(progresso)
         elif t["tipo"] == "roteiro":
             conteudo.gerar_roteiro(t["params"]["alvo"], t["params"].get("pedido", ""), progresso)
         else:
@@ -186,11 +189,29 @@ def executar_monitoramento(contas):
 
 
 def monitorar_todos(contas_do_usuario):
-    """Cron diário (nuvem): roda o monitoramento de cada usuário que ligou a opção."""
-    for r in db.todos("select id from usuarios where (config->'monitoramento'->>'ativo')::boolean is true"):
-        ctx.definir(r["id"])
+    """Cron diário (nuvem): coleta diária da central para quem usa a plataforma (seu perfil + contas mais
+    desatualizadas, com limite) e o monitoramento completo de quem ligou a opção."""
+    from ..inteligencia import rotina
+    ativos = set(rotina.usuarios_ativos())
+    monitorando = {r["id"] for r in db.todos("select id from usuarios where (config->'monitoramento'->>'ativo')::boolean is true")}
+    for uid in ativos | monitorando:
+        ctx.definir(uid)
         try:
-            executar_monitoramento(contas_do_usuario())
+            if uid in monitorando:
+                executar_monitoramento(contas_do_usuario())
+            else:
+                rotina.coleta_diaria()
+        except Exception:
+            traceback.print_exc()
+
+
+def inteligencia_todos():
+    """Cron diário (nuvem), depois da coleta: a rotina da central para cada usuário ativo."""
+    from ..inteligencia import rotina
+    for uid in rotina.usuarios_ativos():
+        ctx.definir(uid)
+        try:
+            enfileirar("inteligencia", params={"silencioso": True})
         except Exception:
             traceback.print_exc()
 

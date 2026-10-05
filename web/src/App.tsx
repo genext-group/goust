@@ -152,7 +152,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
   const aoBaixar = () => recarregar() // o progresso aparece na central de atividade
 
   const tela = {
-    inicio: <TelaInicio contas={contas} tarefas={tarefas} irPara={irPara} />,
+    inicio: <TelaInicio contas={contas} setContas={setContas} irPara={irPara} />,
     meuperfil: <TelaMeuPerfil contas={contas} setContas={setContas} versaoBiblioteca={versaoBiblioteca} aoBaixar={aoBaixar}
       tarefasDownload={tarefas} recarregarTarefas={carregarTarefas} />,
     contas: <TelaContas contas={contas} setContas={setContas} aoBaixar={aoBaixar} />,

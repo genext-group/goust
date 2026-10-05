@@ -7,7 +7,7 @@ export interface Perfil {
 }
 
 export interface Conta {
-  papel?: 'proprio' | 'concorrente'
+  papel?: 'proprio' | 'concorrente' | 'referencia'
   nome: string
   plataforma: Plataforma
   conta: string
@@ -98,7 +98,7 @@ export const api = {
   contas: () => req<Conta[]>('/api/contas'),
   adicionarConta: (conta: string, plataforma?: Plataforma, papel: 'proprio' | 'concorrente' = 'concorrente') =>
     req<Conta[]>('/api/contas', { body: { conta, plataforma, papel } }),
-  papelConta: (c: Pick<Conta, 'plataforma' | 'conta'>, papel: 'proprio' | 'concorrente') =>
+  papelConta: (c: Pick<Conta, 'plataforma' | 'conta'>, papel: 'proprio' | 'concorrente' | 'referencia') =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}/papel`, { method: 'PUT', body: { papel } }),
   removerConta: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}`, { method: 'DELETE' }),
@@ -228,7 +228,7 @@ export interface AnaliseVideo {
 
 export interface TarefaIA {
   id: number
-  tipo: 'perfil' | 'mercado' | 'estrategia' | 'imagem' | 'estilo' | 'calendario' | 'roteiro'
+  tipo: 'perfil' | 'mercado' | 'estrategia' | 'imagem' | 'estilo' | 'calendario' | 'roteiro' | 'inteligencia'
   params?: Record<string, unknown>
   resultado?: Record<string, unknown> | null
   plataforma: Plataforma | null
@@ -400,4 +400,46 @@ export const inicio = {
   config: (c: { onboarding?: boolean }) => req('/api/eu/config', { method: 'PUT', body: c }),
   sugerirConcorrentes: (descricao = '') => req<Sugestao[]>('/api/ia/sugerir-concorrentes', { body: { descricao } }),
   piloto: (p: { estrategia?: boolean; calendario?: boolean } = {}) => req('/api/piloto', { body: p }),
+}
+
+// ---------------------------------------------------------------- central de inteligência (Início)
+
+export interface Metrica {
+  chave: 'seguidores' | 'alcance' | 'engajamento' | 'publicacoes'; rotulo: string; valor: number | null; delta: number | null
+  direcao: 'alta' | 'queda' | 'estavel' | null; comparacao: string | null; nota?: string | null; sufixo?: string
+  referencia?: { historico: number | null; concorrentes: number | null }
+}
+export interface PerfilSemana {
+  tem_perfil: boolean; contas?: string[]; metricas?: Metrica[]; leitura?: string; tom?: 'alerta' | 'atencao' | 'positivo' | 'neutro'
+  chave?: string; dias_sem_postar?: number | null; concorrentes_publicaram_14d?: number
+}
+export interface Evidencia { plataforma: Plataforma; conta: string; id: string; lift?: number }
+export interface AcaoInsight { tipo: 'ir' | 'gerar_ideia' | 'reclassificar' | 'rolar'; destino?: string; tema?: string; rotulo: string; alvo?: string }
+export interface Insight {
+  id: number; tipo: 'perfil' | 'atencao' | 'conta' | 'mercado' | 'ideia' | 'sistema'; chave: string; titulo: string; texto: string | null
+  dados: {
+    categoria?: string; direcao?: 'alta' | 'queda'; rotulo?: string; assunto?: string; por_que_importa?: string; acao_texto?: string
+    evidencias?: Evidencia[]; estatistica?: Record<string, unknown>; acao?: AcaoInsight; tom?: string
+    formato?: string; pilar?: string; gancho?: string; por_que?: string; base?: string; contas?: { conta: string; motivo: string }[]
+  }
+  magnitude: number; confianca: number; relevancia: number; estado: string; criado: string; novo: boolean
+}
+export interface DescobertaRef {
+  id: number; plataforma: Plataforma; conta: string; nome: string | null; tipo: 'concorrente' | 'referencia'
+  categoria: string | null; motivo: string | null; seguidores: number | null
+}
+export interface Central {
+  perfil: PerfilSemana; atencao: Insight[]; mercado: Insight[]; ideias: Insight[]; desde: Insight[]
+  descobertas: DescobertaRef[]; jornada: Record<'perfil' | 'brief' | 'concorrentes' | 'analise' | 'estrategia' | 'planejamento', boolean>
+  atualizado: number | null; rodando: boolean; primeira_vez: boolean
+}
+
+export const central = {
+  ler: () => req<Central>('/api/inicio'),
+  atualizar: () => req<TarefaIA>('/api/inicio/atualizar', { method: 'POST' }),
+  avaliar: (id: number, estado: 'interessante' | 'irrelevante' | 'oculto' | 'feito') => req(`/api/insights/${id}`, { body: { estado } }),
+  reclassificar: (id: number) => req<Conta[]>(`/api/insights/${id}/reclassificar`, { method: 'POST' }),
+  descoberta: (id: number, acao: 'adicionar' | 'ignorar' | 'ocultar' | 'interessante', papel?: 'concorrente' | 'referencia') =>
+    req<{ ok: boolean; contas: Conta[] | null }>(`/api/descobertas/${id}`, { body: { acao, papel } }),
+  ideia: (tema: string, contexto = '') => req<IdeiaGerada[]>('/api/inicio/ideia', { body: { tema, contexto } }),
 }

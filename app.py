@@ -124,7 +124,8 @@ def api_adicionar_conta():
 @app.put("/api/contas/<plataforma>/<conta>/papel")
 @protegido
 def api_papel_conta(plataforma, conta):
-    papel = "proprio" if (request.json or {}).get("papel") == "proprio" else "concorrente"
+    pedido = (request.json or {}).get("papel")
+    papel = pedido if pedido in ("proprio", "concorrente", "referencia") else "concorrente"
     db.executar("""update acompanhamentos set papel = %s where usuario_id = %s and conta_id =
                    (select id from contas where plataforma = %s and conta = %s)""", papel, contexto.usuario(), plataforma, conta)
     return jsonify(contas_completas())
@@ -669,6 +670,134 @@ def api_sugerir_concorrentes():
         return jsonify(erro=str(e)), 400
     except Exception as e:
         return jsonify(erro=f"A pesquisa falhou: {e}"), 500
+
+
+# ---------------------------------------------------------------- central de inteligência (Início)
+
+def _visita():
+    """Guarda a visita atual e devolve o início da visita anterior. Recarregar a página dentro de 30 min não
+    conta como visita nova (o bloco "Desde sua última visita" não some com um F5)."""
+    import time as _t
+    r = db.um("select config from usuarios where id = %s", contexto.usuario())
+    v = ((r or {}).get("config") or {}).get("visita") or {}
+    agora = _t.time()
+    if not v.get("atual") or agora - v["atual"] > 1800:
+        v = {"anterior": v.get("atual"), "atual": agora}
+    else:
+        v["atual"] = agora
+    db.executar("update usuarios set config = jsonb_set(config, '{visita}', %s) where id = %s", v, contexto.usuario())
+    return v.get("anterior")
+
+
+@app.get("/api/inicio")
+@protegido
+def api_inicio():
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timezone
+    from baixador.inteligencia import analise, insights, rotina
+    anterior = _visita()
+    desde_ts = datetime.fromtimestamp(anterior, timezone.utc) if anterior else None
+    leituras = {
+        "perfil": analise.perfil_semana,
+        "todos": lambda: insights.vigentes(limite=40),
+        "desde": lambda: insights.desde(desde_ts) if desde_ts else [],
+        "jornada": analise.jornada,
+        "estado": rotina.estado,
+        "tarefas": lambda: ia_tarefas.listar()[:20],
+        "descobertas": lambda: db.todos("""select id, plataforma, conta, nome, tipo, categoria, motivo, seguidores from descobertas
+                                           where usuario_id = %s and estado = 'nova' order by relevancia desc, criado_em desc limit 8""",
+                                        contexto.usuario()),
+    }
+    with ThreadPoolExecutor(max_workers=len(leituras)) as pool:  # leituras independentes em paralelo
+        futuros = {k: pool.submit(contexto.em_contexto(f)) for k, f in leituras.items()}
+        r = {k: f.result() for k, f in futuros.items()}
+    perfil, todos, estado = r["perfil"], r["todos"], r["estado"]
+    principal = perfil.get("chave")
+    atencao = [i for i in todos if i["tipo"] in ("atencao", "sistema", "conta") or (i["tipo"] == "perfil" and i["chave"] != principal)][:3]
+    ids_atencao = {i["id"] for i in atencao}
+    mercado = [i for i in todos if i["tipo"] in ("mercado", "conta") and i["id"] not in ids_atencao]
+    ideias = [i for i in todos if i["tipo"] == "ideia"][:3]
+    rodando = any(t["tipo"] == "inteligencia" and t["status"] in ia_tarefas.ATIVOS for t in r["tarefas"])
+    # sem cron (modo local) ou se o cron falhar: a própria visita dispara a atualização em segundo plano
+    if not rodando and ia_cliente.configurada() and rotina.precisa_rodar():
+        import time as _t
+        if not estado.get("ultima_coleta") or _t.time() - estado["ultima_coleta"] > 20 * 3600:
+            rotina.coleta_diaria()
+        ia_tarefas.enfileirar("inteligencia", params={"silencioso": True})
+        rodando = True
+    insights.marcar_vistos([i["id"] for i in atencao + ideias + mercado[:4] + r["desde"]])
+    return jsonify(perfil=perfil, atencao=atencao, mercado=mercado, ideias=ideias, desde=r["desde"],
+                   descobertas=r["descobertas"], jornada=r["jornada"],
+                   atualizado=estado.get("ultima"), rodando=rodando, primeira_vez=not estado.get("ultima"))
+
+
+@app.post("/api/inicio/atualizar")
+@protegido
+def api_inicio_atualizar():
+    return jsonify(ia_tarefas.enfileirar("inteligencia", params={"silencioso": True}))
+
+
+@app.post("/api/insights/<int:iid>")
+@protegido
+def api_avaliar_insight(iid):
+    from baixador.inteligencia import insights
+    return _erro(lambda: (insights.avaliar(iid, (request.json or {}).get("estado")), True)[1])
+
+
+@app.post("/api/insights/<int:iid>/reclassificar")
+@protegido
+def api_reclassificar(iid):
+    """Ação do insight de auditoria: marca como referência as contas que não são do seu mercado."""
+    from baixador.inteligencia import insights
+    i = db.um("select dados from insights where id = %s and usuario_id = %s", iid, contexto.usuario())
+    if not i:
+        return jsonify(erro="Insight não encontrado."), 404
+    for c in i["dados"].get("contas", []):
+        db.executar("""update acompanhamentos set papel = 'referencia' where usuario_id = %s and papel = 'concorrente'
+                       and conta_id in (select id from contas where lower(conta) = lower(%s))""",
+                    contexto.usuario(), c["conta"].strip().lstrip("@"))
+    insights.avaliar(iid, "feito")
+    return jsonify(contas_completas())
+
+
+@app.post("/api/descobertas/<int:did>")
+@protegido
+def api_descoberta(did):
+    acao = (request.json or {}).get("acao")
+    d = db.um("select * from descobertas where id = %s and usuario_id = %s", did, contexto.usuario())
+    if not d:
+        return jsonify(erro="Sugestão não encontrada."), 404
+    if acao == "adicionar":
+        papel = (request.json or {}).get("papel") or d["tipo"]
+        tarefas.acompanhar(d["plataforma"], d["conta"], papel if papel in ("concorrente", "referencia") else "referencia", d["nome"])
+        biblioteca.atualizar_perfil(d["plataforma"], d["conta"])
+        tarefas.enfileirar(d["plataforma"], d["conta"], {"modo": "recentes", "quantidade": 30, "somente_reels": False, "analisar_ao_fim": True})
+        estado = "adicionada"
+    elif acao in ("ignorar", "ocultar", "interessante"):
+        estado = {"ignorar": "ignorada", "ocultar": "oculta", "interessante": "interessante"}[acao]
+    else:
+        return jsonify(erro="Ação inválida."), 400
+    db.executar("update descobertas set estado = %s, atualizado_em = now() where id = %s", estado, did)
+    return jsonify(ok=True, contas=contas_completas() if acao == "adicionar" else None)
+
+
+@app.post("/api/inicio/ideia")
+@protegido
+def api_inicio_ideia():
+    """Insight → ação: gera uma ideia a partir de um sinal, sem sair do Início."""
+    try:
+        d = request.json or {}
+        return jsonify(ia_conteudo.ideia_rapida(d.get("tema") or "", d.get("contexto") or ""))
+    except Exception as e:
+        return jsonify(erro=f"Não deu para gerar: {e}"), 500
+
+
+@app.get("/api/cron/inteligencia")
+def api_cron_inteligencia():
+    if request.headers.get("Authorization") != f"Bearer {os.getenv('CRON_SECRET', '')}" or not os.getenv("CRON_SECRET"):
+        return jsonify(erro="não autorizado"), 401
+    ia_tarefas.inteligencia_todos()
+    return jsonify(ok=True)
 
 
 @app.post("/api/piloto")

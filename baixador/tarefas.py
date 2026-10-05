@@ -52,7 +52,7 @@ def cancelar(tid):
 
 def limpar():
     db.executar("delete from tarefas where usuario_id = %s and tipo = 'download' and status = any(%s)",
-                contexto.usuario(), list(FINAIS))
+                contexto.usuario(), db.Lista(FINAIS))
 
 
 def enfileirar(plataforma, conta, opcoes, usuario_id=None):

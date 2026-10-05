@@ -229,6 +229,44 @@ create table if not exists conteudos (
   atualizado_em timestamptz not null default now()
 );
 create index if not exists conteudos_usuario on conteudos (usuario_id, data);
+
+-- central de inteligência: tudo o que a análise encontra vira um insight com chave (deduplicação),
+-- confiança, relevância, validade e o retorno do usuário (que ajusta as próximas recomendações)
+create table if not exists insights (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  tipo text not null,
+  chave text not null,
+  titulo text not null,
+  texto text,
+  dados jsonb not null default '{}',
+  magnitude real not null default 0,
+  confianca real not null default 0.5,
+  relevancia real not null default 0.5,
+  estado text not null default 'novo',
+  criado_em timestamptz not null default now(),
+  visto_em timestamptz,
+  expira_em timestamptz
+);
+create index if not exists insights_usuario on insights (usuario_id, criado_em desc);
+create index if not exists insights_chave on insights (usuario_id, chave, criado_em desc);
+
+create table if not exists descobertas (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  plataforma text not null,
+  conta text not null,
+  nome text,
+  tipo text not null,
+  categoria text,
+  motivo text,
+  seguidores bigint,
+  relevancia real not null default 0.5,
+  estado text not null default 'nova',
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  unique (usuario_id, plataforma, conta)
+);
 """
 
 
@@ -247,10 +285,14 @@ def pool():
     return _pool
 
 
+class Lista(list):
+    """Parâmetro que deve ir como array do Postgres (ex.: `= any(%s)`), e não como JSON."""
+
+
 def _adaptar(params):
     if params is None:
         return None
-    return tuple(Jsonb(p) if isinstance(p, (dict, list)) else p for p in params)
+    return tuple(list(p) if isinstance(p, Lista) else Jsonb(p) if isinstance(p, (dict, list)) else p for p in params)
 
 
 def todos(sql, *params):

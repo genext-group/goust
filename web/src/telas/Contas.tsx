@@ -3,6 +3,8 @@ import { ArrowDownToLine, FolderOpen, Link, Plus, TrashBin } from '@gravity-ui/i
 import { useMemo, useState } from 'react'
 import { api, interpretarEntrada, type Conta, type Opcoes, type Plataforma } from '../api'
 import { AvatarConta } from '../components/Avatar'
+import { Menu } from '../components/Menu'
+import { tocar } from '../sons'
 import { ModalDownload } from '../components/ModalDownload'
 import { IconePlataforma } from '../components/Plataforma'
 import { fmtNum, fmtRelativo } from '../formato'
@@ -23,11 +25,17 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
   const [plataformaArroba, setPlataformaArroba] = useState<Plataforma>('tiktok')
   const [ocupado, setOcupado] = useState(false)
   const [filtro, setFiltro] = useState<Filtro>('todas')
+  const [papel, setPapel] = useState<'todos' | 'concorrente' | 'referencia'>('todos')
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [modalAberto, setModalAberto] = useState(false)
 
   const tipo = interpretarEntrada(entrada)
-  const visiveis = useMemo(() => contas.filter((c) => filtro === 'todas' || c.plataforma === filtro), [contas, filtro])
+  const visiveis = useMemo(() => contas.filter((c) => (filtro === 'todas' || c.plataforma === filtro)
+    && (papel === 'todos' || (c.papel ?? 'concorrente') === papel)), [contas, filtro, papel])
+  const mudarPapel = async (c: Conta, p: 'proprio' | 'concorrente' | 'referencia') => {
+    tocar('pasta')
+    setContas(await api.papelConta(c, p))
+  }
   const escolhidas = contas.filter((c) => selecionadas.has(chave(c)))
   const todasVisiveisMarcadas = visiveis.length > 0 && visiveis.every((c) => selecionadas.has(chave(c)))
 
@@ -93,9 +101,10 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
     <div className="space-y-10 pb-32">
       {/* Hero */}
       <section className="surgir mx-auto max-w-2xl pt-6 text-center">
-        <h1 className="titulo-display text-4xl font-semibold sm:text-5xl">Referências, sem esforço.</h1>
+        <h1 className="titulo-display text-4xl font-semibold sm:text-5xl">Concorrentes e referências</h1>
         <p className="mt-3 text-lg text-muted">
-          Cole um @, o link de um perfil ou de um vídeo do TikTok ou do Instagram.
+          Concorrente disputa o mesmo cliente. Referência inspira, mesmo sendo de outro mercado.
+          Cole um @, o link de um perfil ou de um vídeo.
         </p>
         <form
           className="cartao mt-8 flex flex-wrap items-center gap-2 p-2 sm:flex-nowrap"
@@ -144,7 +153,15 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
             <h2 className="titulo-display text-2xl font-semibold">Contas</h2>
             <p className="text-sm text-muted">Selecione as contas e escolha o que baixar.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-full bg-surface-secondary/60 p-0.5 text-sm">
+              {([['todos', 'Todos'], ['concorrente', 'Concorrentes'], ['referencia', 'Referências']] as const).map(([k, n]) => (
+                <button key={k} onClick={() => setPapel(k)}
+                  className={`rounded-full px-3 py-1 transition-colors ${papel === k ? 'bg-surface font-medium shadow-sm' : 'text-muted hover:text-foreground'}`}>
+                  {n} <span className="num text-xs text-muted">{k === 'todos' ? contas.length : contas.filter((c) => (c.papel ?? 'concorrente') === k).length}</span>
+                </button>
+              ))}
+            </div>
             <ToggleButtonGroup
               size="sm"
               selectionMode="single"
@@ -192,7 +209,20 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
                     <AvatarConta conta={c} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{c.perfil?.nome || c.nome}</p>
-                      <p className="truncate text-sm text-muted">@{c.conta}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm text-muted">@{c.conta}</p>
+                        <Menu titulo="Esta conta é…" alinhar="esquerda" gatilho={(abrir) => (
+                          <button onClick={(e) => { e.stopPropagation(); abrir() }}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                              c.papel === 'proprio' ? 'bg-[var(--menta)]/15 text-[var(--menta)]' : c.papel === 'referencia' ? 'bg-accent/15 text-accent' : 'bg-[var(--sinal-b)]/15 text-[var(--sinal-b)]'}`}>
+                            {c.papel === 'proprio' ? 'Meu perfil' : c.papel === 'referencia' ? 'Referência' : 'Concorrente'} ▾
+                          </button>
+                        )} itens={[
+                          { id: 'concorrente', rotulo: 'Concorrente direto', marcado: (c.papel ?? 'concorrente') === 'concorrente', aoEscolher: () => mudarPapel(c, 'concorrente') },
+                          { id: 'referencia', rotulo: 'Referência (inspiração)', marcado: c.papel === 'referencia', aoEscolher: () => mudarPapel(c, 'referencia') },
+                          { id: 'proprio', rotulo: 'Meu perfil', marcado: c.papel === 'proprio', aoEscolher: () => mudarPapel(c, 'proprio') },
+                        ]} />
+                      </div>
                     </div>
                     <Checkbox
                       isSelected={marcada}

@@ -33,6 +33,7 @@ const NOME_IA: Record<TarefaIA['tipo'], (t: TarefaIA) => string> = {
   estilo: () => 'Lendo o estilo visual',
   calendario: () => 'Montando o calendário',
   roteiro: () => 'Escrevendo o roteiro',
+  inteligencia: () => 'Atualizando sua central',
 }
 const PRONTO_IA: Record<TarefaIA['tipo'], (t: TarefaIA) => string> = {
   perfil: (t) => `Análise de @${t.conta} pronta`,
@@ -42,6 +43,7 @@ const PRONTO_IA: Record<TarefaIA['tipo'], (t: TarefaIA) => string> = {
   estilo: () => 'Guia de estilo pronto',
   calendario: () => 'Calendário pronto',
   roteiro: () => 'Roteiro pronto',
+  inteligencia: () => 'Central atualizada',
 }
 const tipoIA = (t: TarefaIA): TipoProcesso => (['perfil', 'mercado', 'estilo'].includes(t.tipo) ? 'analise' : 'geracao')
 const destinoIA = (t: TarefaIA): Destino =>
@@ -65,7 +67,8 @@ export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => vo
       cancelar: ativo ? () => { api.cancelar(t.id).then(aoMudar) } : undefined,
     }
   })
-  const ias: Processo[] = ia.map((t) => {
+  // a rotina da central roda em segundo plano, sem ocupar a central de atividade
+  const ias: Processo[] = ia.filter((t) => t.tipo !== 'inteligencia').map((t) => {
     const ativo = ATIVOS_IA.includes(t.status)
     return {
       chave: `i${t.id}`, tipo: tipoIA(t),
@@ -93,7 +96,7 @@ export function useSonsDosProcessos(downloads: Tarefa[], ia: TarefaIA[]) {
     const atual = new Map<string, { status: string; n: number; c: number; tipo: string; total: number }>()
     downloads.filter((t) => t.opcoes.modo !== 'link').forEach((t) =>
       atual.set(`d${t.id}`, { status: t.status, n: t.baixados + t.pulados, c: t.comentarios ?? 0, tipo: 'download', total: t.total }))
-    ia.forEach((t) => atual.set(`i${t.id}`, { status: t.status, n: t.feito, c: 0, tipo: t.tipo, total: t.total }))
+    ia.filter((t) => t.tipo !== 'inteligencia').forEach((t) => atual.set(`i${t.id}`, { status: t.status, n: t.feito, c: 0, tipo: t.tipo, total: t.total }))
     const ant = antes.current
     antes.current = atual
     if (!ant) return // primeira leitura: só memoriza

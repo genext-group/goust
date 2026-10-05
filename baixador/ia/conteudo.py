@@ -270,6 +270,22 @@ def _bloco_escolhas():
             + "\nRecusou:\n" + ("\n".join(recusadas) or "(nenhuma)"))
 
 
+def ideia_rapida(tema, contexto_sinal=""):
+    """Uma ideia em poucos segundos a partir de um sinal (ação direta na home): modelo menor e contexto enxuto."""
+    marca = memoria.marca()
+    est = estrategia.obter()
+    entrada = "\n\n".join(filter(None, [
+        "## Brief\n" + json.dumps({k: marca.get(k) for k in ("nome", "produto", "publico", "dores_do_publico", "tom",
+                                                            "recursos_producao", "restricoes") if marca.get(k)}, ensure_ascii=False),
+        "## Pilares da estratégia\n" + json.dumps([p["nome"] for p in est["estrategia"].get("pilares", [])], ensure_ascii=False) if est else None,
+        f"## Sinal que motivou a ideia\n{tema}\n{contexto_sinal}",
+        _bloco_escolhas(),
+        "## Pedido\nQuantidade: 1 ideia, adaptada ao negócio do criador (se o sinal vier de outro nicho, adapte o mecanismo, não o tema).",
+    ]))
+    r = cliente.estruturado("video", INSTRUCOES_IDEIAS, entrada, Ideias, esforco="low")
+    return [i.model_dump() for i in r.ideias[:1]]
+
+
 def gerar_ideias(qtd=4, pilar=None, formato=None, objetivo=None, tema=None):
     qtd = max(1, min(int(qtd or 4), 12))
     pedido = [f"Quantidade: {qtd} ideias."]

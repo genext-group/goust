@@ -210,8 +210,12 @@ def gerar(progresso=lambda etapa, feito, total: None):
     campos_conc = ("resumo_executivo", "posicionamento", "voz_do_publico", "pilares", "formatos", "ganchos",
                    "o_que_performa", "pontos_fortes", "pontos_fracos", "oportunidades_para_voce", "notas")
     blocos_proprios = [b for c in proprias if (b := _bloco_relatorio(c, campos_proprio))]
-    blocos_conc = [b for c in concorrentes if (b := _bloco_relatorio(c, campos_conc))]
-    if not blocos_conc:
+    # concorrente disputa o mesmo cliente (entra no benchmark); referência é inspiração (entra só como aprendizado)
+    diretos = [c for c in concorrentes if c["papel"] != "referencia"] or concorrentes
+    referencias = [c for c in concorrentes if c["papel"] == "referencia" and c not in diretos]
+    blocos_conc = [b for c in diretos if (b := _bloco_relatorio(c, campos_conc))]
+    blocos_ref = [b for c in referencias if (b := _bloco_relatorio(c, ("resumo_executivo", "posicionamento", "ganchos", "o_que_performa", "formatos")))]
+    if not blocos_conc and not blocos_ref:
         raise ValueError("Analise pelo menos um concorrente com IA antes de gerar a estratégia.")
     panorama = None
     from . import mercado
@@ -221,10 +225,11 @@ def gerar(progresso=lambda etapa, feito, total: None):
     entrada = "\n\n".join(filter(None, [
         memoria.contexto(),
         "## Tabela de métricas reais\n" + json.dumps({"voce": tabela_metricas(proprias),
-                                                      "concorrentes": tabela_metricas(concorrentes)}, ensure_ascii=False),
+                                                      "concorrentes": tabela_metricas(diretos)}, ensure_ascii=False),
         "## Análise do(s) seu(s) perfil(is)\n" + ("\n".join(blocos_proprios) if blocos_proprios else
                                                   "(nenhum perfil próprio analisado ainda)"),
-        "## Relatórios dos concorrentes\n" + "\n".join(blocos_conc),
+        "## Relatórios dos concorrentes diretos\n" + "\n".join(blocos_conc) if blocos_conc else None,
+        "## Referências (não são concorrentes: inspiração do que adaptar, fora do benchmark)\n" + "\n".join(blocos_ref) if blocos_ref else None,
         "## Panorama do mercado\n" + json.dumps(panorama, ensure_ascii=False) if panorama else None,
     ]))
     est = cliente.estruturado("relatorio", INSTRUCOES, entrada, Estrategia, esforco="medium")
