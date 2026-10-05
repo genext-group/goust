@@ -13,5 +13,5 @@ from baixador.ia import memoria, tarefas_ia  # noqa: F401
 
 
 @subscribe(topic=execucao.TOPICO, max_attempts=3, retry_after=60)
-async def trabalhar(message: Message[dict]) -> None:
+async def trabalhar(message: Message[dict[str, object]]) -> None:
     await asyncio.to_thread(execucao.processar_mensagem, message.payload)
