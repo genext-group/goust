@@ -8,12 +8,11 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .. import armazenamento, biblioteca
+from .. import biblioteca, catalogo, db
+from .. import contexto as ctx
 from ..execucao import Continuar
 from . import cliente, memoria, video
-from .cliente import PREFIXO_IA
 
-PREFIXO_RELATORIOS = PREFIXO_IA + "relatorios/"
 TEMPO_RELATORIO = 130  # segundos reservados para escrever o relatório (gpt-5.5) dentro do prazo
 RECENTES, MAIS_VISTOS = 25, 15  # vídeos usados por análise (os mais recentes + os de maior alcance)
 
@@ -154,34 +153,37 @@ def _selecionar(videos):
 
 # ---------------------------------------------------------------- armazenamento
 
-def _prefixo(plataforma, conta):
-    return f"{PREFIXO_RELATORIOS}{plataforma}_{conta}/"
-
-
 def versoes(plataforma, conta):
-    return sorted((k.rsplit("/", 1)[1][:-5] for k in armazenamento.listar(_prefixo(plataforma, conta))
-                   if k.endswith(".json")), reverse=True)
+    cid = catalogo.conta_id(plataforma, conta, criar=False)
+    if not cid:
+        return []
+    return [r["versao"] for r in db.todos("""select versao from relatorios where usuario_id = %s and conta_id = %s
+                                             order by versao desc""", ctx.usuario(), cid)]
 
 
 def obter(plataforma, conta, versao=None):
-    vs = versoes(plataforma, conta)
-    if not vs:
+    cid = catalogo.conta_id(plataforma, conta, criar=False)
+    if not cid:
         return None
-    alvo = versao if versao in vs else vs[0]
-    return armazenamento.ler_json(f"{_prefixo(plataforma, conta)}{alvo}.json")
+    if versao:
+        r = db.um("select dados from relatorios where usuario_id = %s and conta_id = %s and versao = %s",
+                  ctx.usuario(), cid, versao)
+        if r:
+            return r["dados"]
+    r = db.um("select dados from relatorios where usuario_id = %s and conta_id = %s order by versao desc limit 1",
+              ctx.usuario(), cid)
+    return r["dados"] if r else None
 
 
 def resumo_todos():
-    """Último relatório de cada conta (só o essencial para listas e para o panorama)."""
-    contas = sorted({k[len(PREFIXO_RELATORIOS):].split("/", 1)[0] for k in armazenamento.listar(PREFIXO_RELATORIOS)})
-    saida = {}
-    for nome in contas:
-        plataforma, conta = nome.split("_", 1)
-        r = obter(plataforma, conta)
-        if r:
-            saida[f"{plataforma}/{conta}"] = {"versao": r["versao"], "gerado": r["gerado"], "notas": r["relatorio"]["notas"],
-                                              "resumo": r["relatorio"]["resumo_executivo"], "metricas": r["metricas"]}
-    return saida
+    """Último relatório de cada conta do usuário (só o essencial para listas e para o panorama)."""
+    linhas = db.todos("""select distinct on (r.conta_id) c.plataforma, c.conta, r.dados from relatorios r
+                         join contas c on c.id = r.conta_id where r.usuario_id = %s
+                         order by r.conta_id, r.versao desc""", ctx.usuario())
+    return {f"{l['plataforma']}/{l['conta']}": {"versao": l["dados"]["versao"], "gerado": l["dados"]["gerado"],
+                                                "notas": l["dados"]["relatorio"]["notas"],
+                                                "resumo": l["dados"]["relatorio"]["resumo_executivo"],
+                                                "metricas": l["dados"]["metricas"]} for l in linhas}
 
 
 # ---------------------------------------------------------------- geração
@@ -203,7 +205,7 @@ def _compactar(a, v):
 def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=None):
     """Com prazo (nuvem), levanta Continuar se o tempo da mensagem acabar; as análises
     de vídeo já feitas ficam em cache, então a próxima mensagem retoma de onde parou."""
-    todos = [v for v in biblioteca.videos() if v["plataforma"] == plataforma and v["conta"] == conta]
+    todos = biblioteca.videos(plataforma, conta)
     if not todos:
         raise ValueError("Baixe alguns vídeos dessa conta antes de analisar.")
     met = metricas(todos)
@@ -224,7 +226,7 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=N
     pares = []
     with ThreadPoolExecutor(4) as ex:
         for i in range(0, len(escolhidos), 4):
-            pares += [p for p in ex.map(analisar_um, escolhidos[i:i + 4]) if p]
+            pares += [p for p in ex.map(ctx.em_contexto(analisar_um), escolhidos[i:i + 4]) if p]
             if prazo and i + 4 < len(escolhidos) and time.time() > prazo - TEMPO_RELATORIO:
                 raise Continuar()
     if not pares:
@@ -258,6 +260,7 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=N
         "aprendizados_versao": memoria.aprendizados()["versao"],
         "relatorio": relatorio.model_dump(),
     }
-    armazenamento.gravar_json(f"{_prefixo(plataforma, conta)}{resultado['versao']}.json", resultado)
+    db.executar("insert into relatorios (usuario_id, conta_id, versao, gerado_em, dados) values (%s, %s, %s, %s, %s)",
+                ctx.usuario(), catalogo.conta_id(plataforma, conta), resultado["versao"], agora, resultado)
     progresso("Concluído", 1, 1)
     return resultado

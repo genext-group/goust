@@ -68,10 +68,15 @@ export interface StatusInstagram {
   status: string
 }
 
+/** Na versão online, cada chamada leva o token de sessão do Clerk (definido pelo App ao logar). */
+let obterToken: (() => Promise<string | null>) | null = null
+export const definirObtencaoToken = (f: (() => Promise<string | null>) | null) => { obterToken = f }
+
 async function req<T>(url: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  const token = obterToken ? await obterToken() : null
   const r = await fetch(url, {
     method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   })
   const j = await r.json().catch(() => ({}))
@@ -80,12 +85,10 @@ async function req<T>(url: string, opts: { method?: string; body?: unknown } = {
   return j as T
 }
 
-export interface Ambiente { nuvem: boolean; precisa_login: boolean; logado: boolean }
+export interface Ambiente { nuvem: boolean; clerk: string | null }
 
 export const api = {
   ambiente: () => req<Ambiente>('/api/ambiente'),
-  login: (senha: string) => req<{ ok: boolean }>('/api/login', { body: { senha } }),
-  logout: () => req('/api/logout', { method: 'POST' }),
   contas: () => req<Conta[]>('/api/contas'),
   adicionarConta: (conta: string, plataforma?: Plataforma) => req<Conta[]>('/api/contas', { body: { conta, plataforma } }),
   removerConta: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
@@ -105,7 +108,12 @@ export const api = {
 }
 
 export const urlThumb = (v: Video) => v.url_thumb
-export const urlArquivo = (v: Video) => `/api/arquivo/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.id)}`
+/** Download do vídeo: o token vai na URL porque a navegação do navegador não leva o cabeçalho. */
+export async function baixarArquivo(v: Video) {
+  const token = obterToken ? await obterToken() : null
+  const url = `/api/arquivo/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.id)}`
+  window.location.href = token ? `${url}?t=${encodeURIComponent(token)}` : url
+}
 /** Player oficial da plataforma, usado quando o vídeo não está guardado (versão online). */
 export const urlEmbed = (v: Video) =>
   v.plataforma === 'tiktok'

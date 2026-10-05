@@ -1,7 +1,7 @@
-"""Tarefas de download: listar a conta, filtrar e baixar/catalogar cada vídeo.
+"""Tarefas de download: listar a conta, filtrar e catalogar/baixar cada vídeo.
 
-O estado fica no armazenamento (arquivo local ou Redis), então a tarefa pode ser retomada por
-outra execução: na nuvem cada mensagem da fila trabalha por alguns minutos e passa o bastão.
+O estado fica no banco (tabela tarefas), então a tarefa pode ser retomada por outra execução:
+na nuvem cada mensagem da fila trabalha por alguns minutos e passa o bastão.
 """
 import re
 import time
@@ -10,26 +10,26 @@ from concurrent.futures import ThreadPoolExecutor
 from yt_dlp import YoutubeDL
 from yt_dlp.networking.impersonate import ImpersonateTarget
 
-from . import armazenamento, biblioteca, execucao, instagram, tiktok
+from . import biblioteca, catalogo, contexto, db, execucao, instagram, tiktok
 from .armazenamento import NUVEM
 from .filtros import Cancelado, aplicar_filtro, ler_metadados, pasta_conta, salvar_metadados
 
 PLATAFORMAS = {"tiktok": tiktok, "instagram": instagram}
 PARALELO = {"tiktok": 3, "instagram": 2}  # o Instagram é mais sensível a rajadas
 FINAIS = ("concluído", "erro", "cancelado")
-CHAVE = "dados/tarefas"            # dicionário id -> estado
-CHAVE_ITENS = "dados/tarefas_itens/"  # itens que ainda faltam baixar, por tarefa
 MAX_HISTORICO = 100
 
 
 # ---------------------------------------------------------------- estado
 
 def _ler(tid):
-    return armazenamento.dic_ler_campo(CHAVE, str(tid))
+    r = db.um("select id, usuario_id, dados from tarefas where id = %s and tipo = 'download'", tid)
+    return {**r["dados"], "id": r["id"], "usuario_id": r["usuario_id"]} if r else None
 
 
 def _gravar(t):
-    armazenamento.dic_gravar(CHAVE, str(t["id"]), t)
+    db.executar("update tarefas set status = %s, dados = %s, fim = to_timestamp(%s) where id = %s",
+                t["status"], {k: v for k, v in t.items() if k not in ("id", "usuario_id")}, t.get("fim"), t["id"])
 
 
 def _log(t, msg):
@@ -37,41 +37,30 @@ def _log(t, msg):
 
 
 def listar():
-    return sorted(armazenamento.dic_ler(CHAVE).values(), key=lambda t: t["id"], reverse=True)
+    linhas = db.todos("""select id, dados from tarefas where usuario_id = %s and tipo = 'download'
+                         order by id desc limit %s""", contexto.usuario(), MAX_HISTORICO)
+    return [{**{k: v for k, v in r["dados"].items() if not k.startswith("_")}, "id": r["id"]} for r in linhas]
 
 
 def cancelar(tid):
     t = _ler(tid)
-    if t and t["status"] not in FINAIS:
+    if t and t["usuario_id"] == contexto.usuario() and t["status"] not in FINAIS:
         t["cancelar"] = True
-        if t["status"] == "na fila" and not NUVEM:
-            pass  # o trabalhador local vê a flag quando pegar a tarefa
         _gravar(t)
 
 
 def limpar():
-    for t in listar():
-        if t["status"] in FINAIS:
-            armazenamento.dic_apagar(CHAVE, str(t["id"]))
-            armazenamento.apagar(f"{CHAVE_ITENS}{t['id']}.json")
+    db.executar("delete from tarefas where usuario_id = %s and tipo = 'download' and status = any(%s)",
+                contexto.usuario(), list(FINAIS))
 
 
-def _podar_historico():
-    finais = [t for t in listar() if t["status"] in FINAIS]
-    for t in finais[MAX_HISTORICO:]:
-        armazenamento.dic_apagar(CHAVE, str(t["id"]))
-
-
-def enfileirar(plataforma, conta, opcoes):
-    t = {
-        "id": armazenamento.contador("dados/tarefas_contador"),
-        "plataforma": plataforma, "conta": conta, "opcoes": opcoes,
-        "status": "na fila", "total": 0, "baixados": 0, "pulados": 0, "erros": 0,
-        "logs": [], "cancelar": False, "criada": time.time(), "fim": None,
-    }
-    _gravar(t)
-    execucao.despachar("download", t["id"], faixa=f"download:{plataforma}")
-    return t
+def enfileirar(plataforma, conta, opcoes, usuario_id=None):
+    dados = {"plataforma": plataforma, "conta": conta, "opcoes": opcoes, "status": "na fila", "total": 0,
+             "baixados": 0, "pulados": 0, "erros": 0, "logs": [], "cancelar": False, "criada": time.time(), "fim": None}
+    r = db.um("insert into tarefas (usuario_id, tipo, status, dados) values (%s, 'download', 'na fila', %s) returning id",
+              usuario_id or contexto.usuario(), dados)
+    execucao.despachar("download", r["id"], faixa=f"download:{plataforma}")
+    return {**dados, "id": r["id"]}
 
 
 def enfileirar_link(url):
@@ -89,6 +78,7 @@ def executar(tid, prazo=None):
     t = _ler(tid)
     if not t or t["status"] in FINAIS:
         return False
+    contexto.definir(t["usuario_id"])
     try:
         if t.get("cancelar"):
             raise Cancelado()
@@ -111,9 +101,8 @@ def executar(tid, prazo=None):
         t["status"] = "erro"
         _log(t, f"Erro inesperado: {e}")
     t["fim"] = time.time()
+    t.pop("_pendentes", None)
     _gravar(t)
-    armazenamento.apagar(f"{CHAVE_ITENS}{t['id']}.json")
-    _podar_historico()
     return False
 
 
@@ -143,7 +132,7 @@ def _listar(t):
         _log(t, f"{len(listados)} vídeos listados, {len(itens)} selecionados.")
     t["total"] = len(itens)
     t["status"] = "baixando"
-    armazenamento.gravar_json(f"{CHAVE_ITENS}{t['id']}.json", itens)
+    t["_pendentes"] = itens
     _gravar(t)
 
 
@@ -155,6 +144,7 @@ def _item_do_link(t):
     with YoutubeDL(opts) as ydl:
         info = ydl.extract_info(t["opcoes"]["link"], download=False)
     t["conta"] = info.get("uploader") or info.get("channel") or t["conta"]
+    acompanhar(t["plataforma"], t["conta"])  # para o vídeo aparecer na biblioteca do usuário
     return {
         "id": info.get("display_id") if t["plataforma"] == "instagram" else info["id"],
         "url": info.get("webpage_url") or t["opcoes"]["link"],
@@ -174,7 +164,7 @@ def _baixar_pendentes(t, prazo):
     """Baixa em lotes paralelos; a cada lote grava o progresso e confere o prazo."""
     mod = PLATAFORMAS[t["plataforma"]]
     pasta = pasta_conta(t["plataforma"], t["conta"])
-    itens = armazenamento.ler_json(f"{CHAVE_ITENS}{t['id']}.json", []) or []
+    itens = t.get("_pendentes") or []
     lote = PARALELO[t["plataforma"]] * 2
 
     def um(item):
@@ -201,7 +191,7 @@ def _baixar_pendentes(t, prazo):
                 else:
                     t["erros"] += 1
                     _log(t, r)
-            armazenamento.gravar_json(f"{CHAVE_ITENS}{t['id']}.json", itens)
+            t["_pendentes"] = itens
             _gravar(t)
             if prazo and itens and time.time() > prazo:
                 return True
@@ -216,6 +206,16 @@ def _depois(t):
         from .ia import perfil as ia_perfil, tarefas_ia
         if ia_perfil.versoes(t["plataforma"], t["conta"]):
             tarefas_ia.enfileirar("perfil", t["plataforma"], t["conta"])
+
+
+def acompanhar(plataforma, conta, papel="concorrente", nome=None, usuario_id=None):
+    """Marca que o usuário acompanha a conta (cria a conta no catálogo compartilhado se preciso)."""
+    cid = catalogo.conta_id(plataforma, conta)
+    db.executar("""insert into acompanhamentos (usuario_id, conta_id, papel, nome) values (%s, %s, %s, %s)
+                   on conflict (usuario_id, conta_id) do update set papel = excluded.papel,
+                   nome = coalesce(excluded.nome, acompanhamentos.nome)""",
+                usuario_id or contexto.usuario(), cid, papel, nome)
+    return cid
 
 
 execucao.registrar("download", executar)

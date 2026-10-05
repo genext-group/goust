@@ -14,6 +14,9 @@ dependencies = [
     "upstash-redis>=1.4",
     "imageio-ffmpeg>=0.6",
     "vercel>=0.11",
+    "psycopg[binary]>=3.2",
+    "psycopg_pool>=3.2",
+    "pyjwt[crypto]>=2.9",
 ]
 
 [[tool.vercel.subscribers]]

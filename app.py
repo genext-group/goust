@@ -4,19 +4,17 @@ Local:  python app.py   (ou iniciar.bat) e abra http://127.0.0.1:5000
 Nuvem:  publicado na Vercel; dados no Redis, tarefas longas pelas Vercel Queues (ver fila.py).
 A interface (React + HeroUI) fica em web/ e é compilada para public/.
 """
-import hmac
 import os
 import subprocess
 import threading
 import webbrowser
-from datetime import timedelta
 from functools import wraps
 
 from curl_cffi import requests as http
-from flask import (Flask, Response, abort, jsonify, request, send_file, send_from_directory, session,
+from flask import (Flask, Response, abort, jsonify, request, send_file, send_from_directory,
                    stream_with_context)
 
-from baixador import armazenamento, biblioteca, instagram, midia, tarefas
+from baixador import auth, biblioteca, contexto, db, instagram, midia, tarefas
 from baixador.armazenamento import NUVEM, RAIZ
 from baixador.filtros import PASTA_DOWNLOADS, normalizar_conta
 from baixador.ia import chat as ia_chat
@@ -28,26 +26,35 @@ from baixador.ia import tarefas_ia as ia_tarefas
 from baixador.ia import video as ia_video
 
 PUBLICO = RAIZ / "public"
-CHAVE_CONTAS = "contas.json"
-SENHA = os.getenv("APP_SENHA", "")
+CLERK = bool(auth.chave_publica_clerk()) and NUVEM
 
 app = Flask(__name__, static_folder=None)
-app.secret_key = os.getenv("APP_SEGREDO") or os.getenv("APP_SENHA") or "local-sem-senha"
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=NUVEM,
-                  PERMANENT_SESSION_LIFETIME=timedelta(days=30))
 estado_login = {"status": "", "rodando": False}
 
 
 # ---------------------------------------------------------------- acesso
 
+def _token():
+    cab = request.headers.get("Authorization", "")
+    if cab.startswith("Bearer "):
+        return cab[7:]
+    return request.args.get("t") or request.cookies.get("__session")
+
+
 def protegido(f):
-    """Com APP_SENHA definida (sempre na nuvem), só quem fez login usa a API."""
+    """Nuvem: exige login do Clerk e define o usuário da requisição. Local: usuário do dono."""
     @wraps(f)
     def envolto(*a, **kw):
-        if SENHA and not session.get("ok"):
-            return jsonify(erro="Faça login."), 401
-        if NUVEM and not SENHA:
-            return jsonify(erro="Defina APP_SENHA nas variáveis de ambiente da Vercel."), 503
+        if CLERK:
+            usuario = auth.validar_token(_token() or "")
+            if not usuario:
+                return jsonify(erro="Faça login."), 401
+            auth.garantir_usuario(usuario)
+        elif NUVEM:
+            return jsonify(erro="Login não configurado (Clerk)."), 503
+        else:
+            usuario = auth.usuario_local()
+        contexto.definir(usuario)
         return f(*a, **kw)
     return envolto
 
@@ -63,32 +70,22 @@ def so_local(f):
 
 @app.get("/api/ambiente")
 def api_ambiente():
-    return jsonify(nuvem=NUVEM, precisa_login=bool(SENHA), logado=bool(session.get("ok")) or not SENHA)
+    return jsonify(nuvem=NUVEM, clerk=auth.chave_publica_clerk() if CLERK else None)
 
 
-@app.post("/api/login")
-def api_login():
-    if SENHA and hmac.compare_digest((request.json or {}).get("senha", ""), SENHA):
-        session.permanent = True
-        session["ok"] = True
-        return jsonify(ok=True)
-    return jsonify(erro="Senha incorreta."), 401
-
-
-@app.post("/api/logout")
-def api_logout():
-    session.clear()
-    return jsonify(ok=True)
+@app.get("/api/eu")
+@protegido
+def api_eu():
+    return jsonify(db.um("select id, email, nome from usuarios where id = %s", contexto.usuario()))
 
 
 # ---------------------------------------------------------------- contas
 
 def ler_contas():
-    return armazenamento.ler_json(CHAVE_CONTAS, []) or []
-
-
-def gravar_contas(contas):
-    armazenamento.gravar_json(CHAVE_CONTAS, contas)
+    """Contas que o usuário atual acompanha (as dele e as dos concorrentes)."""
+    return db.todos("""select c.plataforma, c.conta, coalesce(a.nome, c.nome, c.conta) as nome, a.papel
+                       from acompanhamentos a join contas c on c.id = a.conta_id
+                       where a.usuario_id = %s order by a.criado_em""", contexto.usuario())
 
 
 def contas_completas():
@@ -115,26 +112,22 @@ def api_adicionar_conta():
         plataforma, conta = normalizar_conta(d["conta"], d.get("plataforma"))
     except ValueError as e:
         return jsonify(erro=str(e)), 400
-    contas = ler_contas()
-    if not any(c["plataforma"] == plataforma and c["conta"] == conta for c in contas):
-        nova = {"nome": d.get("nome") or conta, "plataforma": plataforma, "conta": conta}
-        perfil = biblioteca.atualizar_perfil(plataforma, conta)
-        if perfil and perfil.get("nome") and not d.get("nome"):
-            nova["nome"] = perfil["nome"]
-        contas.append(nova)
-        gravar_contas(contas)
+    tarefas.acompanhar(plataforma, conta, d.get("papel") or "concorrente", d.get("nome"))
+    biblioteca.atualizar_perfil(plataforma, conta)
     return jsonify(contas_completas())
 
 
 @app.delete("/api/contas/<plataforma>/<conta>")
 @protegido
 def api_remover_conta(plataforma, conta):
-    gravar_contas([c for c in ler_contas() if not (c["plataforma"] == plataforma and c["conta"] == conta)])
+    db.executar("""delete from acompanhamentos where usuario_id = %s and conta_id =
+                   (select id from contas where plataforma = %s and conta = %s)""", contexto.usuario(), plataforma, conta)
     return jsonify(contas_completas())
 
 
 @app.get("/avatar/<plataforma>/<arquivo>")
 def avatar(plataforma, arquivo):
+    from baixador import armazenamento
     dados = armazenamento.imagem_ler(biblioteca.chave_avatar(plataforma, arquivo.removesuffix(".jpg")))
     if not dados:
         abort(404)
@@ -215,7 +208,7 @@ def thumb(plataforma, conta, vid):
 @protegido
 def api_arquivo(plataforma, conta, vid):
     """Botão Baixar: local entrega o arquivo; na nuvem busca na plataforma e repassa em streaming."""
-    v = next((x for x in biblioteca.videos() if x["plataforma"] == plataforma and x["id"] == vid), None)
+    v = next((x for x in biblioteca.videos(plataforma, conta) if x["id"] == vid), None)
     if not v:
         abort(404)
     nome = f"{conta}_{(v['data'] or 'sem-data')[:10]}_{vid}.mp4"
@@ -416,8 +409,7 @@ def api_cron_monitorar():
     """Chamado pelo cron diário da Vercel (vercel.json). Só roda se o monitoramento estiver ligado."""
     if request.headers.get("Authorization") != f"Bearer {os.getenv('CRON_SECRET', '')}" or not os.getenv("CRON_SECRET"):
         return jsonify(erro="não autorizado"), 401
-    if ia_tarefas.config()["ativo"]:
-        ia_tarefas.executar_monitoramento(ler_contas())
+    ia_tarefas.monitorar_todos(ler_contas)
     return jsonify(ok=True)
 
 
@@ -434,7 +426,8 @@ def interface(caminho="index.html"):
 
 
 if __name__ == "__main__":
+    contexto.definir(auth.usuario_local())
     biblioteca.atualizar_perfis_em_segundo_plano(ler_contas())
-    ia_tarefas.iniciar_agendador(ler_contas)
+    ia_tarefas.iniciar_agendador(auth.usuario_local(), ler_contas)
     threading.Timer(1.2, lambda: webbrowser.open("http://127.0.0.1:5000")).start()
     app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)

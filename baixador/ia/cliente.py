@@ -5,13 +5,10 @@ import time
 
 from dotenv import load_dotenv
 
-from .. import armazenamento
+from .. import contexto, db
 from ..armazenamento import RAIZ
 
 load_dotenv(RAIZ / ".env")
-
-PREFIXO_IA = "dados/ia/"
-CHAVE_USO = PREFIXO_IA + "uso.json"
 
 MODELOS = {
     # raciocínio pesado: relatórios, panorama, chat, destilação de aprendizados
@@ -38,19 +35,23 @@ def cliente():
 
 
 def registrar_uso(modelo, entrada=0, saida=0, segundos_audio=0):
-    with _trava:
-        uso = armazenamento.ler_json(CHAVE_USO, {}) or {}
-        m = uso.setdefault(modelo, {"chamadas": 0, "entrada": 0, "saida": 0, "segundos_audio": 0})
-        m["chamadas"] += 1
-        m["entrada"] += entrada
-        m["saida"] += saida
-        m["segundos_audio"] += round(segundos_audio)
-        uso["_atualizado"] = time.time()
-        armazenamento.gravar_json(CHAVE_USO, uso)
+    """Soma o consumo no mês do usuário atual (base para limites e, depois, cobrança)."""
+    try:
+        usuario = contexto.usuario()
+    except RuntimeError:
+        return
+    db.executar("""insert into uso (usuario_id, mes, modelo, chamadas, entrada, saida, segundos_audio)
+                   values (%s, %s, %s, 1, %s, %s, %s)
+                   on conflict (usuario_id, mes, modelo) do update set chamadas = uso.chamadas + 1,
+                     entrada = uso.entrada + excluded.entrada, saida = uso.saida + excluded.saida,
+                     segundos_audio = uso.segundos_audio + excluded.segundos_audio""",
+                usuario, time.strftime("%Y-%m"), modelo, entrada, saida, round(segundos_audio))
 
 
 def uso():
-    return armazenamento.ler_json(CHAVE_USO, {}) or {}
+    """Consumo do usuário atual no mês corrente, por modelo."""
+    linhas = db.todos("select * from uso where usuario_id = %s and mes = %s", contexto.usuario(), time.strftime("%Y-%m"))
+    return {r["modelo"]: {k: int(r[k]) for k in ("chamadas", "entrada", "saida", "segundos_audio")} for r in linhas}
 
 
 def estruturado(tipo, instrucoes, conteudo, formato, esforco="medium"):

@@ -5,12 +5,11 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .. import armazenamento
+from .. import contexto as ctx
+from .. import db
 from . import cliente, memoria, perfil
-from .cliente import PREFIXO_IA
 from .perfil import Ideia, Item, Oportunidade
 
-PREFIXO_MERCADO = PREFIXO_IA + "mercado/"
 
 
 class Concorrente(BaseModel):
@@ -55,15 +54,17 @@ Português do Brasil, específico, com números."""
 
 
 def versoes():
-    return sorted((k.rsplit("/", 1)[1][:-5] for k in armazenamento.listar(PREFIXO_MERCADO) if k.endswith(".json")), reverse=True)
+    return [r["versao"] for r in db.todos("select versao from panoramas where usuario_id = %s order by versao desc",
+                                          ctx.usuario())]
 
 
 def obter(versao=None):
-    vs = versoes()
-    if not vs:
-        return None
-    alvo = versao if versao in vs else vs[0]
-    return armazenamento.ler_json(f"{PREFIXO_MERCADO}{alvo}.json")
+    if versao:
+        r = db.um("select dados from panoramas where usuario_id = %s and versao = %s", ctx.usuario(), versao)
+        if r:
+            return r["dados"]
+    r = db.um("select dados from panoramas where usuario_id = %s order by versao desc limit 1", ctx.usuario())
+    return r["dados"] if r else None
 
 
 def gerar(progresso=lambda etapa, feito, total: None):
@@ -92,6 +93,7 @@ def gerar(progresso=lambda etapa, feito, total: None):
         "aprendizados_versao": memoria.aprendizados()["versao"],
         "panorama": panorama.model_dump(),
     }
-    armazenamento.gravar_json(f"{PREFIXO_MERCADO}{resultado['versao']}.json", resultado)
+    db.executar("insert into panoramas (usuario_id, versao, gerado_em, dados) values (%s, %s, %s, %s)",
+                ctx.usuario(), resultado["versao"], agora, resultado)
     progresso("Concluído", 1, 1)
     return resultado

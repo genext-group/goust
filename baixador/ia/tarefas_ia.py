@@ -1,60 +1,62 @@
-"""Fila das análises de IA e monitoramento automático dos concorrentes.
+"""Fila das análises de IA e monitoramento automático dos concorrentes (por usuário).
 
-O estado fica no armazenamento: na nuvem uma análise pode atravessar várias mensagens da fila.
+O estado fica na tabela tarefas (tipo 'ia'): na nuvem uma análise pode atravessar várias
+mensagens da fila. A configuração do monitoramento fica em usuarios.config.
 """
 import threading
 import time
 import traceback
 
-from .. import armazenamento, execucao
+from .. import contexto as ctx
+from .. import db, execucao
 from .. import tarefas as downloads
 from ..armazenamento import NUVEM
 from ..execucao import Continuar
 from . import mercado, perfil
 
-CHAVE = "dados/tarefas_ia"
-CHAVE_CONFIG = "dados/monitoramento.json"
 ATIVOS = ("na fila", "rodando")
 
 
 def _ler(tid):
-    return armazenamento.dic_ler_campo(CHAVE, str(tid))
+    r = db.um("select id, usuario_id, dados from tarefas where id = %s and tipo = 'ia'", tid)
+    return {**r["dados"], "id": r["id"], "usuario_id": r["usuario_id"]} if r else None
 
 
 def _gravar(t):
-    armazenamento.dic_gravar(CHAVE, str(t["id"]), t)
+    db.executar("update tarefas set status = %s, dados = %s, fim = to_timestamp(%s) where id = %s",
+                t["status"], {k: v for k, v in t.items() if k not in ("id", "usuario_id")}, t.get("fim"), t["id"])
 
 
 def listar():
-    ts = sorted(armazenamento.dic_ler(CHAVE).values(), key=lambda t: t["id"], reverse=True)
-    for velha in [t for t in ts if t["status"] not in ATIVOS][30:]:  # mantém o histórico curto
-        armazenamento.dic_apagar(CHAVE, str(velha["id"]))
-    return ts[:60]
+    linhas = db.todos("select id, dados from tarefas where usuario_id = %s and tipo = 'ia' order by id desc limit 60",
+                      ctx.usuario())
+    return [{**r["dados"], "id": r["id"]} for r in linhas]
 
 
 def enfileirar(tipo, plataforma=None, conta=None):
     for t in listar():  # evita duplicar a mesma análise na fila
         if t["tipo"] == tipo and t["plataforma"] == plataforma and t["conta"] == conta and t["status"] in ATIVOS:
             return t
-    t = {"id": armazenamento.contador("dados/tarefas_ia_contador"), "tipo": tipo, "plataforma": plataforma,
-         "conta": conta, "status": "na fila", "etapa": "Aguardando", "feito": 0, "total": 0, "erro": None,
-         "criada": time.time(), "fim": None}
-    _gravar(t)
-    execucao.despachar("ia", t["id"], faixa="ia")
-    return t
+    dados = {"tipo": tipo, "plataforma": plataforma, "conta": conta, "status": "na fila", "etapa": "Aguardando",
+             "feito": 0, "total": 0, "erro": None, "criada": time.time(), "fim": None}
+    r = db.um("insert into tarefas (usuario_id, tipo, status, dados) values (%s, 'ia', 'na fila', %s) returning id",
+              ctx.usuario(), dados)
+    execucao.despachar("ia", r["id"], faixa="ia")
+    return {**dados, "id": r["id"]}
 
 
 def executar(tid, prazo=None):
     t = _ler(tid)
     if not t or t["status"] not in ATIVOS:
         return False
+    ctx.definir(t["usuario_id"])
     t["status"] = "rodando"
     _gravar(t)
     ultimo = [0.0]
 
     def progresso(etapa, feito, total):
         t.update(etapa=etapa, feito=feito, total=total)
-        if time.time() - ultimo[0] > 2 or feito == total:  # poupa escritas no Redis
+        if time.time() - ultimo[0] > 2 or feito == total:  # poupa escritas
             ultimo[0] = time.time()
             _gravar(t)
 
@@ -80,11 +82,16 @@ def executar(tid, prazo=None):
 execucao.registrar("ia", executar)
 
 
-# ---------------------------------------------------------------- monitoramento
+# ---------------------------------------------------------------- monitoramento (por usuário)
+
+def _config_usuario(usuario_id):
+    r = db.um("select config from usuarios where id = %s", usuario_id)
+    return (r["config"] if r else {}).get("monitoramento") or {}
+
 
 def config():
     padrao = {"ativo": False, "intervalo_horas": 24, "reanalisar": True, "ultima_execucao": None, "proxima": None}
-    padrao.update(armazenamento.ler_json(CHAVE_CONFIG, {}) or {})
+    padrao.update(_config_usuario(ctx.usuario()))
     if NUVEM:
         padrao["intervalo_horas"] = 24  # na nuvem roda pelo cron diário da Vercel
     if padrao["ativo"] and padrao["ultima_execucao"]:
@@ -92,32 +99,48 @@ def config():
     return padrao
 
 
+def _gravar_config(c):
+    db.executar("update usuarios set config = jsonb_set(config, '{monitoramento}', %s) where id = %s",
+                {k: v for k, v in c.items() if k != "proxima"}, ctx.usuario())
+
+
 def salvar_config(dados):
     c = config()
     c.update({k: dados[k] for k in ("ativo", "intervalo_horas", "reanalisar") if k in dados})
     c["intervalo_horas"] = max(1, int(c["intervalo_horas"]))
-    armazenamento.gravar_json(CHAVE_CONFIG, {k: v for k, v in c.items() if k != "proxima"})
+    _gravar_config(c)
     return config()
 
 
 def executar_monitoramento(contas):
-    """Baixa os vídeos novos de todas as contas; quem tiver novidade é reanalisado (se ligado)."""
+    """Baixa os vídeos novos das contas do usuário atual; quem tiver novidade é reanalisado (se ligado)."""
     c = config()
     c["ultima_execucao"] = time.time()
-    armazenamento.gravar_json(CHAVE_CONFIG, {k: v for k, v in c.items() if k != "proxima"})
+    _gravar_config(c)
     opcoes = {"modo": "novos", "somente_reels": True, "analisar_depois": bool(c["reanalisar"])}
     for x in contas:
         downloads.enfileirar(x["plataforma"], x["conta"], opcoes)
 
 
-def iniciar_agendador(ler_contas):
+def monitorar_todos(contas_do_usuario):
+    """Cron diário (nuvem): roda o monitoramento de cada usuário que ligou a opção."""
+    for r in db.todos("select id from usuarios where (config->'monitoramento'->>'ativo')::boolean is true"):
+        ctx.definir(r["id"])
+        try:
+            executar_monitoramento(contas_do_usuario())
+        except Exception:
+            traceback.print_exc()
+
+
+def iniciar_agendador(usuario_local, contas_do_usuario):
     """Só no modo local; na nuvem quem dispara é o cron da Vercel (/api/cron/monitorar)."""
     def laco():
+        ctx.definir(usuario_local)
         while True:
             c = config()
             if c["ativo"] and (not c["ultima_execucao"] or time.time() >= c["proxima"]):
                 try:
-                    executar_monitoramento(ler_contas())
+                    executar_monitoramento(contas_do_usuario())
                 except Exception:
                     traceback.print_exc()
             time.sleep(600)

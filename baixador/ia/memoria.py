@@ -1,8 +1,9 @@
 """O que a IA sabe sobre você e o que aprendeu com seus feedbacks.
 
-- marca.json: seu negócio, público e objetivos, para que os insights sejam sobre VOCÊ.
-- feedback.jsonl: cada 👍/👎 (com comentário opcional) dado a um insight.
-- aprendizados.json: regras destiladas dos feedbacks (e as que você escreveu à mão),
+Tudo por usuário, no banco:
+- documento "marca": seu negócio, público e objetivos, para que os insights sejam sobre VOCÊ.
+- tabela feedbacks: cada 👍/👎 (com comentário opcional) dado a um insight.
+- documento "aprendizados": regras destiladas dos feedbacks (e as que você escreveu à mão),
   injetadas em todos os prompts. A cada N feedbacks novos a destilação roda sozinha.
 """
 import threading
@@ -11,13 +12,10 @@ import uuid
 
 from pydantic import BaseModel
 
-from .. import armazenamento, execucao
+from .. import contexto as ctx
+from .. import db, execucao
 from . import cliente
-from .cliente import PREFIXO_IA
 
-CHAVE_MARCA = PREFIXO_IA + "marca.json"
-CHAVE_FEEDBACK = PREFIXO_IA + "feedback.jsonl"
-CHAVE_APRENDIZADOS = PREFIXO_IA + "aprendizados.json"
 DESTILAR_A_CADA = 5
 _trava = threading.Lock()
 
@@ -26,27 +24,38 @@ CAMPOS_MARCA = ["nome", "produto", "publico", "objetivos", "tom", "diferenciais"
 
 # ---------------------------------------------------------------- marca
 
+def ler_documento(tipo, padrao=None):
+    r = db.um("select dados from documentos where usuario_id = %s and tipo = %s", ctx.usuario(), tipo)
+    return r["dados"] if r else padrao
+
+
+def gravar_documento(tipo, dados):
+    db.executar("""insert into documentos (usuario_id, tipo, dados) values (%s, %s, %s)
+                   on conflict (usuario_id, tipo) do update set dados = excluded.dados, atualizado_em = now()""",
+                ctx.usuario(), tipo, dados)
+
+
 def marca():
-    return armazenamento.ler_json(CHAVE_MARCA) or {c: "" for c in CAMPOS_MARCA}
+    return {c: "" for c in CAMPOS_MARCA} | (ler_documento("marca") or {})
 
 
 def salvar_marca(dados):
     m = {c: (dados.get(c) or "").strip() for c in CAMPOS_MARCA}
-    armazenamento.gravar_json(CHAVE_MARCA, m)
+    gravar_documento("marca", m)
     return m
 
 
 # ---------------------------------------------------------------- feedback
 
 def feedbacks():
-    return armazenamento.lista_ler(CHAVE_FEEDBACK)
+    linhas = db.todos("""select id, extract(epoch from ts) as ts, alvo, ref, secao, item, voto, comentario
+                         from feedbacks where usuario_id = %s order by ts""", ctx.usuario())
+    return [{**r, "ts": float(r["ts"]), "comentario": r["comentario"] or ""} for r in linhas]
 
 
 def registrar_feedback(fb):
     """fb: {alvo, ref, secao, item, voto (+1/-1), comentario}"""
     registro = {
-        "id": uuid.uuid4().hex[:10],
-        "ts": time.time(),
         "alvo": fb.get("alvo"),
         "ref": fb.get("ref"),
         "secao": fb.get("secao"),
@@ -54,9 +63,11 @@ def registrar_feedback(fb):
         "voto": 1 if fb.get("voto", 0) > 0 else -1,
         "comentario": (fb.get("comentario") or "").strip()[:1000],
     }
-    armazenamento.lista_adicionar(CHAVE_FEEDBACK, registro)
+    db.executar("""insert into feedbacks (usuario_id, alvo, ref, secao, item, voto, comentario)
+                   values (%s, %s, %s, %s, %s, %s, %s)""", ctx.usuario(), registro["alvo"], registro["ref"],
+                registro["secao"], registro["item"], registro["voto"], registro["comentario"])
     if len(feedbacks()) - aprendizados().get("feedbacks_processados", 0) >= DESTILAR_A_CADA:
-        execucao.despachar("destilar", 0)
+        execucao.despachar("destilar", ctx.usuario())
     return registro
 
 
@@ -72,13 +83,12 @@ def votos_por_ref(ref):
 # ---------------------------------------------------------------- aprendizados
 
 def aprendizados():
-    return armazenamento.ler_json(CHAVE_APRENDIZADOS) or {
-        "versao": 0, "regras": [], "feedbacks_processados": 0, "atualizado": None}
+    return ler_documento("aprendizados") or {"versao": 0, "regras": [], "feedbacks_processados": 0, "atualizado": None}
 
 
 def _salvar_aprendizados(a):
     a["atualizado"] = time.time()
-    armazenamento.gravar_json(CHAVE_APRENDIZADOS, a)
+    gravar_documento("aprendizados", a)
 
 
 def salvar_regras(regras):
@@ -168,4 +178,10 @@ def contexto():
     return "\n\n".join(partes)
 
 
-execucao.registrar("destilar", lambda _id, _prazo: bool(destilar()) and False)
+def _destilar_tarefa(usuario_id, _prazo):
+    ctx.definir(usuario_id)
+    destilar()
+    return False
+
+
+execucao.registrar("destilar", _destilar_tarefa)

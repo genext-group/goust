@@ -1,10 +1,7 @@
 """Filtros de seleção de vídeos e utilitários comuns."""
-import csv
 import re
-import threading
 from datetime import datetime, timezone
 
-from . import armazenamento
 from .armazenamento import NUVEM, PASTA_TEMP, RAIZ
 
 PASTA_DOWNLOADS = RAIZ / "downloads"
@@ -83,59 +80,12 @@ def pasta_conta(plataforma, conta):
     return p
 
 
-CAMPOS_CSV = ["data", "id", "url", "views", "likes", "comentarios", "duracao_s", "arquivo", "legenda"]
-_trava_csv = threading.Lock()
-
-
-def _linha(i):
-    return {
-        "data": datetime.fromtimestamp(i["timestamp"], timezone.utc).strftime("%Y-%m-%d %H:%M") if i.get("timestamp") else "",
-        "id": str(i["id"]),
-        "url": i["url"],
-        "views": i.get("views") if i.get("views") is not None else "",
-        "likes": i.get("likes") if i.get("likes") is not None else "",
-        "comentarios": i.get("comentarios") if i.get("comentarios") is not None else "",
-        "duracao_s": round(i["duracao"]) if i.get("duracao") else "",
-        "arquivo": "" if NUVEM else nome_arquivo(i),
-        "legenda": " ".join((i.get("legenda") or "").split()),
-    }
-
-
 def ler_metadados(plataforma, conta):
-    """{id: linha} dos vídeos já catalogados da conta."""
-    if NUVEM:
-        return armazenamento.dic_ler(f"meta:{plataforma}/{conta}")
-    arq = PASTA_DOWNLOADS / plataforma / conta / "_videos.csv"
-    if not arq.exists():
-        return {}
-    with open(arq, encoding="utf-8-sig", newline="") as f:
-        return {r["id"]: r for r in csv.DictReader(f, delimiter=";")}
+    """Códigos dos posts já catalogados da conta (catálogo compartilhado no banco)."""
+    from . import catalogo
+    return {c: {} for c in catalogo.codigos_conhecidos(plataforma, conta)}
 
 
 def salvar_metadados(plataforma, conta, itens):
-    """Local: mescla em _videos.csv (abre no Excel). Nuvem: um campo por vídeo no Redis."""
-    if NUVEM:
-        for i in itens:
-            armazenamento.dic_gravar(f"meta:{plataforma}/{conta}", str(i["id"]), _linha(i))
-        return
-    with _trava_csv:
-        linhas = ler_metadados(plataforma, conta)
-        for i in itens:
-            linhas[str(i["id"])] = _linha(i)
-        arq = pasta_conta(plataforma, conta) / "_videos.csv"
-        with open(arq, "w", encoding="utf-8-sig", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=CAMPOS_CSV, delimiter=";")
-            w.writeheader()
-            w.writerows(sorted(linhas.values(), key=lambda r: r["data"], reverse=True))
-
-
-def contas_com_metadados():
-    """[(plataforma, conta)] que têm vídeos catalogados."""
-    if NUVEM:
-        return [tuple(k.split(":", 1)[1].split("/", 1)) for k in armazenamento.listar("meta:")]
-    saida = []
-    if PASTA_DOWNLOADS.exists():
-        for plat in PASTA_DOWNLOADS.iterdir():
-            if plat.is_dir():
-                saida += [(plat.name, c.name) for c in plat.iterdir() if c.is_dir()]
-    return saida
+    from . import catalogo
+    catalogo.salvar_posts(plataforma, conta, itens)

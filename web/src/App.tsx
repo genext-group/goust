@@ -1,7 +1,9 @@
-import { Button, Input, Spinner, Tabs, Toast } from '@heroui/react'
+import { Button, Spinner, Tabs, Toast } from '@heroui/react'
 import { Moon, Sparkles, Sun } from '@gravity-ui/icons'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type Ambiente, type Conta, type Tarefa } from './api'
+import { ClerkProvider, Show, SignIn, UserButton, useAuth } from '@clerk/react'
+import { ptBR } from '@clerk/localizations'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { api, definirObtencaoToken, type Ambiente, type Conta, type Tarefa } from './api'
 import { AmbienteContexto } from './ambiente'
 import { StatusInstagram } from './components/StatusInstagram'
 import { TelaBiblioteca } from './telas/Biblioteca'
@@ -11,61 +13,62 @@ import { TelaInteligencia } from './telas/Inteligencia'
 
 type Aba = 'contas' | 'biblioteca' | 'inteligencia' | 'downloads'
 
-/** Verifica o ambiente (local/online) e pede a senha quando o app está protegido. */
+/** Verifica o ambiente. Online: login pelo Clerk (cada criador vê só os próprios dados). Local: direto. */
 export default function App() {
   const [amb, setAmb] = useState<Ambiente | null>(null)
   const [erro, setErro] = useState('')
 
-  const carregar = useCallback(() => api.ambiente().then(setAmb).catch(() => setErro('Não foi possível falar com o servidor.')), [])
   useEffect(() => {
-    carregar()
-    const pedir = () => setAmb((a) => (a ? { ...a, logado: false } : a))
-    window.addEventListener('precisa-login', pedir)
-    return () => window.removeEventListener('precisa-login', pedir)
-  }, [carregar])
+    api.ambiente().then(setAmb).catch(() => setErro('Não foi possível falar com o servidor.'))
+  }, [])
 
   if (!amb) return <div className="grid min-h-screen place-items-center text-muted">{erro || <Spinner />}</div>
-  if (amb.precisa_login && !amb.logado) return <Login aoEntrar={carregar} />
-  return (
+  const painel = (
     <AmbienteContexto.Provider value={{ nuvem: amb.nuvem }}>
-      <Painel nuvem={amb.nuvem} />
+      <Painel nuvem={amb.nuvem} clerk={!!amb.clerk} />
     </AmbienteContexto.Provider>
+  )
+  if (!amb.clerk) return painel
+  return (
+    <ClerkProvider publishableKey={amb.clerk} localization={ptBR} appearance={{ variables: { colorPrimary: '#0071e3', borderRadius: '0.875rem' } }}>
+      <Show when="signed-out">
+        <TelaEntrar />
+      </Show>
+      <Show when="signed-in">
+        <ComToken>{painel}</ComToken>
+      </Show>
+    </ClerkProvider>
   )
 }
 
-function Login({ aoEntrar }: { aoEntrar: () => void }) {
-  const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState('')
-  const [ocupado, setOcupado] = useState(false)
-  const entrar = async () => {
-    setOcupado(true)
-    setErro('')
-    try {
-      await api.login(senha)
-      aoEntrar()
-    } catch (e) {
-      setErro((e as Error).message)
-    } finally {
-      setOcupado(false)
-    }
-  }
+function TelaEntrar() {
   return (
-    <div className="grid min-h-screen place-items-center px-4">
-      <form className="cartao surgir w-full max-w-sm space-y-5 p-8 text-center" onSubmit={(e) => { e.preventDefault(); entrar() }}>
-        <img src="/favicon.svg" alt="" className="mx-auto size-12" />
-        <div>
-          <h1 className="titulo-display text-2xl font-semibold">Referências</h1>
-          <p className="mt-1 text-sm text-muted">Digite a senha de acesso.</p>
+    <div className="grid min-h-screen place-items-center px-4 py-10">
+      <div className="surgir flex flex-col items-center gap-6">
+        <div className="text-center">
+          <img src="/favicon.svg" alt="" className="mx-auto size-12" />
+          <h1 className="titulo-display mt-3 text-3xl font-semibold">Referências</h1>
+          <p className="mt-1 text-muted">Monitore concorrentes e crie conteúdo com IA.</p>
         </div>
-        <Input aria-label="Senha" type="password" autoFocus value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha" className="w-full" />
-        {erro && <p className="text-sm text-danger">{erro}</p>}
-        <Button type="submit" fullWidth isPending={ocupado} isDisabled={!senha}>Entrar</Button>
-      </form>
+        <SignIn routing="hash" />
+      </div>
     </div>
   )
 }
 
-function Painel({ nuvem }: { nuvem: boolean }) {
+/** Entrega ao api.ts a forma de obter o token de sessão; só mostra o painel depois disso. */
+function ComToken({ children }: { children: ReactNode }) {
+  const { getToken } = useAuth()
+  const [pronto, setPronto] = useState(false)
+  useEffect(() => {
+    definirObtencaoToken(() => getToken())
+    setPronto(true)
+    return () => definirObtencaoToken(null)
+  }, [getToken])
+  return pronto ? <>{children}</> : null
+}
+
+function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
   const [aba, setAba] = useState<Aba>('contas')
   const [contas, setContas] = useState<Conta[]>([])
   const [tarefas, setTarefas] = useState<Tarefa[]>([])
@@ -148,6 +151,7 @@ function Painel({ nuvem }: { nuvem: boolean }) {
             </Tabs.ListContainer>
             <div className="ml-auto flex items-center gap-1 sm:ml-0">
               <StatusInstagram />
+              {clerk && <div className="ml-1 grid place-items-center"><UserButton /></div>}
               <Button isIconOnly size="sm" variant="ghost" aria-label="Alternar tema" onPress={() => setEscuro((e) => !e)}>
                 {escuro ? <Sun /> : <Moon />}
               </Button>

@@ -6,10 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .. import armazenamento, midia
+from .. import catalogo, db, midia
 from ..filtros import PASTA_DOWNLOADS
 from . import cliente
-from .cliente import PREFIXO_IA
 
 VERSAO = 1  # suba quando mudar o schema/prompt para reanalisar
 
@@ -57,12 +56,11 @@ Regras:
 - Se algo não existir (ex.: sem CTA), escreva "nenhum"."""
 
 
-def _caminho_cache(plataforma, vid):
-    return f"{PREFIXO_IA}videos/{plataforma}_{vid}.json"
-
-
 def obter(plataforma, vid):
-    return armazenamento.ler_json(_caminho_cache(plataforma, vid))
+    """Análise em cache (compartilhada entre usuários: cada vídeo é analisado uma vez só)."""
+    r = db.um("""select a.dados from analises_video a join posts p on p.id = a.post_id
+                 where p.plataforma = %s and p.codigo = %s""", plataforma, vid)
+    return r["dados"] if r else None
 
 
 def _quadros(video, duracao, pasta):
@@ -130,5 +128,9 @@ def analisar(v, metricas_conta=None, forcar=False):
         "transcricao": transcricao,
         **analise.model_dump(),
     }
-    armazenamento.gravar_json(_caminho_cache(v["plataforma"], v["id"]), resultado)
+    pid = catalogo.post_id(v["plataforma"], v["id"])
+    if pid:
+        db.executar("""insert into analises_video (post_id, versao, dados) values (%s, %s, %s)
+                       on conflict (post_id) do update set versao = excluded.versao, dados = excluded.dados, criado_em = now()""",
+                    pid, VERSAO, resultado)
     return resultado

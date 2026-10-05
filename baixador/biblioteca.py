@@ -1,143 +1,133 @@
-"""Biblioteca de vídeos, miniaturas e cache dos perfis (foto, nome, seguidores).
+"""Biblioteca do usuário: posts das contas que ele acompanha, miniaturas e perfis (foto, nome, seguidores).
 
-Local: os vídeos ficam em downloads/ e a miniatura é gerada do próprio arquivo.
-Nuvem: só o catálogo (metadados) e a capa ficam guardados; o vídeo toca pelo player oficial.
+Os dados vêm do catálogo compartilhado no banco. No modo local, se o arquivo do vídeo existir em
+downloads/, ele toca direto; senão (e sempre na nuvem) toca pelo player oficial da plataforma.
 """
-import re
 import threading
 import time
 from urllib.parse import quote
 
 from curl_cffi import requests
 
-from . import armazenamento, instagram, tiktok
+from . import armazenamento, catalogo, contexto, db, instagram, tiktok
 from .armazenamento import NUVEM
-from .filtros import PASTA_DOWNLOADS, contas_com_metadados, ler_metadados
+from .filtros import PASTA_DOWNLOADS
 from .midia import chave_thumb, rodar_ffmpeg
 
-CHAVE_PERFIS = "dados/perfis.json"
 VALIDADE_PERFIL = 24 * 3600
-_trava_perfis = threading.Lock()
-RE_ARQUIVO = re.compile(r"^(\d{4}-\d{2}-\d{2}|sem-data)_(.+)\.mp4$")
 
 
-def _num(v):
-    try:
-        return int(float(v))
-    except (TypeError, ValueError):
+def _arquivo_local(plataforma, conta, codigo):
+    if NUVEM:
         return None
+    pasta = PASTA_DOWNLOADS / plataforma / conta
+    return next(pasta.glob(f"*_{codigo}.mp4"), None) if pasta.exists() else None
 
 
-def _video(plataforma, conta, vid, r, arquivo=None, tamanho=0, data_arquivo=""):
-    views, likes, coments = _num(r.get("views")), _num(r.get("likes")), _num(r.get("comentarios"))
-    base = f"{plataforma}/{quote(conta)}"
+def _video(r):
+    views, likes, coments = r["views"], r["likes"], r["comentarios"]
+    arquivo = _arquivo_local(r["plataforma"], r["conta"], r["codigo"])
+    base = f"{r['plataforma']}/{quote(r['conta'])}"
     return {
-        "plataforma": plataforma,
-        "conta": conta,
-        "id": vid,
-        "arquivo": arquivo or "",
-        "data": r.get("data") or data_arquivo,
-        "url": r.get("url") or "",
+        "plataforma": r["plataforma"],
+        "conta": r["conta"],
+        "id": r["codigo"],
+        "arquivo": arquivo.name if arquivo else "",
+        "data": r["publicado_em"].strftime("%Y-%m-%d %H:%M") if r["publicado_em"] else "",
+        "url": r["url"] or "",
+        "tipo": r["tipo"],
         "views": views,
         "likes": likes,
         "comentarios": coments,
         "engajamento": round(((likes or 0) + (coments or 0)) / views * 100, 2) if views else None,
-        "duracao": _num(r.get("duracao_s")),
-        "legenda": r.get("legenda") or "",
-        "tamanho": tamanho,
-        "url_thumb": f"/thumb/{base}/{quote(vid)}",
-        "url_video": f"/media/{base}/{quote(arquivo)}" if arquivo else None,
+        "duracao": r["duracao"],
+        "legenda": r["legenda"] or "",
+        "tamanho": arquivo.stat().st_size if arquivo else 0,
+        "url_thumb": f"/thumb/{base}/{quote(r['codigo'])}",
+        "url_video": f"/media/{base}/{quote(arquivo.name)}" if arquivo else None,
     }
 
 
-def videos():
-    """Todos os vídeos catalogados (local: os arquivos em downloads/; nuvem: o catálogo)."""
-    saida = []
-    if NUVEM:
-        for plataforma, conta in contas_com_metadados():
-            for vid, r in ler_metadados(plataforma, conta).items():
-                saida.append(_video(plataforma, conta, vid, r))
-    elif PASTA_DOWNLOADS.exists():
-        for pasta_plat in PASTA_DOWNLOADS.iterdir():
-            if not pasta_plat.is_dir():
-                continue
-            for pasta in pasta_plat.iterdir():
-                if not pasta.is_dir():
-                    continue
-                meta = ler_metadados(pasta_plat.name, pasta.name)
-                for arq in pasta.glob("*.mp4"):
-                    m = RE_ARQUIVO.match(arq.name)
-                    if m:
-                        data = m.group(1) if m.group(1) != "sem-data" else ""
-                        saida.append(_video(pasta_plat.name, pasta.name, m.group(2), meta.get(m.group(2), {}),
-                                            arq.name, arq.stat().st_size, data))
-    saida.sort(key=lambda v: v["data"], reverse=True)
-    return saida
+def videos(plataforma=None, conta=None):
+    """Posts das contas acompanhadas pelo usuário atual (opcionalmente de uma conta só)."""
+    filtro, params = "", [contexto.usuario()]
+    if plataforma and conta:
+        filtro, params = " and c.plataforma = %s and c.conta = %s", params + [plataforma, conta]
+    linhas = db.todos(f"""
+        select p.*, c.conta from posts p
+        join contas c on c.id = p.conta_id
+        join acompanhamentos a on a.conta_id = c.id and a.usuario_id = %s
+        where true {filtro}
+        order by p.publicado_em desc nulls last""", *params)
+    return [_video(r) for r in linhas]
 
 
 def resumo_por_conta():
-    resumo = {}
-    for v in videos():
-        k = f"{v['plataforma']}/{v['conta']}"
-        r = resumo.setdefault(k, {"videos": 0, "views": 0, "ultimo": ""})
-        r["videos"] += 1
-        r["views"] += v["views"] or 0
-        r["ultimo"] = max(r["ultimo"], v["data"])
-    return resumo
+    linhas = db.todos("""
+        select c.plataforma, c.conta, count(p.id) as videos, coalesce(sum(p.views), 0) as views,
+               max(p.publicado_em) as ultimo
+        from acompanhamentos a join contas c on c.id = a.conta_id
+        left join posts p on p.conta_id = c.id
+        where a.usuario_id = %s group by c.plataforma, c.conta""", contexto.usuario())
+    return {f"{r['plataforma']}/{r['conta']}": {"videos": r["videos"], "views": int(r["views"]),
+                                                  "ultimo": r["ultimo"].strftime("%Y-%m-%d") if r["ultimo"] else ""}
+            for r in linhas}
 
 
 def miniatura(plataforma, conta, vid):
-    """Bytes do JPG de capa. Local: gerado uma vez a partir do vídeo. Nuvem: a capa guardada."""
-    if NUVEM:
-        return armazenamento.imagem_ler(chave_thumb(plataforma, vid))
-    pasta = PASTA_DOWNLOADS / plataforma / conta
-    video = next(pasta.glob(f"*_{vid}.mp4"), None) if pasta.exists() else None
+    """Bytes do JPG de capa: a capa guardada; no modo local, gerada do arquivo se não houver."""
+    dados = armazenamento.imagem_ler(chave_thumb(plataforma, vid))
+    if dados or NUVEM:
+        return dados
+    video = _arquivo_local(plataforma, conta, vid)
     if not video:
         return None
-    thumb = pasta / ".thumbs" / (video.stem + ".jpg")
+    thumb = video.parent / ".thumbs" / (video.stem + ".jpg")
     if not thumb.exists():
         thumb.parent.mkdir(exist_ok=True)
         rodar_ffmpeg("-ss", "0.8", "-i", video, "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", thumb)
     return thumb.read_bytes() if thumb.exists() else None
 
 
-# ---------------------------------------------------------------- perfis
-
-def perfis():
-    return armazenamento.ler_json(CHAVE_PERFIS, {}) or {}
-
+# ---------------------------------------------------------------- perfis (catálogo compartilhado)
 
 def chave_avatar(plataforma, conta):
     return f"dados/avatares/{plataforma}_{conta}.jpg"
 
 
+def perfis():
+    """{plataforma/conta: {nome, foto, seguidores}} das contas acompanhadas pelo usuário."""
+    linhas = db.todos("""select c.* from contas c join acompanhamentos a on a.conta_id = c.id
+                         where a.usuario_id = %s""", contexto.usuario())
+    return {f"{r['plataforma']}/{r['conta']}": {
+        "nome": r["nome"], "seguidores": r["seguidores"],
+        "foto": f"/avatar/{r['plataforma']}/{quote(r['conta'])}.jpg?v={r['foto_versao']}" if r["foto_versao"] else None,
+        "atualizado": r["atualizado_em"].timestamp() if r["atualizado_em"] else 0,
+    } for r in linhas}
+
+
 def atualizar_perfil(plataforma, conta, forcar=False):
-    """Busca nome, foto e seguidores. A foto é guardada porque o link da CDN expira."""
-    chave = f"{plataforma}/{conta}"
-    atual = perfis().get(chave)
-    if atual and not forcar and time.time() - atual.get("atualizado", 0) < VALIDADE_PERFIL:
-        return atual
+    """Busca nome, foto e seguidores (a foto é guardada porque o link da CDN expira)."""
+    r = db.um("select * from contas where plataforma = %s and conta = %s", plataforma, conta)
+    if r and r["atualizado_em"] and not forcar and time.time() - r["atualizado_em"].timestamp() < VALIDADE_PERFIL:
+        return
     mod = tiktok if plataforma == "tiktok" else instagram
     try:
         p = mod.perfil_publico(conta)
     except Exception:
-        return atual
+        return
     if not p.get("nome") and not p.get("foto"):
-        return atual  # a plataforma bloqueou o servidor: mantém o que já tinha
-    dados = {"nome": p.get("nome"), "seguidores": p.get("seguidores"), "foto": None, "atualizado": time.time()}
+        return  # a plataforma bloqueou o servidor: mantém o que já tinha
+    versao = None
     if p.get("foto"):
         try:
             img = requests.get(p["foto"], impersonate="chrome", timeout=30)
             if img.status_code == 200:
                 armazenamento.imagem_gravar(chave_avatar(plataforma, conta), img.content)
-                dados["foto"] = f"/avatar/{plataforma}/{conta}.jpg?v={int(dados['atualizado'])}"
+                versao = int(time.time())
         except Exception:
             pass
-    with _trava_perfis:
-        todos = perfis()
-        todos[chave] = dados
-        armazenamento.gravar_json(CHAVE_PERFIS, todos)
-    return dados
+    catalogo.atualizar_perfil(plataforma, conta, nome=p.get("nome"), seguidores=p.get("seguidores"), foto_versao=versao)
 
 
 def atualizar_perfis_em_segundo_plano(contas):

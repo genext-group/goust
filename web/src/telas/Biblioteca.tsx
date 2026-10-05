@@ -1,7 +1,7 @@
 import { Button, Label, ListBox, Modal, SearchField, Select, Skeleton, ToggleButton, ToggleButtonGroup } from '@heroui/react'
 import { ArrowDownToLine, ArrowUpRightFromSquare, Comment, Eye, FolderOpen, Heart, Play, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, ia, urlArquivo, urlEmbed, urlThumb, type AnaliseVideo, type Conta, type Plataforma, type Video } from '../api'
+import { api, baixarArquivo, ia, urlEmbed, urlThumb, type AnaliseVideo, type Conta, type Plataforma, type Video } from '../api'
 import { useNuvem } from '../ambiente'
 import { NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
 import { fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
@@ -273,7 +273,7 @@ export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nom
                       Abrir no {NOME_PLATAFORMA[video.plataforma]}
                     </Button>
                   )}
-                  <Button size="sm" variant="tertiary" onPress={() => { window.location.href = urlArquivo(video) }}>
+                  <Button size="sm" variant="tertiary" onPress={() => baixarArquivo(video)}>
                     <ArrowDownToLine />
                     Baixar
                   </Button>
