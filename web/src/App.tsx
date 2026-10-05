@@ -121,7 +121,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
               <span>Referências</span>
             </div>
             <Tabs.ListContainer className="order-last w-full sm:order-none sm:mx-auto sm:w-auto">
-              <Tabs.List aria-label="Seções">
+              <Tabs.List aria-label="Seções" className="[&_[role=tab]]:whitespace-nowrap">
                 <Tabs.Tab id="contas">
                   Contas
                   <Tabs.Indicator />
