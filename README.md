@@ -3,6 +3,22 @@
 App local para baixar e estudar vídeos de contas do TikTok e do Instagram.
 Interface em React + [HeroUI v3](https://heroui.com) e backend em Python (Flask + yt-dlp).
 
+## Versão online (Vercel)
+
+Publicada em https://referencias-flax-chi.vercel.app (projeto `referencias`, time GEROCKET), com deploy
+automático a cada push na `main`. O acesso é protegido pela senha da variável `APP_SENHA`.
+
+| | Local (`iniciar.bat`) | Online |
+|---|---|---|
+| Vídeos | baixados em `downloads/` | não são guardados: catálogo + capa; tocam pelo player oficial e o botão **Baixar** busca na hora |
+| Dados | arquivos em `dados/` | Redis (Upstash, plano gratuito) |
+| Tarefas longas | threads no próprio app | Vercel Queues (`fila.py`), em etapas de até ~4 min |
+| Instagram | página do perfil + busca ampliada (+ login opcional) | só a busca ampliada (o Instagram manda servidores para o login) |
+| Monitoramento | a cada N horas | cron diário (10h UTC) |
+
+Variáveis na Vercel: `OPENAI_API_KEY`, `APP_SENHA`, `APP_SEGREDO`, `CRON_SECRET` e as `KV_*` do Redis.
+Para copiar dados locais para a nuvem: `vercel env pull .env.nuvem --yes` e `python scripts/migrar_para_nuvem.py`.
+
 ## Como usar
 
 1. Dê dois cliques em `iniciar.bat`. Ele instala as dependências, compila a interface na
