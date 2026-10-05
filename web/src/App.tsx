@@ -10,8 +10,9 @@ import { TelaBiblioteca } from './telas/Biblioteca'
 import { TelaContas } from './telas/Contas'
 import { TelaDownloads, ativa } from './telas/Downloads'
 import { TelaInteligencia } from './telas/Inteligencia'
+import { TelaMeuPerfil } from './telas/MeuPerfil'
 
-type Aba = 'contas' | 'biblioteca' | 'inteligencia' | 'downloads'
+type Aba = 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'downloads'
 
 /** Verifica o ambiente. Online: login pelo Clerk (cada criador vê só os próprios dados). Local: direto. */
 export default function App() {
@@ -125,6 +126,10 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
                   Contas
                   <Tabs.Indicator />
                 </Tabs.Tab>
+                <Tabs.Tab id="meuperfil">
+                  Meu perfil
+                  <Tabs.Indicator />
+                </Tabs.Tab>
                 <Tabs.Tab id="biblioteca">
                   Biblioteca
                   <Tabs.Indicator />
@@ -162,6 +167,10 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
         <main className="mx-auto w-full min-w-0 max-w-7xl px-4 pt-8 sm:px-6">
           <Tabs.Panel id="contas">
             <TelaContas contas={contas} setContas={setContas} aoBaixar={() => (carregarTarefas(), setAba('downloads'))} />
+          </Tabs.Panel>
+          <Tabs.Panel id="meuperfil">
+            <TelaMeuPerfil contas={contas} setContas={setContas} versaoBiblioteca={versaoBiblioteca}
+              aoBaixar={() => (carregarTarefas(), setAba('downloads'))} />
           </Tabs.Panel>
           <Tabs.Panel id="biblioteca">
             <TelaBiblioteca contas={contas} versao={versaoBiblioteca} />

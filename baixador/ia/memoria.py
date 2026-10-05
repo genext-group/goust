@@ -19,7 +19,17 @@ from . import cliente
 DESTILAR_A_CADA = 5
 _trava = threading.Lock()
 
-CAMPOS_MARCA = ["nome", "produto", "publico", "objetivos", "tom", "diferenciais", "observacoes"]
+CAMPOS_MARCA = ["nome", "produto", "publico", "dores_do_publico", "objetivos", "metas", "onde_quer_chegar",
+                "posicionamento_desejado", "tom", "diferenciais", "frequencia_possivel", "recursos_producao",
+                "restricoes", "site", "observacoes"]
+NOMES_CAMPOS = {
+    "nome": "marca", "produto": "o que vende (oferta, preço, como funciona)", "publico": "público-alvo",
+    "dores_do_publico": "dores e desejos do público", "objetivos": "objetivo principal com conteúdo",
+    "metas": "metas em números e prazo", "onde_quer_chegar": "onde quer chegar (visão de 6 a 12 meses)",
+    "posicionamento_desejado": "como quer ser percebido", "tom": "tom de voz", "diferenciais": "diferenciais",
+    "frequencia_possivel": "frequência de postagem possível", "recursos_producao": "recursos de produção",
+    "restricoes": "o que não faz / limites", "site": "site", "observacoes": "observações",
+}
 
 
 # ---------------------------------------------------------------- marca
@@ -157,8 +167,8 @@ def contexto():
     m = marca()
     partes = []
     if any(m.values()):
-        partes.append("## Sobre o usuário (quem vai usar os insights)\n" + "\n".join(
-            f"- {k}: {v}" for k, v in m.items() if v))
+        partes.append("## Brief do usuário (quem vai usar os insights)\n" + "\n".join(
+            f"- {NOMES_CAMPOS.get(k, k)}: {v}" for k, v in m.items() if v))
     else:
         partes.append("## Sobre o usuário\nCriador/empresa que monitora concorrentes. Ainda não descreveu a própria marca; "
                       "faça recomendações úteis para quem compete nesse mesmo mercado.")

@@ -117,6 +117,15 @@ def api_adicionar_conta():
     return jsonify(contas_completas())
 
 
+@app.put("/api/contas/<plataforma>/<conta>/papel")
+@protegido
+def api_papel_conta(plataforma, conta):
+    papel = "proprio" if (request.json or {}).get("papel") == "proprio" else "concorrente"
+    db.executar("""update acompanhamentos set papel = %s where usuario_id = %s and conta_id =
+                   (select id from contas where plataforma = %s and conta = %s)""", papel, contexto.usuario(), plataforma, conta)
+    return jsonify(contas_completas())
+
+
 @app.delete("/api/contas/<plataforma>/<conta>")
 @protegido
 def api_remover_conta(plataforma, conta):
@@ -337,8 +346,8 @@ def api_ia_analisar():
     if not ia_cliente.configurada():
         return jsonify(erro="Defina OPENAI_API_KEY nas variáveis de ambiente."), 400
     d = request.json or {}
-    if d.get("tipo") == "mercado":
-        t = ia_tarefas.enfileirar("mercado")
+    if d.get("tipo") in ("mercado", "estrategia"):
+        t = ia_tarefas.enfileirar(d["tipo"])
     else:
         t = ia_tarefas.enfileirar("perfil", d["plataforma"], d["conta"])
     return jsonify(t)
@@ -367,6 +376,25 @@ def api_ia_relatorio(plataforma, conta):
 @protegido
 def api_ia_mercado():
     return jsonify(panorama=ia_mercado.obter(request.args.get("versao")), versoes=ia_mercado.versoes())
+
+
+@app.get("/api/ia/estrategia")
+@protegido
+def api_ia_estrategia():
+    from baixador.ia import estrategia
+    proprias, concorrentes = estrategia.contas_por_papel()
+    return jsonify(estrategia=estrategia.obter(request.args.get("versao")), versoes=estrategia.versoes(),
+                   proprias=len(proprias), concorrentes=len(concorrentes))
+
+
+@app.post("/api/ia/brief/rascunho")
+@protegido
+def api_ia_rascunho_brief():
+    from baixador.ia import estrategia
+    try:
+        return jsonify(estrategia.rascunhar_brief((request.json or {}).get("site") or None))
+    except ValueError as e:
+        return jsonify(erro=str(e)), 400
 
 
 @app.get("/api/ia/video/<plataforma>/<vid>")

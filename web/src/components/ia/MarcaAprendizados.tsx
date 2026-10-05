@@ -16,7 +16,7 @@ const CAMPOS: { k: keyof Marca; rotulo: string; dica: string; longo?: boolean }[
   { k: 'observacoes', rotulo: 'Outras observações', dica: 'Restrições, o que não quer fazer, recursos de produção…', longo: true },
 ]
 
-export function MarcaAprendizados({ status, aoMudar }: { status: StatusIA | null; aoMudar: () => void }) {
+export function MarcaAprendizados({ status, aoMudar, semMarca = false }: { status: StatusIA | null; aoMudar: () => void; semMarca?: boolean }) {
   const nuvem = useNuvem()
   const [marca, setMarca] = useState<Marca | null>(null)
   const [regras, setRegras] = useState<Regra[]>([])
@@ -57,8 +57,8 @@ export function MarcaAprendizados({ status, aoMudar }: { status: StatusIA | null
   const uso = Object.entries(status?.uso ?? {}).filter(([k]) => !k.startsWith('_')) as [string, { chamadas: number; entrada: number; saida: number; segundos_audio: number }][]
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
-      <Secao titulo="Minha marca" descricao="A IA usa isso para transformar a análise dos concorrentes em recomendações para VOCÊ.">
+    <div className={semMarca ? 'grid gap-4 lg:grid-cols-2 [&>div]:contents' : 'grid gap-4 lg:grid-cols-[3fr_2fr]'}>
+      {!semMarca && <Secao titulo="Minha marca" descricao="A IA usa isso para transformar a análise dos concorrentes em recomendações para VOCÊ.">
         {marca && (
           <div className="mt-2 space-y-4">
             {CAMPOS.map((c) => (
@@ -70,7 +70,7 @@ export function MarcaAprendizados({ status, aoMudar }: { status: StatusIA | null
             <div className="flex justify-end"><Button isPending={salvando} onPress={salvarMarca}>Salvar</Button></div>
           </div>
         )}
-      </Secao>
+      </Secao>}
 
       <div className="space-y-4">
         <Secao titulo="O que a IA aprendeu" icone={<Sparkles />}

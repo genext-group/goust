@@ -135,7 +135,7 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
               onSelectionChange={(k) => setVisao([...k][0] as Visao)} aria-label="Visão">
               <ToggleButton id="perfis">Perfis</ToggleButton>
               <ToggleButton id="mercado"><ToggleButtonGroup.Separator />Mercado</ToggleButton>
-              <ToggleButton id="marca"><ToggleButtonGroup.Separator />Minha marca e aprendizados</ToggleButton>
+              <ToggleButton id="marca"><ToggleButtonGroup.Separator />Aprendizados</ToggleButton>
             </ToggleButtonGroup>
             {visao !== 'marca' && (
               <Button onPress={() => setChatAberto(true)}><Comments /> Pergunte à IA</Button>
@@ -261,7 +261,7 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
           </div>
         )}
 
-        {visao === 'marca' && <MarcaAprendizados status={status} aoMudar={carregarStatus} />}
+        {visao === 'marca' && <MarcaAprendizados status={status} aoMudar={carregarStatus} semMarca />}
       </div>
 
       <ModalVideo video={videoAberto} onFechar={() => setVideoAberto(null)} />

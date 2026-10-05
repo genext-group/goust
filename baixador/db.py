@@ -94,6 +94,14 @@ create table if not exists panoramas (
   dados jsonb not null
 );
 
+create table if not exists estrategias (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  versao text not null,
+  gerado_em timestamptz not null,
+  dados jsonb not null
+);
+
 create table if not exists documentos (
   usuario_id text not null references usuarios(id) on update cascade on delete cascade,
   tipo text not null,

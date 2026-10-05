@@ -301,8 +301,13 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=N
     cid = catalogo.conta_id(plataforma, conta)
     seguidores_hist = [f"{r['dia']}: {r['seguidores']}" for r in catalogo.evolucao_seguidores(cid)][-30:]
     comentarios = _comentarios_para_prompt(plataforma, conta)
+    proprio = db.um("""select 1 from acompanhamentos where usuario_id = %s and conta_id = %s and papel = 'proprio'""",
+                    ctx.usuario(), cid)
+    aviso = ("\n\nATENÇÃO: este é o PERFIL DO PRÓPRIO USUÁRIO, não um concorrente. Escreva para ele melhorar: "
+             "'oportunidades_para_voce' = melhorias no próprio perfil; 'ideias_de_conteudo' = próximos posts dele; "
+             "'pontos_fracos' = o que corrigir primeiro." if proprio else "")
     entrada = (
-        memoria.contexto()
+        memoria.contexto() + aviso
         + f"\n\n## Perfil analisado\n@{conta} no {plataforma} · nome: {perfil.get('nome')} · seguidores: {perfil.get('seguidores')}"
         + (f"\nBio: {dados_perfil.get('bio')!r} · categoria: {dados_perfil.get('categoria')} · links: "
            + json.dumps(dados_perfil.get("links") or [], ensure_ascii=False) if dados_perfil else "")

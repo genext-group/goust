@@ -12,7 +12,7 @@ from .. import db, execucao
 from .. import tarefas as downloads
 from ..armazenamento import NUVEM
 from ..execucao import Continuar
-from . import mercado, perfil
+from . import estrategia, mercado, perfil
 
 ATIVOS = ("na fila", "rodando")
 
@@ -63,6 +63,8 @@ def executar(tid, prazo=None):
     try:
         if t["tipo"] == "perfil":
             perfil.gerar(t["plataforma"], t["conta"], progresso, prazo)
+        elif t["tipo"] == "estrategia":
+            estrategia.gerar(progresso)
         else:
             mercado.gerar(progresso)
         t["status"] = "concluído"

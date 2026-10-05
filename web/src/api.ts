@@ -7,6 +7,7 @@ export interface Perfil {
 }
 
 export interface Conta {
+  papel?: 'proprio' | 'concorrente'
   nome: string
   plataforma: Plataforma
   conta: string
@@ -94,7 +95,10 @@ export interface Ambiente { nuvem: boolean; clerk: string | null }
 export const api = {
   ambiente: () => req<Ambiente>('/api/ambiente'),
   contas: () => req<Conta[]>('/api/contas'),
-  adicionarConta: (conta: string, plataforma?: Plataforma) => req<Conta[]>('/api/contas', { body: { conta, plataforma } }),
+  adicionarConta: (conta: string, plataforma?: Plataforma, papel: 'proprio' | 'concorrente' = 'concorrente') =>
+    req<Conta[]>('/api/contas', { body: { conta, plataforma, papel } }),
+  papelConta: (c: Pick<Conta, 'plataforma' | 'conta'>, papel: 'proprio' | 'concorrente') =>
+    req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}/papel`, { method: 'PUT', body: { papel } }),
   removerConta: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}`, { method: 'DELETE' }),
   baixar: (contas: Pick<Conta, 'plataforma' | 'conta'>[], opcoes: Opcoes) =>
@@ -223,7 +227,7 @@ export interface AnaliseVideo {
 
 export interface TarefaIA {
   id: number
-  tipo: 'perfil' | 'mercado'
+  tipo: 'perfil' | 'mercado' | 'estrategia'
   plataforma: Plataforma | null
   conta: string | null
   status: 'na fila' | 'rodando' | 'concluído' | 'erro'
@@ -235,7 +239,7 @@ export interface TarefaIA {
 
 export interface Regra { id?: string; texto: string; origem: 'manual' | 'feedback' }
 export interface Aprendizados { versao: number; regras: Regra[]; feedbacks_processados: number; atualizado: number | null; ultima_mudanca?: string }
-export type Marca = Record<'nome' | 'produto' | 'publico' | 'objetivos' | 'tom' | 'diferenciais' | 'observacoes', string>
+export type Marca = Record<string, string>
 export interface Monitoramento { ativo: boolean; intervalo_horas: number; reanalisar: boolean; ultima_execucao: number | null; proxima: number | null }
 
 export interface StatusIA {
@@ -257,7 +261,10 @@ export const ia = {
   relatorio: (p: Plataforma, c: string, versao?: string) =>
     req<{ relatorio: RegistroRelatorio | null; versoes: string[] }>(`/api/ia/relatorio/${p}/${encodeURIComponent(c)}${versao ? `?versao=${versao}` : ''}`),
   mercado: (versao?: string) => req<{ panorama: RegistroPanorama | null; versoes: string[] }>(`/api/ia/mercado${versao ? `?versao=${versao}` : ''}`),
-  analisar: (alvo: { tipo: 'perfil'; plataforma: Plataforma; conta: string } | { tipo: 'mercado' }) => req<TarefaIA>('/api/ia/analisar', { body: alvo }),
+  analisar: (alvo: { tipo: 'perfil'; plataforma: Plataforma; conta: string } | { tipo: 'mercado' | 'estrategia' }) => req<TarefaIA>('/api/ia/analisar', { body: alvo }),
+  estrategia: (versao?: string) =>
+    req<{ estrategia: RegistroEstrategia | null; versoes: string[]; proprias: number; concorrentes: number }>(`/api/ia/estrategia${versao ? `?versao=${versao}` : ''}`),
+  rascunharBrief: (site?: string) => req<Marca>('/api/ia/brief/rascunho', { body: { site } }),
   tarefas: () => req<TarefaIA[]>('/api/ia/tarefas'),
   video: (p: Plataforma, id: string) => req<AnaliseVideo | null>(`/api/ia/video/${p}/${encodeURIComponent(id)}`),
   analisarVideo: (p: Plataforma, id: string) => req<AnaliseVideo>(`/api/ia/video/${p}/${encodeURIComponent(id)}`, { method: 'POST' }),
@@ -271,4 +278,31 @@ export const ia = {
     req<{ resposta: string }>('/api/ia/chat', { body: { escopo, mensagens } }),
   salvarMonitoramento: (m: Partial<Monitoramento>) => req<Monitoramento>('/api/ia/monitoramento', { method: 'PUT', body: m }),
   monitorarAgora: () => req('/api/ia/monitoramento/agora', { method: 'POST' }),
+}
+
+export interface Estrategia {
+  resumo: string
+  benchmark: { metrica: string; voce: string; media_concorrentes: string; melhor: string; leitura: string }[]
+  onde_voce_esta_atras: Item[]
+  onde_voce_ganha: Item[]
+  o_que_adaptar_dos_concorrentes: Oportunidade[]
+  espacos_livres: Oportunidade[]
+  posicionamento_recomendado: { frase: string; para_quem: string; contra_quem: string; por_que_voce: string }
+  pilares: { nome: string; objetivo: string; participacao_pct: number; formatos: string[]; temas: string[] }[]
+  mix_de_formatos: { formato: string; por_semana: number; por_que: string }[]
+  tom_de_voz: string
+  frequencia: string
+  metas: { metrica: string; atual: string; meta_90_dias: string; como: string }[]
+  prioridades_90_dias: Oportunidade[]
+  primeiras_ideias: Ideia[]
+  nivel_de_confianca: 'alto' | 'medio' | 'baixo'
+  o_que_falta_para_melhorar: string[]
+}
+
+export interface RegistroEstrategia {
+  versao: string
+  gerado: string
+  perfis_proprios: string[]
+  concorrentes: string[]
+  estrategia: Estrategia
 }
