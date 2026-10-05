@@ -19,8 +19,6 @@ web/dist/
 # Vercel
 .vercel
 
-# interface compilada (gerada no build)
-public/
 
 .vercel
 .env*
