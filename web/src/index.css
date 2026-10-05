@@ -1,0 +1,91 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+/* Paleta inspirada no macOS/iOS: fundo cinza-claro, superfícies brancas, azul do sistema. */
+:root,
+[data-theme="light"] {
+  --background: #f5f5f7;
+  --foreground: #1d1d1f;
+  --surface: #ffffff;
+  --surface-secondary: #f5f5f7;
+  --muted: #6e6e73;
+  --accent: #0071e3;
+  --accent-foreground: #ffffff;
+  --border: rgb(0 0 0 / 0.08);
+  --separator: rgb(0 0 0 / 0.08);
+  --field-background: #ffffff;
+  --radius: 0.875rem;
+  --glass: rgb(255 255 255 / 0.72);
+  --hairline: rgb(0 0 0 / 0.08);
+  --tiktok: #000000;
+  --instagram: #d62976;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.04);
+}
+
+.dark,
+[data-theme="dark"] {
+  --background: #000000;
+  --foreground: #f5f5f7;
+  --surface: #1c1c1e;
+  --surface-secondary: #2c2c2e;
+  --muted: #98989d;
+  --accent: #0a84ff;
+  --accent-foreground: #ffffff;
+  --border: rgb(255 255 255 / 0.1);
+  --separator: rgb(255 255 255 / 0.1);
+  --field-background: #1c1c1e;
+  --glass: rgb(22 22 23 / 0.72);
+  --hairline: rgb(255 255 255 / 0.1);
+  --tiktok: #f5f5f7;
+  --instagram: #ff5fa2;
+  --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI",
+    Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+.titulo-display {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI",
+    Inter, system-ui, sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.vidro {
+  background: var(--glass);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+.cartao {
+  background: var(--surface);
+  border-radius: 1.25rem;
+  box-shadow: var(--card-shadow);
+}
+
+.linha-fina {
+  border-color: var(--hairline);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes surgir {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.surgir {
+  animation: surgir 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .surgir { animation: none; }
+}

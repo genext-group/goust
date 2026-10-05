@@ -1,0 +1,20 @@
+# segredos: chave da OpenAI
+.env
+.env.*
+
+# dados locais: sessão/cookies do Instagram, análises da IA, histórico
+dados/
+
+# vídeos baixados (gigabytes, conteúdo de terceiros)
+downloads/
+
+# Python
+__pycache__/
+*.pyc
+
+# interface: dependências e build
+web/node_modules/
+web/dist/
+
+# Vercel
+.vercel
