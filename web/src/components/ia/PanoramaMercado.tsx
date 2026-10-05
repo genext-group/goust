@@ -16,7 +16,7 @@ export function PanoramaMercado({ r, contas }: { r: RegistroPanorama; contas: Co
         <p className="mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wide text-accent uppercase">
           <Sparkles className="size-3.5" /> Resumo do mercado · {r.perfis.length} perfis
         </p>
-        <p className="titulo-display text-[19px] leading-relaxed"><TextoComVideos texto={p.resumo_do_mercado} /></p>
+        <p className="text-[17px] leading-[1.7] text-foreground/90"><TextoComVideos texto={p.resumo_do_mercado} /></p>
         <div className="mt-3 flex justify-end"><Feedback secao="resumo_do_mercado" item={p.resumo_do_mercado} /></div>
       </section>
 

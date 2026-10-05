@@ -26,6 +26,7 @@ export interface Opcoes {
   data_fim?: string | null
   min_views?: number
   somente_reels?: boolean
+  analisar_ao_fim?: boolean
   link?: string
 }
 

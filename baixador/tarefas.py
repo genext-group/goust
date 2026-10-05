@@ -238,8 +238,11 @@ def _coletar_comentarios(t, prazo):
 
 def _depois(t):
     """Monitoramento: depois de baixar o que é novo, reanalisa a conta com IA (se pedido)."""
-    if t["opcoes"].get("analisar_depois") and t["baixados"] > 0:
-        from .ia import perfil as ia_perfil, tarefas_ia
+    from .ia import perfil as ia_perfil, tarefas_ia
+    if t["opcoes"].get("analisar_ao_fim") and (t["baixados"] + t["pulados"]) > 0:
+        # fluxo "coletar e analisar" (ex.: ao adicionar o seu perfil): a análise começa sozinha
+        tarefas_ia.enfileirar("perfil", t["plataforma"], t["conta"])
+    elif t["opcoes"].get("analisar_depois") and t["baixados"] > 0:
         if ia_perfil.versoes(t["plataforma"], t["conta"]):
             tarefas_ia.enfileirar("perfil", t["plataforma"], t["conta"])
 

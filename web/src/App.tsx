@@ -1,18 +1,18 @@
-import { Button, Spinner, Tabs, Toast } from '@heroui/react'
-import { Moon, Sparkles, Sun } from '@gravity-ui/icons'
+import { Button, Spinner, Toast } from '@heroui/react'
+import { House, Moon, Person, Persons, Picture, Sparkles, Sun, Thunderbolt } from '@gravity-ui/icons'
 import { ClerkProvider, Show, SignIn, UserButton, useAuth } from '@clerk/react'
 import { ptBR } from '@clerk/localizations'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, definirObtencaoToken, type Ambiente, type Conta, type Tarefa } from './api'
 import { AmbienteContexto } from './ambiente'
-import { StatusInstagram } from './components/StatusInstagram'
 import { TelaBiblioteca } from './telas/Biblioteca'
 import { TelaContas } from './telas/Contas'
 import { TelaDownloads, ativa } from './telas/Downloads'
 import { TelaInteligencia } from './telas/Inteligencia'
 import { TelaMeuPerfil } from './telas/MeuPerfil'
+import { TelaInicio } from './telas/Inicio'
 
-type Aba = 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'downloads'
+type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'downloads'
 
 /** Verifica o ambiente. Online: login pelo Clerk (cada criador vê só os próprios dados). Local: direto. */
 export default function App() {
@@ -70,7 +70,7 @@ function ComToken({ children }: { children: ReactNode }) {
 }
 
 function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
-  const [aba, setAba] = useState<Aba>('contas')
+  const [aba, setAba] = useState<Aba>('inicio')
   const [contas, setContas] = useState<Conta[]>([])
   const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [versaoBiblioteca, setVersaoBiblioteca] = useState(0)
@@ -110,79 +110,84 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
     }
   }, [escuro])
 
-  return (
-    <div className="min-h-screen overflow-x-clip">
-      <Toast.Provider placement="top" />
-      <Tabs className="block w-full min-w-0" selectedKey={aba} onSelectionChange={(k) => setAba(k as Aba)}>
-        <header className="vidro sticky top-0 z-40 border-b linha-fina">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:h-14 sm:flex-nowrap sm:py-0 sm:px-6">
-            <div className="flex items-center gap-2 font-semibold">
-              <img src="/favicon.svg" alt="" className="size-6" />
-              <span>Referências</span>
-            </div>
-            <Tabs.ListContainer className="order-last w-full sm:order-none sm:mx-auto sm:w-auto">
-              <Tabs.List aria-label="Seções" className="[&_[role=tab]]:whitespace-nowrap">
-                <Tabs.Tab id="contas">
-                  Contas
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-                <Tabs.Tab id="meuperfil">
-                  Meu perfil
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-                <Tabs.Tab id="biblioteca">
-                  Biblioteca
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-                <Tabs.Tab id="inteligencia">
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="size-3.5 text-accent" />
-                    Inteligência
-                  </span>
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-                <Tabs.Tab id="downloads">
-                  <span className="flex items-center gap-1.5">
-                    Downloads
-                    {emAndamento > 0 && (
-                      <span className="num grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-foreground">
-                        {emAndamento}
-                      </span>
-                    )}
-                  </span>
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              </Tabs.List>
-            </Tabs.ListContainer>
-            <div className="ml-auto flex items-center gap-1 sm:ml-0">
-              <StatusInstagram />
-              {clerk && <div className="ml-1 grid place-items-center"><UserButton /></div>}
-              <Button isIconOnly size="sm" variant="ghost" aria-label="Alternar tema" onPress={() => setEscuro((e) => !e)}>
-                {escuro ? <Sun /> : <Moon />}
-              </Button>
-            </div>
-          </div>
-        </header>
+  const itens: { id: Aba; nome: string; icone: ReactNode; extra?: ReactNode }[] = [
+    { id: 'inicio', nome: 'Início', icone: <House /> },
+    { id: 'meuperfil', nome: 'Meu perfil', icone: <Person /> },
+    { id: 'contas', nome: 'Concorrentes', icone: <Persons /> },
+    { id: 'inteligencia', nome: 'Inteligência', icone: <Sparkles /> },
+    { id: 'biblioteca', nome: 'Biblioteca', icone: <Picture /> },
+    {
+      id: 'downloads', nome: 'Atividade', icone: <Thunderbolt />,
+      extra: emAndamento > 0 ? <span className="num grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-foreground">{emAndamento}</span> : null,
+    },
+  ]
+  const irPara = (a: Aba) => { setAba(a); window.scrollTo({ top: 0 }) }
+  const aoBaixar = () => (carregarTarefas(), irPara('downloads'))
 
-        <main className="mx-auto w-full min-w-0 max-w-7xl px-4 pt-8 sm:px-6">
-          <Tabs.Panel id="contas">
-            <TelaContas contas={contas} setContas={setContas} aoBaixar={() => (carregarTarefas(), setAba('downloads'))} />
-          </Tabs.Panel>
-          <Tabs.Panel id="meuperfil">
-            <TelaMeuPerfil contas={contas} setContas={setContas} versaoBiblioteca={versaoBiblioteca}
-              aoBaixar={() => (carregarTarefas(), setAba('downloads'))} />
-          </Tabs.Panel>
-          <Tabs.Panel id="biblioteca">
-            <TelaBiblioteca contas={contas} versao={versaoBiblioteca} />
-          </Tabs.Panel>
-          <Tabs.Panel id="inteligencia">
-            <TelaInteligencia contas={contas} versaoBiblioteca={versaoBiblioteca} />
-          </Tabs.Panel>
-          <Tabs.Panel id="downloads">
-            <TelaDownloads tarefas={tarefas} aoMudar={carregarTarefas} />
-          </Tabs.Panel>
-        </main>
-      </Tabs>
+  const tela = {
+    inicio: <TelaInicio contas={contas} tarefas={tarefas} irPara={irPara} />,
+    meuperfil: <TelaMeuPerfil contas={contas} setContas={setContas} versaoBiblioteca={versaoBiblioteca} aoBaixar={aoBaixar}
+      tarefasDownload={tarefas} recarregarTarefas={carregarTarefas} />,
+    contas: <TelaContas contas={contas} setContas={setContas} aoBaixar={aoBaixar} />,
+    inteligencia: <TelaInteligencia contas={contas} versaoBiblioteca={versaoBiblioteca} />,
+    biblioteca: <TelaBiblioteca contas={contas} versao={versaoBiblioteca} />,
+    downloads: <TelaDownloads tarefas={tarefas} aoMudar={carregarTarefas} />,
+  }[aba]
+
+  const navegacao = (compacta: boolean) => (
+    <nav aria-label="Seções" className={compacta ? 'flex gap-1 overflow-x-auto' : 'space-y-0.5'}>
+      {itens.map((it) => {
+        const ativo = aba === it.id
+        return (
+          <button key={it.id} onClick={() => irPara(it.id)} aria-current={ativo ? 'page' : undefined}
+            className={`group flex items-center gap-3 rounded-xl text-sm font-medium transition-colors outline-none ${compacta ? 'shrink-0 px-3 py-2' : 'w-full px-3 py-2.5'} ${
+              ativo ? 'bg-surface-secondary text-foreground shadow-sm' : 'text-muted hover:bg-surface-secondary/60 hover:text-foreground'}`}>
+            <span className={`[&_svg]:size-4 ${ativo ? 'text-accent' : ''}`}>{it.icone}</span>
+            <span className="flex-1 text-left whitespace-nowrap">{it.nome}</span>
+            {it.extra}
+          </button>
+        )
+      })}
+    </nav>
+  )
+
+  return (
+    <div className="ambiente min-h-screen overflow-x-clip">
+      <Toast.Provider placement="top end" />
+
+      {/* barra lateral (desktop) */}
+      <aside className="vidro fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r linha-fina lg:flex">
+        <div className="flex items-center gap-2.5 px-5 pt-6 pb-8">
+          <span className="grid size-8 place-items-center rounded-xl botao-sinal"><Sparkles className="size-4" /></span>
+          <span className="titulo-display text-lg font-semibold">Referências</span>
+        </div>
+        <div className="flex-1 px-3">{navegacao(false)}</div>
+        <div className="flex items-center gap-2 border-t px-4 py-4 linha-fina">
+          {clerk ? <UserButton showName appearance={{ elements: { userButtonBox: { flexDirection: 'row-reverse', color: 'var(--foreground)' } } }} /> : <span className="text-sm text-muted">Modo local</span>}
+          <Button isIconOnly size="sm" variant="ghost" className="ml-auto" aria-label="Alternar tema" onPress={() => setEscuro((e) => !e)}>
+            {escuro ? <Sun /> : <Moon />}
+          </Button>
+        </div>
+      </aside>
+
+      {/* topo (celular e tablet) */}
+      <header className="vidro sticky top-0 z-40 border-b linha-fina lg:hidden">
+        <div className="flex items-center gap-2 px-4 pt-3">
+          <span className="grid size-7 place-items-center rounded-lg botao-sinal"><Sparkles className="size-3.5" /></span>
+          <span className="titulo-display font-semibold">Referências</span>
+          <div className="ml-auto flex items-center gap-1">
+            {clerk && <UserButton />}
+            <Button isIconOnly size="sm" variant="ghost" aria-label="Alternar tema" onPress={() => setEscuro((e) => !e)}>
+              {escuro ? <Sun /> : <Moon />}
+            </Button>
+          </div>
+        </div>
+        <div className="px-2 py-2">{navegacao(true)}</div>
+      </header>
+
+      <main className="min-w-0 lg:pl-64">
+        <div key={aba} className="surgir mx-auto w-full min-w-0 max-w-6xl px-4 pt-8 pb-16 sm:px-8">{tela}</div>
+      </main>
     </div>
   )
 }

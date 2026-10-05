@@ -3,66 +3,95 @@
 
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
-/* Paleta inspirada no macOS/iOS: fundo cinza-claro, superfícies brancas, azul do sistema. */
+/*
+  Sistema visual "Referências"
+  - fundo grafite azulado, superfícies em camadas, destaque em gradiente violeta → coral
+  - assinatura: a "aura" de cada perfil (gradiente próprio gerado a partir do nome)
+*/
 :root,
 [data-theme="light"] {
-  --background: #f5f5f7;
-  --foreground: #1d1d1f;
+  --background: #f4f4f8;
+  --foreground: #14141c;
   --surface: #ffffff;
-  --surface-secondary: #f5f5f7;
-  --muted: #6e6e73;
-  --accent: #0071e3;
+  --surface-secondary: #f0f0f5;
+  --surface-tertiary: #e8e8f0;
+  --muted: #6b6b7b;
+  --accent: #6a4cff;
   --accent-foreground: #ffffff;
-  --border: rgb(0 0 0 / 0.08);
-  --separator: rgb(0 0 0 / 0.08);
+  --border: rgb(20 20 40 / 0.08);
+  --separator: rgb(20 20 40 / 0.08);
   --field-background: #ffffff;
-  --radius: 0.875rem;
+  --radius: 0.9rem;
+  --hairline: rgb(20 20 40 / 0.08);
   --glass: rgb(255 255 255 / 0.72);
-  --hairline: rgb(0 0 0 / 0.08);
-  --tiktok: #000000;
+  --sidebar: rgb(255 255 255 / 0.6);
+  --tiktok: #111118;
   --instagram: #d62976;
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.04);
+  --sinal-a: #7c5cff;
+  --sinal-b: #ff6a3d;
+  --menta: #12b886;
+  --ambar: #f59f00;
+  --card-shadow: 0 1px 2px rgb(20 20 40 / 0.04), 0 10px 30px -12px rgb(20 20 40 / 0.12);
 }
 
 .dark,
 [data-theme="dark"] {
-  --background: #000000;
-  --foreground: #f5f5f7;
-  --surface: #1c1c1e;
-  --surface-secondary: #2c2c2e;
-  --muted: #98989d;
-  --accent: #0a84ff;
+  --background: #0b0b12;
+  --foreground: #ececf3;
+  --surface: #13131c;
+  --surface-secondary: #1b1b26;
+  --surface-tertiary: #242432;
+  --muted: #8d8da0;
+  --accent: #8b70ff;
   --accent-foreground: #ffffff;
-  --border: rgb(255 255 255 / 0.1);
-  --separator: rgb(255 255 255 / 0.1);
-  --field-background: #1c1c1e;
-  --glass: rgb(22 22 23 / 0.72);
-  --hairline: rgb(255 255 255 / 0.1);
-  --tiktok: #f5f5f7;
+  --border: rgb(255 255 255 / 0.08);
+  --separator: rgb(255 255 255 / 0.07);
+  --field-background: #171722;
+  --hairline: rgb(255 255 255 / 0.07);
+  --glass: rgb(19 19 28 / 0.7);
+  --sidebar: rgb(13 13 20 / 0.72);
+  --tiktok: #f2f2f7;
   --instagram: #ff5fa2;
-  --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.06);
+  --sinal-a: #8b70ff;
+  --sinal-b: #ff7a4d;
+  --menta: #2ee6a6;
+  --ambar: #ffb547;
+  --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 20px 40px -24px rgb(0 0 0 / 0.6);
 }
 
 html,
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI",
-    Inter, system-ui, sans-serif;
+  font-family: "Geist", -apple-system, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv11", "ss01";
 }
 
 .titulo-display {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI",
-    Inter, system-ui, sans-serif;
-  letter-spacing: -0.025em;
+  font-family: "Bricolage Grotesque", "Geist", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  font-optical-sizing: auto;
+}
+
+.num {
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* fundo ambiente: dois brilhos do gradiente da marca, bem suaves */
+.ambiente {
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, color-mix(in srgb, var(--sinal-a) 16%, transparent), transparent 60%),
+    radial-gradient(50rem 30rem at -10% 10%, color-mix(in srgb, var(--sinal-b) 10%, transparent), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
 }
 
 .vidro {
   background: var(--glass);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
 }
 
 .cartao {
@@ -75,17 +104,55 @@ body {
   border-color: var(--hairline);
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
+/* texto e borda no gradiente da marca */
+.texto-sinal {
+  background: linear-gradient(100deg, var(--sinal-a), var(--sinal-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.botao-sinal {
+  background: linear-gradient(100deg, var(--sinal-a), var(--sinal-b)) !important;
+  color: #fff !important;
+  border: 0 !important;
+  box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--sinal-a) 70%, transparent);
+}
+.botao-sinal:hover { filter: brightness(1.08); }
+
+/* aura: o gradiente próprio de cada perfil (as cores vêm de --a1/--a2/--a3, ver aura.ts) */
+.aura {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 140% at 0% 0%, var(--a1), transparent 55%),
+    radial-gradient(120% 140% at 100% 20%, var(--a2), transparent 55%),
+    radial-gradient(120% 120% at 50% 120%, var(--a3), transparent 60%),
+    #0d0d16;
+}
+.aura::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.18;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 
 @keyframes surgir {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-.surgir {
-  animation: surgir 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+.surgir { animation: surgir 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes brilho {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
+.pulsando { animation: brilho 1.6s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .surgir { animation: none; }
+  .surgir, .pulsando { animation: none; }
 }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

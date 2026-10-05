@@ -21,7 +21,7 @@ export function EstrategiaView({ r }: { r: RegistroEstrategia }) {
             confiança {nomeConf}
           </span>
         </div>
-        <p className="titulo-display text-[19px] leading-relaxed"><TextoComVideos texto={e.resumo} /></p>
+        <p className="text-[17px] leading-[1.7] text-foreground/90"><TextoComVideos texto={e.resumo} /></p>
         <div className="mt-3 flex justify-end"><Feedback secao="estrategia.resumo" item={e.resumo} /></div>
         {e.o_que_falta_para_melhorar.length > 0 && (
           <div className="mt-2 rounded-xl bg-surface-secondary p-3 text-sm">

@@ -13,6 +13,7 @@ import { PanoramaMercado } from '../components/ia/PanoramaMercado'
 import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
 import { SeloPlataforma } from '../components/Plataforma'
 import { fmtRelativo } from '../formato'
+import { aura } from '../aura'
 import { ModalVideo } from './Biblioteca'
 import { useNuvem } from '../ambiente'
 
@@ -176,11 +177,13 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
 
             <div className="min-w-0 space-y-4">
               {conta && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <AvatarConta conta={conta} tamanho="lg" />
+                <div className="aura flex flex-wrap items-center gap-4 overflow-hidden rounded-[1.5rem] px-6 py-6 text-white"
+                  style={aura(`${conta.plataforma}/${conta.conta}`)}>
+                  <div className="rounded-full ring-4 ring-white/20"><AvatarConta conta={conta} tamanho="lg" /></div>
                   <div className="min-w-0 flex-1">
-                    <h2 className="titulo-display truncate text-2xl font-semibold">{conta.perfil?.nome || conta.nome}</h2>
-                    <div className="flex items-center gap-2 text-sm text-muted"><SeloPlataforma plataforma={conta.plataforma} /> @{conta.conta}</div>
+                    <p className="text-xs text-white/70">{conta.papel === 'proprio' ? 'Seu perfil' : 'Concorrente'}</p>
+                    <h2 className="titulo-display truncate text-3xl font-semibold">{conta.perfil?.nome || conta.nome}</h2>
+                    <div className="flex items-center gap-2 text-sm text-white/80"><SeloPlataforma plataforma={conta.plataforma} /> @{conta.conta}</div>
                   </div>
                   {relatorio && relatorio.versoes.length > 1 && (
                     <Select className="w-48" value={relatorio.relatorio?.versao ?? null} onChange={(v) => setVersao(String(v))} aria-label="Versão">

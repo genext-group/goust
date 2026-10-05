@@ -23,7 +23,7 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
             <p className="mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wide text-accent uppercase">
               <Sparkles className="size-3.5" /> Resumo executivo
             </p>
-            <p className="titulo-display text-[19px] leading-relaxed"><TextoComVideos texto={rel.resumo_executivo} /></p>
+            <p className="text-[17px] leading-[1.7] text-foreground/90"><TextoComVideos texto={rel.resumo_executivo} /></p>
             <div className="mt-3 flex justify-end"><Feedback secao="resumo_executivo" item={rel.resumo_executivo} /></div>
           </div>
           <div className="space-y-3 rounded-2xl bg-surface-secondary p-4">
