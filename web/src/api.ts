@@ -57,9 +57,12 @@ export interface Video {
   duracao: number | null
   legenda: string
   tamanho: number
+  url_thumb: string
+  url_video: string | null
 }
 
 export interface StatusInstagram {
+  nuvem?: boolean
   usuario: string | null
   rodando: boolean
   status: string
@@ -72,11 +75,17 @@ async function req<T>(url: string, opts: { method?: string; body?: unknown } = {
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   })
   const j = await r.json().catch(() => ({}))
+  if (r.status === 401 && !url.startsWith('/api/login')) window.dispatchEvent(new Event('precisa-login'))
   if (!r.ok) throw new Error(j.erro || `Erro ${r.status}`)
   return j as T
 }
 
+export interface Ambiente { nuvem: boolean; precisa_login: boolean; logado: boolean }
+
 export const api = {
+  ambiente: () => req<Ambiente>('/api/ambiente'),
+  login: (senha: string) => req<{ ok: boolean }>('/api/login', { body: { senha } }),
+  logout: () => req('/api/logout', { method: 'POST' }),
   contas: () => req<Conta[]>('/api/contas'),
   adicionarConta: (conta: string, plataforma?: Plataforma) => req<Conta[]>('/api/contas', { body: { conta, plataforma } }),
   removerConta: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
@@ -95,8 +104,13 @@ export const api = {
   desconectarInstagram: () => req('/api/instagram/desconectar', { method: 'POST' }),
 }
 
-export const urlMidia = (v: Video) => `/media/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.arquivo)}`
-export const urlThumb = (v: Video) => `/thumb/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.arquivo)}`
+export const urlThumb = (v: Video) => v.url_thumb
+export const urlArquivo = (v: Video) => `/api/arquivo/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.id)}`
+/** Player oficial da plataforma, usado quando o vídeo não está guardado (versão online). */
+export const urlEmbed = (v: Video) =>
+  v.plataforma === 'tiktok'
+    ? `https://www.tiktok.com/player/v1/${v.id}?autoplay=1&rel=0&description=0&music_info=0`
+    : `https://www.instagram.com/reel/${v.id}/embed/`
 
 /** Interpreta o que o usuário colou: vídeo avulso, perfil ou @. */
 export function interpretarEntrada(texto: string): { tipo: 'video' | 'perfil' | 'arroba'; plataforma?: Plataforma } {

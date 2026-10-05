@@ -16,6 +16,8 @@ from curl_cffi import requests
 from yt_dlp import YoutubeDL
 
 from . import instagram_descoberta as descoberta
+from .armazenamento import NUVEM
+from .midia import FFMPEG, salvar_capa
 from .filtros import (MAX_FIXADOS, PASTA_DADOS, Cancelado, data_inicio_ts,
                       nome_arquivo, quantos_listar)
 
@@ -50,6 +52,8 @@ def desconectar():
 
 def conectar(log, tempo_max=600):
     """Abre uma janela do navegador para o usuário fazer login e salva os cookies."""
+    if NUVEM:
+        raise SessaoInvalida("O login do Instagram só funciona no app local (iniciar.bat).")
     from playwright.sync_api import sync_playwright
 
     PASTA_DADOS.mkdir(exist_ok=True)
@@ -135,7 +139,9 @@ def _listar_sem_login(conta, opcoes, log, cancelado=lambda: False):
     if conexao is None:
         if '"is_private":true' in html:
             raise ValueError("Perfil privado.")
-        raise RuntimeError("O Instagram não devolveu os Reels agora (limite temporário). Tente de novo em alguns minutos.")
+        # Acontece nos servidores da Vercel (o Instagram manda para o login): segue só com a descoberta ampliada.
+        log("O Instagram não mostrou o perfil para este servidor; usando só a busca ampliada.")
+        conexao = {"edges": [], "page_info": {"has_next_page": True}}
     itens = []
     for e in conexao.get("edges") or []:
         n = e["node"]
@@ -148,6 +154,7 @@ def _listar_sem_login(conta, opcoes, log, cancelado=lambda: False):
             "comentarios": n.get("comment_count"),
             "duracao": None,
             "legenda": None,
+            "capa": n.get("display_uri"),
         })
     if not conexao.get("page_info", {}).get("has_next_page") or not _precisa_de_mais(opcoes, len(itens)):
         return itens
@@ -164,6 +171,8 @@ def _listar_sem_login(conta, opcoes, log, cancelado=lambda: False):
 
 def _precisa_de_mais(opcoes, tem):
     modo = opcoes.get("modo", "todos")
+    if tem == 0:  # a página do perfil não trouxe nada (servidor na nuvem): só a busca resolve
+        return True
     if modo == "recentes":
         return int(opcoes.get("quantidade") or 10) > tem
     return modo in ("todos", "antigos", "mais_vistos", "periodo")
@@ -257,6 +266,7 @@ def _listar_com_login(conta, opcoes, log, cancelado, conhecido):
                 "comentarios": m.get("comment_count"),
                 "duracao": m.get("video_duration"),
                 "legenda": (m.get("caption") or {}).get("text"),
+                "capa": ((m.get("image_versions2") or {}).get("candidates") or [{}])[0].get("url"),
             }
             itens.append(item)
             antigo = inicio and (item["timestamp"] or 0) < inicio
@@ -284,6 +294,8 @@ def listar(conta, opcoes, log, cancelado, conhecido=lambda _id: False):
 # ---------------------------------------------------------------- download
 
 def baixar(item, pasta, cancelado):
+    if NUVEM:  # online o vídeo não é guardado: só a capa vira miniatura
+        return salvar_capa("instagram", item)
     destino = pasta / nome_arquivo(item)
     if destino.exists():
         return "pulado"
@@ -319,7 +331,7 @@ def _baixar_ytdlp(item, destino, cancelado):
     opts = {
         "quiet": True, "no_warnings": True, "noprogress": True,
         "outtmpl": str(destino.with_suffix("")) + ".%(ext)s",
-        "format": "bv*+ba/b", "merge_output_format": "mp4",
+        "format": "bv*+ba/b", "merge_output_format": "mp4", "ffmpeg_location": FFMPEG,
         "progress_hooks": [checar], "retries": 5,
     }
     with YoutubeDL(opts) as ydl:

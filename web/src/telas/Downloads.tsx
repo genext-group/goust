@@ -3,6 +3,7 @@ import { FolderOpen, Xmark } from '@gravity-ui/icons'
 import type { Tarefa } from '../api'
 import { api } from '../api'
 import { IconePlataforma, NOME_PLATAFORMA } from '../components/Plataforma'
+import { useNuvem } from '../ambiente'
 
 const COR: Record<Tarefa['status'], 'default' | 'accent' | 'success' | 'danger' | 'warning'> = {
   'na fila': 'default',
@@ -31,6 +32,7 @@ const descreverModo = (t: Tarefa) => {
 export const ativa = (t: Tarefa) => ['na fila', 'listando', 'baixando'].includes(t.status)
 
 export function TelaDownloads({ tarefas, aoMudar }: { tarefas: Tarefa[]; aoMudar: () => void }) {
+  const nuvem = useNuvem()
   const ativas = tarefas.filter(ativa)
   const finalizadas = tarefas.filter((t) => !ativa(t))
 
@@ -39,13 +41,19 @@ export function TelaDownloads({ tarefas, aoMudar }: { tarefas: Tarefa[]; aoMudar
       <div className="flex flex-wrap items-end justify-between gap-4 pt-2">
         <div>
           <h1 className="titulo-display text-4xl font-semibold">Downloads</h1>
-          <p className="mt-1 text-muted">TikTok e Instagram baixam em paralelo, com vários vídeos por vez.</p>
+          <p className="mt-1 text-muted">
+            {nuvem
+              ? 'Na versão online os vídeos são catalogados (métricas, legenda e capa) e tocam pelo player oficial.'
+              : 'TikTok e Instagram baixam em paralelo, com vários vídeos por vez.'}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="tertiary" onPress={() => api.abrirPasta()}>
-            <FolderOpen />
-            Abrir pasta
-          </Button>
+          {!nuvem && (
+            <Button variant="tertiary" onPress={() => api.abrirPasta()}>
+              <FolderOpen />
+              Abrir pasta
+            </Button>
+          )}
           {finalizadas.length > 0 && (
             <Button variant="tertiary" onPress={() => api.limpar().then(aoMudar)}>
               Limpar histórico
@@ -76,6 +84,7 @@ function Grupo({ titulo, tarefas, aoMudar }: { titulo: string; tarefas: Tarefa[]
 }
 
 function LinhaTarefa({ t, aoMudar }: { t: Tarefa; aoMudar: () => void }) {
+  const nuvem = useNuvem()
   const feito = t.baixados + t.pulados + t.erros
   const pct = t.total ? Math.round((feito / t.total) * 100) : t.status === 'concluído' ? 100 : 0
   const indeterminado = t.status === 'listando'
@@ -101,7 +110,7 @@ function LinhaTarefa({ t, aoMudar }: { t: Tarefa; aoMudar: () => void }) {
           <Button isIconOnly size="sm" variant="ghost" aria-label="Cancelar" onPress={() => api.cancelar(t.id).then(aoMudar)}>
             <Xmark />
           </Button>
-        ) : (
+        ) : nuvem ? null : (
           <Button
             isIconOnly
             size="sm"
@@ -137,7 +146,7 @@ function LinhaTarefa({ t, aoMudar }: { t: Tarefa; aoMudar: () => void }) {
             <span className="text-foreground">{feito}</span> de {t.total}
           </span>
         )}
-        <span>{t.baixados} baixados</span>
+        <span>{t.baixados} {nuvem ? 'catalogados' : 'baixados'}</span>
         {t.pulados > 0 && <span>{t.pulados} já existiam</span>}
         {t.erros > 0 && <span className="text-danger">{t.erros} erros</span>}
         {t.logs.length > 0 && <span className="truncate">{t.logs[t.logs.length - 1].slice(9)}</span>}

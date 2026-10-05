@@ -14,6 +14,7 @@ import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
 import { SeloPlataforma } from '../components/Plataforma'
 import { fmtRelativo } from '../formato'
 import { ModalVideo } from './Biblioteca'
+import { useNuvem } from '../ambiente'
 
 type Visao = 'perfis' | 'mercado' | 'marca'
 const chave = (c: Pick<Conta, 'plataforma' | 'conta'>) => `${c.plataforma}/${c.conta}`
@@ -22,6 +23,7 @@ const notaMedia = (n: ResumoRelatorio['notas']) =>
   (n.consistencia + n.ganchos + n.clareza_da_mensagem + n.producao + n.engajamento) / 5
 
 export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]; versaoBiblioteca: number }) {
+  const nuvem = useNuvem()
   const [visao, setVisao] = useState<Visao>('perfis')
   const [status, setStatus] = useState<StatusIA | null>(null)
   const [resumos, setResumos] = useState<Record<string, ResumoRelatorio>>({})
@@ -84,9 +86,9 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
       antes = new Set(ts.filter((t) => t.status === 'na fila' || t.status === 'rodando').map((t) => t.id))
     }
     tick()
-    const id = setInterval(tick, 2000)
+    const id = setInterval(() => { if (!document.hidden) tick() }, nuvem ? 4000 : 2000)
     return () => clearInterval(id)
-  }, [carregarResumos, carregarStatus, carregarRelatorio, carregarPanorama])
+  }, [carregarResumos, carregarStatus, carregarRelatorio, carregarPanorama, nuvem])
 
   const tarefaDe = (c?: Conta) => c && ativas.find((t) => t.tipo === 'perfil' && t.plataforma === c.plataforma && t.conta === c.conta)
   const tarefaMercado = ativas.find((t) => t.tipo === 'mercado')

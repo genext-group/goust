@@ -1,17 +1,21 @@
-"""Biblioteca de vídeos baixados, miniaturas e cache dos perfis (foto, nome, seguidores)."""
-import json
+"""Biblioteca de vídeos, miniaturas e cache dos perfis (foto, nome, seguidores).
+
+Local: os vídeos ficam em downloads/ e a miniatura é gerada do próprio arquivo.
+Nuvem: só o catálogo (metadados) e a capa ficam guardados; o vídeo toca pelo player oficial.
+"""
 import re
-import subprocess
 import threading
 import time
+from urllib.parse import quote
 
 from curl_cffi import requests
 
-from . import instagram, tiktok
-from .filtros import PASTA_DADOS, PASTA_DOWNLOADS, ler_planilha
+from . import armazenamento, instagram, tiktok
+from .armazenamento import NUVEM
+from .filtros import PASTA_DOWNLOADS, contas_com_metadados, ler_metadados
+from .midia import chave_thumb, rodar_ffmpeg
 
-ARQ_PERFIS = PASTA_DADOS / "perfis.json"
-PASTA_AVATARES = PASTA_DADOS / "avatares"
+CHAVE_PERFIS = "dados/perfis.json"
 VALIDADE_PERFIL = 24 * 3600
 _trava_perfis = threading.Lock()
 RE_ARQUIVO = re.compile(r"^(\d{4}-\d{2}-\d{2}|sem-data)_(.+)\.mp4$")
@@ -24,40 +28,49 @@ def _num(v):
         return None
 
 
+def _video(plataforma, conta, vid, r, arquivo=None, tamanho=0, data_arquivo=""):
+    views, likes, coments = _num(r.get("views")), _num(r.get("likes")), _num(r.get("comentarios"))
+    base = f"{plataforma}/{quote(conta)}"
+    return {
+        "plataforma": plataforma,
+        "conta": conta,
+        "id": vid,
+        "arquivo": arquivo or "",
+        "data": r.get("data") or data_arquivo,
+        "url": r.get("url") or "",
+        "views": views,
+        "likes": likes,
+        "comentarios": coments,
+        "engajamento": round(((likes or 0) + (coments or 0)) / views * 100, 2) if views else None,
+        "duracao": _num(r.get("duracao_s")),
+        "legenda": r.get("legenda") or "",
+        "tamanho": tamanho,
+        "url_thumb": f"/thumb/{base}/{quote(vid)}",
+        "url_video": f"/media/{base}/{quote(arquivo)}" if arquivo else None,
+    }
+
+
 def videos():
-    """Todos os vídeos em downloads/, com os metadados do _videos.csv quando houver."""
+    """Todos os vídeos catalogados (local: os arquivos em downloads/; nuvem: o catálogo)."""
     saida = []
-    if not PASTA_DOWNLOADS.exists():
-        return saida
-    for pasta_plat in PASTA_DOWNLOADS.iterdir():
-        if not pasta_plat.is_dir():
-            continue
-        for pasta in pasta_plat.iterdir():
-            if not pasta.is_dir():
+    if NUVEM:
+        for plataforma, conta in contas_com_metadados():
+            for vid, r in ler_metadados(plataforma, conta).items():
+                saida.append(_video(plataforma, conta, vid, r))
+    elif PASTA_DOWNLOADS.exists():
+        for pasta_plat in PASTA_DOWNLOADS.iterdir():
+            if not pasta_plat.is_dir():
                 continue
-            meta = ler_planilha(pasta)
-            for arq in pasta.glob("*.mp4"):
-                m = RE_ARQUIVO.match(arq.name)
-                if not m:
+            for pasta in pasta_plat.iterdir():
+                if not pasta.is_dir():
                     continue
-                vid = m.group(2)
-                r = meta.get(vid, {})
-                views, likes, coments = _num(r.get("views")), _num(r.get("likes")), _num(r.get("comentarios"))
-                saida.append({
-                    "plataforma": pasta_plat.name,
-                    "conta": pasta.name,
-                    "id": vid,
-                    "arquivo": arq.name,
-                    "data": r.get("data") or (m.group(1) if m.group(1) != "sem-data" else ""),
-                    "url": r.get("url") or "",
-                    "views": views,
-                    "likes": likes,
-                    "comentarios": coments,
-                    "engajamento": round(((likes or 0) + (coments or 0)) / views * 100, 2) if views else None,
-                    "duracao": _num(r.get("duracao_s")),
-                    "legenda": r.get("legenda") or "",
-                    "tamanho": arq.stat().st_size,
-                })
+                meta = ler_metadados(pasta_plat.name, pasta.name)
+                for arq in pasta.glob("*.mp4"):
+                    m = RE_ARQUIVO.match(arq.name)
+                    if m:
+                        data = m.group(1) if m.group(1) != "sem-data" else ""
+                        saida.append(_video(pasta_plat.name, pasta.name, m.group(2), meta.get(m.group(2), {}),
+                                            arq.name, arq.stat().st_size, data))
     saida.sort(key=lambda v: v["data"], reverse=True)
     return saida
 
@@ -73,40 +86,35 @@ def resumo_por_conta():
     return resumo
 
 
-def miniatura(plataforma, conta, arquivo):
-    """Gera (uma vez) e devolve o caminho do JPG de capa do vídeo."""
+def miniatura(plataforma, conta, vid):
+    """Bytes do JPG de capa. Local: gerado uma vez a partir do vídeo. Nuvem: a capa guardada."""
+    if NUVEM:
+        return armazenamento.imagem_ler(chave_thumb(plataforma, vid))
     pasta = PASTA_DOWNLOADS / plataforma / conta
-    video = pasta / arquivo
-    if not video.exists() or video.suffix != ".mp4":
+    video = next(pasta.glob(f"*_{vid}.mp4"), None) if pasta.exists() else None
+    if not video:
         return None
     thumb = pasta / ".thumbs" / (video.stem + ".jpg")
     if not thumb.exists():
         thumb.parent.mkdir(exist_ok=True)
-        subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-ss", "0.8", "-i", str(video),
-             "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", str(thumb)],
-            check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-    return thumb if thumb.exists() else None
+        rodar_ffmpeg("-ss", "0.8", "-i", video, "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", thumb)
+    return thumb.read_bytes() if thumb.exists() else None
 
 
 # ---------------------------------------------------------------- perfis
 
-def _ler_perfis():
-    if ARQ_PERFIS.exists():
-        return json.loads(ARQ_PERFIS.read_text(encoding="utf-8"))
-    return {}
-
-
 def perfis():
-    return _ler_perfis()
+    return armazenamento.ler_json(CHAVE_PERFIS, {}) or {}
+
+
+def chave_avatar(plataforma, conta):
+    return f"dados/avatares/{plataforma}_{conta}.jpg"
 
 
 def atualizar_perfil(plataforma, conta, forcar=False):
-    """Busca nome, foto e seguidores. A foto é salva localmente porque o link da CDN expira."""
+    """Busca nome, foto e seguidores. A foto é guardada porque o link da CDN expira."""
     chave = f"{plataforma}/{conta}"
-    with _trava_perfis:
-        atual = _ler_perfis().get(chave)
+    atual = perfis().get(chave)
     if atual and not forcar and time.time() - atual.get("atualizado", 0) < VALIDADE_PERFIL:
         return atual
     mod = tiktok if plataforma == "tiktok" else instagram
@@ -114,20 +122,21 @@ def atualizar_perfil(plataforma, conta, forcar=False):
         p = mod.perfil_publico(conta)
     except Exception:
         return atual
+    if not p.get("nome") and not p.get("foto"):
+        return atual  # a plataforma bloqueou o servidor: mantém o que já tinha
     dados = {"nome": p.get("nome"), "seguidores": p.get("seguidores"), "foto": None, "atualizado": time.time()}
     if p.get("foto"):
         try:
-            PASTA_AVATARES.mkdir(parents=True, exist_ok=True)
             img = requests.get(p["foto"], impersonate="chrome", timeout=30)
             if img.status_code == 200:
-                (PASTA_AVATARES / f"{plataforma}_{conta}.jpg").write_bytes(img.content)
+                armazenamento.imagem_gravar(chave_avatar(plataforma, conta), img.content)
                 dados["foto"] = f"/avatar/{plataforma}/{conta}.jpg?v={int(dados['atualizado'])}"
         except Exception:
             pass
     with _trava_perfis:
-        todos = _ler_perfis()
+        todos = perfis()
         todos[chave] = dados
-        ARQ_PERFIS.write_text(json.dumps(todos, ensure_ascii=False, indent=1), encoding="utf-8")
+        armazenamento.gravar_json(CHAVE_PERFIS, todos)
     return dados
 
 

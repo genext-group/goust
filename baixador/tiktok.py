@@ -7,7 +7,9 @@ from curl_cffi import requests
 from yt_dlp import YoutubeDL
 from yt_dlp.networking.impersonate import ImpersonateTarget
 
+from .armazenamento import NUVEM
 from .filtros import MAX_FIXADOS, Cancelado, data_inicio_ts, nome_arquivo, quantos_listar
+from .midia import FFMPEG, salvar_capa
 
 OPCOES_BASE = {
     "quiet": True,
@@ -54,6 +56,7 @@ def listar(conta, opcoes, log, cancelado, conhecido=lambda _id: False):
                 "comentarios": e.get("comment_count"),
                 "duracao": e.get("duration"),
                 "legenda": e.get("description") or e.get("title"),
+                "capa": next((t["url"] for t in e.get("thumbnails") or [] if t.get("id") == "cover"), None),
             })
             if len(itens) % 30 == 0:
                 log(f"{len(itens)} vídeos encontrados...")
@@ -68,6 +71,8 @@ def listar(conta, opcoes, log, cancelado, conhecido=lambda _id: False):
 
 
 def baixar(item, pasta, cancelado):
+    if NUVEM:  # online o vídeo não é guardado: só a capa vira miniatura
+        return salvar_capa("tiktok", item)
     destino = pasta / nome_arquivo(item)
     if destino.exists():
         return "pulado"
@@ -81,6 +86,7 @@ def baixar(item, pasta, cancelado):
         "outtmpl": str(destino.with_suffix("")) + ".%(ext)s",
         "format": "bv*+ba/b",
         "merge_output_format": "mp4",
+        "ffmpeg_location": FFMPEG,
         "progress_hooks": [checar_cancelamento],
         "retries": 5,
     }

@@ -1,18 +1,20 @@
 """Relatório estratégico de um perfil concorrente, com histórico de versões."""
 import json
 import statistics
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
 
-from .. import biblioteca
+from .. import armazenamento, biblioteca
+from ..execucao import Continuar
 from . import cliente, memoria, video
-from .cliente import PASTA_IA
+from .cliente import PREFIXO_IA
 
-PASTA_RELATORIOS = PASTA_IA / "relatorios"
-PASTA_RELATORIOS.mkdir(parents=True, exist_ok=True)
+PREFIXO_RELATORIOS = PREFIXO_IA + "relatorios/"
+TEMPO_RELATORIO = 130  # segundos reservados para escrever o relatório (gpt-5.5) dentro do prazo
 RECENTES, MAIS_VISTOS = 25, 15  # vídeos usados por análise (os mais recentes + os de maior alcance)
 
 
@@ -152,17 +154,13 @@ def _selecionar(videos):
 
 # ---------------------------------------------------------------- armazenamento
 
-def _pasta(plataforma, conta):
-    p = PASTA_RELATORIOS / f"{plataforma}_{conta}"
-    p.mkdir(exist_ok=True)
-    return p
+def _prefixo(plataforma, conta):
+    return f"{PREFIXO_RELATORIOS}{plataforma}_{conta}/"
 
 
 def versoes(plataforma, conta):
-    p = PASTA_RELATORIOS / f"{plataforma}_{conta}"
-    if not p.exists():
-        return []
-    return sorted((f.stem for f in p.glob("*.json")), reverse=True)
+    return sorted((k.rsplit("/", 1)[1][:-5] for k in armazenamento.listar(_prefixo(plataforma, conta))
+                   if k.endswith(".json")), reverse=True)
 
 
 def obter(plataforma, conta, versao=None):
@@ -170,16 +168,17 @@ def obter(plataforma, conta, versao=None):
     if not vs:
         return None
     alvo = versao if versao in vs else vs[0]
-    return json.loads((_pasta(plataforma, conta) / f"{alvo}.json").read_text(encoding="utf-8"))
+    return armazenamento.ler_json(f"{_prefixo(plataforma, conta)}{alvo}.json")
 
 
 def resumo_todos():
     """Último relatório de cada conta (só o essencial para listas e para o panorama)."""
+    contas = sorted({k[len(PREFIXO_RELATORIOS):].split("/", 1)[0] for k in armazenamento.listar(PREFIXO_RELATORIOS)})
     saida = {}
-    for p in PASTA_RELATORIOS.iterdir():
-        if p.is_dir() and any(p.glob("*.json")):
-            plataforma, conta = p.name.split("_", 1)
-            r = obter(plataforma, conta)
+    for nome in contas:
+        plataforma, conta = nome.split("_", 1)
+        r = obter(plataforma, conta)
+        if r:
             saida[f"{plataforma}/{conta}"] = {"versao": r["versao"], "gerado": r["gerado"], "notas": r["relatorio"]["notas"],
                                               "resumo": r["relatorio"]["resumo_executivo"], "metricas": r["metricas"]}
     return saida
@@ -201,7 +200,9 @@ def _compactar(a, v):
     }
 
 
-def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None):
+def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=None):
+    """Com prazo (nuvem), levanta Continuar se o tempo da mensagem acabar; as análises
+    de vídeo já feitas ficam em cache, então a próxima mensagem retoma de onde parou."""
     todos = [v for v in biblioteca.videos() if v["plataforma"] == plataforma and v["conta"] == conta]
     if not todos:
         raise ValueError("Baixe alguns vídeos dessa conta antes de analisar.")
@@ -220,10 +221,16 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None):
         return (a, v) if a else None
 
     progresso("Analisando vídeos (áudio, imagem e legenda)", 0, len(escolhidos))
+    pares = []
     with ThreadPoolExecutor(4) as ex:
-        pares = [p for p in ex.map(analisar_um, escolhidos) if p]
+        for i in range(0, len(escolhidos), 4):
+            pares += [p for p in ex.map(analisar_um, escolhidos[i:i + 4]) if p]
+            if prazo and i + 4 < len(escolhidos) and time.time() > prazo - TEMPO_RELATORIO:
+                raise Continuar()
     if not pares:
         raise RuntimeError("Não foi possível analisar os vídeos.")
+    if prazo and time.time() > prazo - TEMPO_RELATORIO:
+        raise Continuar()  # deixa o relatório para a próxima mensagem, com tempo de sobra
 
     progresso("Escrevendo o relatório estratégico", 0, 1)
     anterior = obter(plataforma, conta)
@@ -251,7 +258,6 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None):
         "aprendizados_versao": memoria.aprendizados()["versao"],
         "relatorio": relatorio.model_dump(),
     }
-    (_pasta(plataforma, conta) / f"{resultado['versao']}.json").write_text(
-        json.dumps(resultado, ensure_ascii=False, indent=1), encoding="utf-8")
+    armazenamento.gravar_json(f"{_prefixo(plataforma, conta)}{resultado['versao']}.json", resultado)
     progresso("Concluído", 1, 1)
     return resultado

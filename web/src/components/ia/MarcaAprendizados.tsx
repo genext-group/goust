@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ia, type Marca, type Regra, type StatusIA } from '../../api'
 import { fmtNum } from '../../formato'
 import { Secao } from './Compartilhado'
+import { useNuvem } from '../../ambiente'
 
 const CAMPOS: { k: keyof Marca; rotulo: string; dica: string; longo?: boolean }[] = [
   { k: 'nome', rotulo: 'Nome da sua marca', dica: 'Ex.: Meu app de finanças' },
@@ -16,6 +17,7 @@ const CAMPOS: { k: keyof Marca; rotulo: string; dica: string; longo?: boolean }[
 ]
 
 export function MarcaAprendizados({ status, aoMudar }: { status: StatusIA | null; aoMudar: () => void }) {
+  const nuvem = useNuvem()
   const [marca, setMarca] = useState<Marca | null>(null)
   const [regras, setRegras] = useState<Regra[]>([])
   const [novaRegra, setNovaRegra] = useState('')
@@ -115,11 +117,11 @@ export function MarcaAprendizados({ status, aoMudar }: { status: StatusIA | null
                 <Switch.Control><Switch.Thumb /></Switch.Control>
                 <Switch.Content><Label>Ativado</Label></Switch.Content>
               </Switch>
-              <NumberField value={mon.intervalo_horas} minValue={1} maxValue={168}
+              {nuvem ? <p className="text-sm text-muted">Na versão online roda uma vez por dia (10h UTC).</p> : <NumberField value={mon.intervalo_horas} minValue={1} maxValue={168}
                 onChange={(v) => ia.salvarMonitoramento({ intervalo_horas: v }).then(aoMudar)}>
                 <Label>A cada quantas horas</Label>
                 <NumberField.Group><NumberField.DecrementButton /><NumberField.Input /><NumberField.IncrementButton /></NumberField.Group>
-              </NumberField>
+              </NumberField>}
               <Switch isSelected={mon.reanalisar} onChange={(v) => ia.salvarMonitoramento({ reanalisar: v }).then(aoMudar)}>
                 <Switch.Control><Switch.Thumb /></Switch.Control>
                 <Switch.Content><Label>Reanalisar com IA quando houver vídeo novo</Label></Switch.Content>

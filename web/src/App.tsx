@@ -1,7 +1,8 @@
-import { Button, Tabs, Toast } from '@heroui/react'
+import { Button, Input, Spinner, Tabs, Toast } from '@heroui/react'
 import { Moon, Sparkles, Sun } from '@gravity-ui/icons'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type Conta, type Tarefa } from './api'
+import { api, type Ambiente, type Conta, type Tarefa } from './api'
+import { AmbienteContexto } from './ambiente'
 import { StatusInstagram } from './components/StatusInstagram'
 import { TelaBiblioteca } from './telas/Biblioteca'
 import { TelaContas } from './telas/Contas'
@@ -10,7 +11,61 @@ import { TelaInteligencia } from './telas/Inteligencia'
 
 type Aba = 'contas' | 'biblioteca' | 'inteligencia' | 'downloads'
 
+/** Verifica o ambiente (local/online) e pede a senha quando o app está protegido. */
 export default function App() {
+  const [amb, setAmb] = useState<Ambiente | null>(null)
+  const [erro, setErro] = useState('')
+
+  const carregar = useCallback(() => api.ambiente().then(setAmb).catch(() => setErro('Não foi possível falar com o servidor.')), [])
+  useEffect(() => {
+    carregar()
+    const pedir = () => setAmb((a) => (a ? { ...a, logado: false } : a))
+    window.addEventListener('precisa-login', pedir)
+    return () => window.removeEventListener('precisa-login', pedir)
+  }, [carregar])
+
+  if (!amb) return <div className="grid min-h-screen place-items-center text-muted">{erro || <Spinner />}</div>
+  if (amb.precisa_login && !amb.logado) return <Login aoEntrar={carregar} />
+  return (
+    <AmbienteContexto.Provider value={{ nuvem: amb.nuvem }}>
+      <Painel nuvem={amb.nuvem} />
+    </AmbienteContexto.Provider>
+  )
+}
+
+function Login({ aoEntrar }: { aoEntrar: () => void }) {
+  const [senha, setSenha] = useState('')
+  const [erro, setErro] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const entrar = async () => {
+    setOcupado(true)
+    setErro('')
+    try {
+      await api.login(senha)
+      aoEntrar()
+    } catch (e) {
+      setErro((e as Error).message)
+    } finally {
+      setOcupado(false)
+    }
+  }
+  return (
+    <div className="grid min-h-screen place-items-center px-4">
+      <form className="cartao surgir w-full max-w-sm space-y-5 p-8 text-center" onSubmit={(e) => { e.preventDefault(); entrar() }}>
+        <img src="/favicon.svg" alt="" className="mx-auto size-12" />
+        <div>
+          <h1 className="titulo-display text-2xl font-semibold">Referências</h1>
+          <p className="mt-1 text-sm text-muted">Digite a senha de acesso.</p>
+        </div>
+        <Input aria-label="Senha" type="password" autoFocus value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Senha" className="w-full" />
+        {erro && <p className="text-sm text-danger">{erro}</p>}
+        <Button type="submit" fullWidth isPending={ocupado} isDisabled={!senha}>Entrar</Button>
+      </form>
+    </div>
+  )
+}
+
+function Painel({ nuvem }: { nuvem: boolean }) {
   const [aba, setAba] = useState<Aba>('contas')
   const [contas, setContas] = useState<Conta[]>([])
   const [tarefas, setTarefas] = useState<Tarefa[]>([])
@@ -24,9 +79,10 @@ export default function App() {
   useEffect(() => {
     carregarContas()
     carregarTarefas()
-    const t = setInterval(carregarTarefas, 1500)
+    // online cada consulta custa um comando no Redis gratuito: consulta menos e só com a aba visível
+    const t = setInterval(() => { if (!document.hidden) carregarTarefas() }, nuvem ? 4000 : 1500)
     return () => clearInterval(t)
-  }, [carregarContas, carregarTarefas])
+  }, [carregarContas, carregarTarefas, nuvem])
 
   // quando um download termina, atualiza contadores e biblioteca
   const emAndamento = tarefas.filter(ativa).length

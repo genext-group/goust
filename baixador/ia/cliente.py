@@ -1,18 +1,17 @@
 """Cliente OpenAI, modelos configuráveis no .env e contabilidade de tokens."""
-import json
 import os
 import threading
 import time
 
 from dotenv import load_dotenv
 
-from ..filtros import PASTA_DADOS, RAIZ
+from .. import armazenamento
+from ..armazenamento import RAIZ
 
 load_dotenv(RAIZ / ".env")
 
-PASTA_IA = PASTA_DADOS / "ia"
-PASTA_IA.mkdir(parents=True, exist_ok=True)
-ARQ_USO = PASTA_IA / "uso.json"
+PREFIXO_IA = "dados/ia/"
+CHAVE_USO = PREFIXO_IA + "uso.json"
 
 MODELOS = {
     # raciocínio pesado: relatórios, panorama, chat, destilação de aprendizados
@@ -40,18 +39,18 @@ def cliente():
 
 def registrar_uso(modelo, entrada=0, saida=0, segundos_audio=0):
     with _trava:
-        uso = json.loads(ARQ_USO.read_text(encoding="utf-8")) if ARQ_USO.exists() else {}
+        uso = armazenamento.ler_json(CHAVE_USO, {}) or {}
         m = uso.setdefault(modelo, {"chamadas": 0, "entrada": 0, "saida": 0, "segundos_audio": 0})
         m["chamadas"] += 1
         m["entrada"] += entrada
         m["saida"] += saida
         m["segundos_audio"] += round(segundos_audio)
         uso["_atualizado"] = time.time()
-        ARQ_USO.write_text(json.dumps(uso, indent=1), encoding="utf-8")
+        armazenamento.gravar_json(CHAVE_USO, uso)
 
 
 def uso():
-    return json.loads(ARQ_USO.read_text(encoding="utf-8")) if ARQ_USO.exists() else {}
+    return armazenamento.ler_json(CHAVE_USO, {}) or {}
 
 
 def estruturado(tipo, instrucoes, conteudo, formato, esforco="medium"):

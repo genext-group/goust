@@ -1,7 +1,9 @@
 flask>=3.0
 yt-dlp[default,curl-cffi]>=2026.8.19
 curl_cffi>=0.11
-playwright>=1.50
 openai>=3.0
 python-dotenv>=1.0
 pydantic>=2.0
+upstash-redis>=1.4
+imageio-ffmpeg>=0.6
+vercel>=0.11

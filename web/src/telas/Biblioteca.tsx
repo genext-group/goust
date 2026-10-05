@@ -1,7 +1,8 @@
 import { Button, Label, ListBox, Modal, SearchField, Select, Skeleton, ToggleButton, ToggleButtonGroup } from '@heroui/react'
-import { ArrowUpRightFromSquare, Comment, Eye, FolderOpen, Heart, Play, Sparkles } from '@gravity-ui/icons'
+import { ArrowDownToLine, ArrowUpRightFromSquare, Comment, Eye, FolderOpen, Heart, Play, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, ia, urlMidia, urlThumb, type AnaliseVideo, type Conta, type Plataforma, type Video } from '../api'
+import { api, ia, urlArquivo, urlEmbed, urlThumb, type AnaliseVideo, type Conta, type Plataforma, type Video } from '../api'
+import { useNuvem } from '../ambiente'
 import { NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
 import { fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
 
@@ -225,6 +226,7 @@ function CartaoVideo({ v, nome, onAbrir }: { v: Video; nome?: string; onAbrir: (
 }
 
 export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nome?: string; onFechar: () => void }) {
+  const nuvem = useNuvem()
   return (
     <Modal.Backdrop isOpen={!!video} onOpenChange={(v) => !v && onFechar()}>
       <Modal.Container size="lg">
@@ -233,7 +235,12 @@ export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nom
           {video && (
             <div className="grid md:grid-cols-[minmax(0,400px)_1fr]">
               <div className="bg-black">
-                <video key={video.arquivo} src={urlMidia(video)} controls autoPlay className="mx-auto max-h-[78vh] w-full" />
+                {video.url_video ? (
+                  <video key={video.id} src={video.url_video} controls autoPlay className="mx-auto max-h-[78vh] w-full" />
+                ) : (
+                  <iframe key={video.id} src={urlEmbed(video)} title="Vídeo" allow="autoplay; encrypted-media; fullscreen"
+                    className="mx-auto aspect-[9/16] max-h-[78vh] w-full border-0" />
+                )}
               </div>
               <div className="flex max-h-[78vh] flex-col gap-5 overflow-y-auto p-6">
                 <div className="space-y-1">
@@ -266,14 +273,20 @@ export function ModalVideo({ video, nome, onFechar }: { video: Video | null; nom
                       Abrir no {NOME_PLATAFORMA[video.plataforma]}
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    variant="tertiary"
-                    onPress={() => api.abrirPasta({ plataforma: video.plataforma, conta: video.conta, arquivo: video.arquivo })}
-                  >
-                    <FolderOpen />
-                    Mostrar na pasta
+                  <Button size="sm" variant="tertiary" onPress={() => { window.location.href = urlArquivo(video) }}>
+                    <ArrowDownToLine />
+                    Baixar
                   </Button>
+                  {!nuvem && (
+                    <Button
+                      size="sm"
+                      variant="tertiary"
+                      onPress={() => api.abrirPasta({ plataforma: video.plataforma, conta: video.conta, arquivo: video.arquivo })}
+                    >
+                      <FolderOpen />
+                      Mostrar na pasta
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

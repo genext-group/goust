@@ -1,0 +1,20 @@
+[project]
+name = "referencias"
+version = "1.0.0"
+description = "Baixa e analisa com IA vídeos de concorrentes no TikTok e no Instagram"
+requires-python = ">=3.12"
+# Dependências da versão online (Vercel). O app local usa requirements.txt (+ Playwright).
+dependencies = [
+    "flask>=3.0",
+    "yt-dlp[default,curl-cffi]>=2026.8.19",
+    "curl_cffi>=0.11",
+    "openai>=3.0",
+    "python-dotenv>=1.0",
+    "pydantic>=2.0",
+    "upstash-redis>=1.4",
+    "imageio-ffmpeg>=0.6",
+    "vercel>=0.11",
+]
+
+[[tool.vercel.subscribers]]
+entrypoint = "fila"

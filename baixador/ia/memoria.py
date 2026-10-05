@@ -5,19 +5,19 @@
 - aprendizados.json: regras destiladas dos feedbacks (e as que você escreveu à mão),
   injetadas em todos os prompts. A cada N feedbacks novos a destilação roda sozinha.
 """
-import json
 import threading
 import time
 import uuid
 
 from pydantic import BaseModel
 
+from .. import armazenamento, execucao
 from . import cliente
-from .cliente import PASTA_IA
+from .cliente import PREFIXO_IA
 
-ARQ_MARCA = PASTA_IA / "marca.json"
-ARQ_FEEDBACK = PASTA_IA / "feedback.jsonl"
-ARQ_APRENDIZADOS = PASTA_IA / "aprendizados.json"
+CHAVE_MARCA = PREFIXO_IA + "marca.json"
+CHAVE_FEEDBACK = PREFIXO_IA + "feedback.jsonl"
+CHAVE_APRENDIZADOS = PREFIXO_IA + "aprendizados.json"
 DESTILAR_A_CADA = 5
 _trava = threading.Lock()
 
@@ -27,23 +27,19 @@ CAMPOS_MARCA = ["nome", "produto", "publico", "objetivos", "tom", "diferenciais"
 # ---------------------------------------------------------------- marca
 
 def marca():
-    if ARQ_MARCA.exists():
-        return json.loads(ARQ_MARCA.read_text(encoding="utf-8"))
-    return {c: "" for c in CAMPOS_MARCA}
+    return armazenamento.ler_json(CHAVE_MARCA) or {c: "" for c in CAMPOS_MARCA}
 
 
 def salvar_marca(dados):
     m = {c: (dados.get(c) or "").strip() for c in CAMPOS_MARCA}
-    ARQ_MARCA.write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
+    armazenamento.gravar_json(CHAVE_MARCA, m)
     return m
 
 
 # ---------------------------------------------------------------- feedback
 
 def feedbacks():
-    if not ARQ_FEEDBACK.exists():
-        return []
-    return [json.loads(l) for l in ARQ_FEEDBACK.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return armazenamento.lista_ler(CHAVE_FEEDBACK)
 
 
 def registrar_feedback(fb):
@@ -58,11 +54,9 @@ def registrar_feedback(fb):
         "voto": 1 if fb.get("voto", 0) > 0 else -1,
         "comentario": (fb.get("comentario") or "").strip()[:1000],
     }
-    with _trava:
-        with open(ARQ_FEEDBACK, "a", encoding="utf-8") as f:
-            f.write(json.dumps(registro, ensure_ascii=False) + "\n")
+    armazenamento.lista_adicionar(CHAVE_FEEDBACK, registro)
     if len(feedbacks()) - aprendizados().get("feedbacks_processados", 0) >= DESTILAR_A_CADA:
-        threading.Thread(target=destilar, daemon=True).start()
+        execucao.despachar("destilar", 0)
     return registro
 
 
@@ -78,14 +72,13 @@ def votos_por_ref(ref):
 # ---------------------------------------------------------------- aprendizados
 
 def aprendizados():
-    if ARQ_APRENDIZADOS.exists():
-        return json.loads(ARQ_APRENDIZADOS.read_text(encoding="utf-8"))
-    return {"versao": 0, "regras": [], "feedbacks_processados": 0, "atualizado": None}
+    return armazenamento.ler_json(CHAVE_APRENDIZADOS) or {
+        "versao": 0, "regras": [], "feedbacks_processados": 0, "atualizado": None}
 
 
 def _salvar_aprendizados(a):
     a["atualizado"] = time.time()
-    ARQ_APRENDIZADOS.write_text(json.dumps(a, ensure_ascii=False, indent=1), encoding="utf-8")
+    armazenamento.gravar_json(CHAVE_APRENDIZADOS, a)
 
 
 def salvar_regras(regras):
@@ -173,3 +166,6 @@ def contexto():
         partes.append("## Exemplos que o usuário reprovou (não repita esse estilo)\n" + "\n".join(
             f"- ({f['secao']}) {f['item'][:300]}" + (f" — motivo: {f['comentario']}" if f["comentario"] else "") for f in ruins))
     return "\n\n".join(partes)
+
+
+execucao.registrar("destilar", lambda _id, _prazo: bool(destilar()) and False)

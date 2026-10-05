@@ -18,3 +18,14 @@ web/dist/
 
 # Vercel
 .vercel
+
+# interface compilada (gerada no build)
+public/
+
+.vercel
+.env*
+
+# skills de agentes de IA instaladas por integrações (não fazem parte do app)
+.agents/
+.claude/
+skills-lock.json

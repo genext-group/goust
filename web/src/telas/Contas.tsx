@@ -6,6 +6,7 @@ import { AvatarConta } from '../components/Avatar'
 import { ModalDownload } from '../components/ModalDownload'
 import { IconePlataforma } from '../components/Plataforma'
 import { fmtNum, fmtRelativo } from '../formato'
+import { useNuvem } from '../ambiente'
 
 type Filtro = 'todas' | Plataforma
 const chave = (c: Pick<Conta, 'plataforma' | 'conta'>) => `${c.plataforma}/${c.conta}`
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function TelaContas({ contas, setContas, aoBaixar }: Props) {
+  const nuvem = useNuvem()
   const [entrada, setEntrada] = useState('')
   const [plataformaArroba, setPlataformaArroba] = useState<Plataforma>('tiktok')
   const [ocupado, setOcupado] = useState(false)
@@ -205,11 +207,11 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-2 border-t pt-3 linha-fina">
                     <Metrica rotulo="Seguidores" valor={fmtNum(c.perfil?.seguidores)} />
-                    <Metrica rotulo="Baixados" valor={fmtNum(c.videos)} />
+                    <Metrica rotulo={nuvem ? "Catalogados" : "Baixados"} valor={fmtNum(c.videos)} />
                     <Metrica rotulo="Mais recente" valor={c.ultimo ? fmtRelativo(c.ultimo) : '—'} />
                   </div>
                   <div className="absolute top-3 right-12 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    {c.videos > 0 && (
+                    {c.videos > 0 && !nuvem && (
                       <Button
                         isIconOnly
                         size="sm"

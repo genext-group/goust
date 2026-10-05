@@ -1,18 +1,24 @@
-"""Painel local para baixar vídeos de contas do TikTok e Reels do Instagram.
+"""Referências: baixa e analisa vídeos de concorrentes no TikTok e no Instagram.
 
-Rode:  python app.py   (ou dê dois cliques em iniciar.bat) e abra http://127.0.0.1:5000
-A interface (React + HeroUI) fica em web/ e é servida já compilada de web/dist.
+Local:  python app.py   (ou iniciar.bat) e abra http://127.0.0.1:5000
+Nuvem:  publicado na Vercel; dados no Redis, tarefas longas pelas Vercel Queues (ver fila.py).
+A interface (React + HeroUI) fica em web/ e é compilada para public/.
 """
-import json
+import hmac
 import os
 import subprocess
 import threading
 import webbrowser
+from datetime import timedelta
+from functools import wraps
 
-from flask import Flask, abort, jsonify, request, send_file, send_from_directory
+from curl_cffi import requests as http
+from flask import (Flask, Response, abort, jsonify, request, send_file, send_from_directory, session,
+                   stream_with_context)
 
-from baixador import biblioteca, instagram, tarefas
-from baixador.filtros import PASTA_DADOS, PASTA_DOWNLOADS, RAIZ, normalizar_conta
+from baixador import armazenamento, biblioteca, instagram, midia, tarefas
+from baixador.armazenamento import NUVEM, RAIZ
+from baixador.filtros import PASTA_DOWNLOADS, normalizar_conta
 from baixador.ia import chat as ia_chat
 from baixador.ia import cliente as ia_cliente
 from baixador.ia import memoria as ia_memoria
@@ -21,24 +27,72 @@ from baixador.ia import perfil as ia_perfil
 from baixador.ia import tarefas_ia as ia_tarefas
 from baixador.ia import video as ia_video
 
-DIST = RAIZ / "web" / "dist"
+PUBLICO = RAIZ / "public"
+CHAVE_CONTAS = "contas.json"
+SENHA = os.getenv("APP_SENHA", "")
+
 app = Flask(__name__, static_folder=None)
-ARQ_CONTAS = RAIZ / "contas.json"
+app.secret_key = os.getenv("APP_SEGREDO") or os.getenv("APP_SENHA") or "local-sem-senha"
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=NUVEM,
+                  PERMANENT_SESSION_LIFETIME=timedelta(days=30))
 estado_login = {"status": "", "rodando": False}
 
 
+# ---------------------------------------------------------------- acesso
+
+def protegido(f):
+    """Com APP_SENHA definida (sempre na nuvem), só quem fez login usa a API."""
+    @wraps(f)
+    def envolto(*a, **kw):
+        if SENHA and not session.get("ok"):
+            return jsonify(erro="Faça login."), 401
+        if NUVEM and not SENHA:
+            return jsonify(erro="Defina APP_SENHA nas variáveis de ambiente da Vercel."), 503
+        return f(*a, **kw)
+    return envolto
+
+
+def so_local(f):
+    @wraps(f)
+    def envolto(*a, **kw):
+        if NUVEM:
+            return jsonify(erro="Disponível só no app local (iniciar.bat)."), 400
+        return f(*a, **kw)
+    return envolto
+
+
+@app.get("/api/ambiente")
+def api_ambiente():
+    return jsonify(nuvem=NUVEM, precisa_login=bool(SENHA), logado=bool(session.get("ok")) or not SENHA)
+
+
+@app.post("/api/login")
+def api_login():
+    if SENHA and hmac.compare_digest((request.json or {}).get("senha", ""), SENHA):
+        session.permanent = True
+        session["ok"] = True
+        return jsonify(ok=True)
+    return jsonify(erro="Senha incorreta."), 401
+
+
+@app.post("/api/logout")
+def api_logout():
+    session.clear()
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- contas
+
 def ler_contas():
-    if ARQ_CONTAS.exists():
-        return json.loads(ARQ_CONTAS.read_text(encoding="utf-8"))
-    return []
+    return armazenamento.ler_json(CHAVE_CONTAS, []) or []
 
 
 def gravar_contas(contas):
-    ARQ_CONTAS.write_text(json.dumps(contas, ensure_ascii=False, indent=2), encoding="utf-8")
+    armazenamento.gravar_json(CHAVE_CONTAS, contas)
 
 
 def contas_completas():
-    """Contas salvas + foto/seguidores + quantos vídeos já foram baixados."""
+    """Contas salvas + foto/seguidores + quantos vídeos já foram catalogados."""
     resumo, perfis = biblioteca.resumo_por_conta(), biblioteca.perfis()
     saida = []
     for c in ler_contas():
@@ -47,14 +101,14 @@ def contas_completas():
     return saida
 
 
-# ---------------------------------------------------------------- contas
-
 @app.get("/api/contas")
+@protegido
 def api_contas():
     return jsonify(contas_completas())
 
 
 @app.post("/api/contas")
+@protegido
 def api_adicionar_conta():
     d = request.json
     try:
@@ -73,6 +127,7 @@ def api_adicionar_conta():
 
 
 @app.delete("/api/contas/<plataforma>/<conta>")
+@protegido
 def api_remover_conta(plataforma, conta):
     gravar_contas([c for c in ler_contas() if not (c["plataforma"] == plataforma and c["conta"] == conta)])
     return jsonify(contas_completas())
@@ -80,15 +135,16 @@ def api_remover_conta(plataforma, conta):
 
 @app.get("/avatar/<plataforma>/<arquivo>")
 def avatar(plataforma, arquivo):
-    caminho = PASTA_DADOS / "avatares" / f"{plataforma}_{arquivo}"
-    if not caminho.exists():
+    dados = armazenamento.imagem_ler(biblioteca.chave_avatar(plataforma, arquivo.removesuffix(".jpg")))
+    if not dados:
         abort(404)
-    return send_file(caminho, max_age=86400)
+    return Response(dados, mimetype="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------------------------------------------------------------- downloads
 
 @app.post("/api/baixar")
+@protegido
 def api_baixar():
     d = request.json
     criadas = []
@@ -97,65 +153,87 @@ def api_baixar():
             plataforma, conta = normalizar_conta(alvo["conta"], alvo.get("plataforma"))
         except ValueError as e:
             return jsonify(erro=str(e)), 400
-        criadas.append(tarefas.enfileirar(plataforma, conta, d["opcoes"]).id)
+        criadas.append(tarefas.enfileirar(plataforma, conta, d["opcoes"])["id"])
     return jsonify(criadas=criadas)
 
 
 @app.post("/api/baixar-link")
+@protegido
 def api_baixar_link():
     try:
         t = tarefas.enfileirar_link(request.json["url"].strip())
     except ValueError as e:
         return jsonify(erro=str(e)), 400
-    return jsonify(criadas=[t.id])
+    return jsonify(criadas=[t["id"]])
 
 
 @app.get("/api/tarefas")
+@protegido
 def api_tarefas():
-    lista = sorted(tarefas.tarefas.values(), key=lambda t: t.id, reverse=True)
-    return jsonify([t.como_dict() for t in lista])
+    return jsonify(tarefas.listar())
 
 
 @app.post("/api/tarefas/<int:tid>/cancelar")
+@protegido
 def api_cancelar(tid):
-    t = tarefas.tarefas.get(tid)
-    if t:
-        t.cancelar = True
+    tarefas.cancelar(tid)
     return jsonify(ok=True)
 
 
 @app.post("/api/tarefas/limpar")
+@protegido
 def api_limpar():
-    for tid, t in list(tarefas.tarefas.items()):
-        if t.status in tarefas.FINAIS:
-            del tarefas.tarefas[tid]
-    tarefas.salvar_historico()
+    tarefas.limpar()
     return jsonify(ok=True)
 
 
 # ---------------------------------------------------------------- biblioteca
 
 @app.get("/api/biblioteca")
+@protegido
 def api_biblioteca():
     return jsonify(biblioteca.videos())
 
 
 @app.get("/media/<plataforma>/<conta>/<arquivo>")
+@so_local
 def media(plataforma, conta, arquivo):
     return send_from_directory(PASTA_DOWNLOADS / plataforma / conta, arquivo, conditional=True)
 
 
-@app.get("/thumb/<plataforma>/<conta>/<arquivo>")
-def thumb(plataforma, conta, arquivo):
-    if ".." in plataforma + conta + arquivo:
+@app.get("/thumb/<plataforma>/<conta>/<vid>")
+def thumb(plataforma, conta, vid):
+    if ".." in plataforma + conta + vid:
         abort(400)
-    caminho = biblioteca.miniatura(plataforma, conta, arquivo)
-    if not caminho:
+    dados = biblioteca.miniatura(plataforma, conta, vid.removesuffix(".mp4").split("_")[-1] if vid.endswith(".mp4") else vid)
+    if not dados:
         abort(404)
-    return send_file(caminho, max_age=604800)
+    return Response(dados, mimetype="image/jpeg", headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+
+@app.get("/api/arquivo/<plataforma>/<conta>/<vid>")
+@protegido
+def api_arquivo(plataforma, conta, vid):
+    """Botão Baixar: local entrega o arquivo; na nuvem busca na plataforma e repassa em streaming."""
+    v = next((x for x in biblioteca.videos() if x["plataforma"] == plataforma and x["id"] == vid), None)
+    if not v:
+        abort(404)
+    nome = f"{conta}_{(v['data'] or 'sem-data')[:10]}_{vid}.mp4"
+    if not NUVEM:
+        return send_file(PASTA_DOWNLOADS / plataforma / conta / v["arquivo"], as_attachment=True, download_name=nome)
+    try:
+        url, cabecalhos = midia.link_direto(v["url"], plataforma)
+        r = http.get(url, headers=cabecalhos, impersonate="chrome", stream=True, timeout=120)
+        r.raise_for_status()
+    except Exception as e:
+        return jsonify(erro=f"Não foi possível buscar o vídeo agora: {e}"), 502
+    return Response(stream_with_context(r.iter_content()), mimetype="video/mp4",
+                    headers={"Content-Disposition": f'attachment; filename="{nome}"'})
 
 
 @app.post("/api/abrir-pasta")
+@protegido
+@so_local
 def api_abrir_pasta():
     d = request.json or {}
     pasta = PASTA_DOWNLOADS
@@ -169,14 +247,17 @@ def api_abrir_pasta():
     return jsonify(ok=True)
 
 
-# ---------------------------------------------------------------- instagram (login opcional)
+# ---------------------------------------------------------------- instagram (login opcional, só local)
 
 @app.get("/api/instagram")
+@protegido
 def api_instagram_status():
-    return jsonify(usuario=instagram.sessao_ativa(), **estado_login)
+    return jsonify(usuario=None if NUVEM else instagram.sessao_ativa(), nuvem=NUVEM, **estado_login)
 
 
 @app.post("/api/instagram/conectar")
+@protegido
+@so_local
 def api_instagram_conectar():
     if estado_login["rodando"]:
         return jsonify(ok=True)
@@ -196,6 +277,8 @@ def api_instagram_conectar():
 
 
 @app.post("/api/instagram/desconectar")
+@protegido
+@so_local
 def api_instagram_desconectar():
     instagram.desconectar()
     return jsonify(ok=True)
@@ -204,93 +287,109 @@ def api_instagram_desconectar():
 # ---------------------------------------------------------------- inteligência (IA)
 
 @app.get("/api/ia/status")
+@protegido
 def api_ia_status():
     return jsonify(configurada=ia_cliente.configurada(), modelos=ia_cliente.MODELOS, uso=ia_cliente.uso(),
                    aprendizados=ia_memoria.aprendizados(), feedbacks=len(ia_memoria.feedbacks()),
-                   monitoramento=ia_tarefas.config())
+                   monitoramento=ia_tarefas.config(), nuvem=NUVEM)
 
 
 @app.get("/api/ia/marca")
+@protegido
 def api_ia_marca():
     return jsonify(ia_memoria.marca())
 
 
 @app.put("/api/ia/marca")
+@protegido
 def api_ia_salvar_marca():
     return jsonify(ia_memoria.salvar_marca(request.json))
 
 
 @app.put("/api/ia/aprendizados")
+@protegido
 def api_ia_salvar_regras():
     return jsonify(ia_memoria.salvar_regras(request.json["regras"]))
 
 
 @app.post("/api/ia/aprendizados/destilar")
+@protegido
 def api_ia_destilar():
     return jsonify(ia_memoria.destilar())
 
 
 @app.post("/api/ia/feedback")
+@protegido
 def api_ia_feedback():
     return jsonify(ia_memoria.registrar_feedback(request.json))
 
 
 @app.get("/api/ia/votos/<path:ref>")
+@protegido
 def api_ia_votos(ref):
     return jsonify(ia_memoria.votos_por_ref(ref))
 
 
 @app.post("/api/ia/analisar")
+@protegido
 def api_ia_analisar():
     if not ia_cliente.configurada():
-        return jsonify(erro="Defina OPENAI_API_KEY no arquivo .env."), 400
+        return jsonify(erro="Defina OPENAI_API_KEY nas variáveis de ambiente."), 400
     d = request.json or {}
     if d.get("tipo") == "mercado":
         t = ia_tarefas.enfileirar("mercado")
     else:
         t = ia_tarefas.enfileirar("perfil", d["plataforma"], d["conta"])
-    return jsonify(t.como_dict())
+    return jsonify(t)
 
 
 @app.get("/api/ia/tarefas")
+@protegido
 def api_ia_tarefas():
-    return jsonify([t.como_dict() for t in sorted(ia_tarefas.tarefas.values(), key=lambda t: t.id, reverse=True)])
+    return jsonify(ia_tarefas.listar())
 
 
 @app.get("/api/ia/relatorios")
+@protegido
 def api_ia_relatorios():
     return jsonify(ia_perfil.resumo_todos())
 
 
 @app.get("/api/ia/relatorio/<plataforma>/<conta>")
+@protegido
 def api_ia_relatorio(plataforma, conta):
     r = ia_perfil.obter(plataforma, conta, request.args.get("versao"))
     return jsonify(relatorio=r, versoes=ia_perfil.versoes(plataforma, conta))
 
 
 @app.get("/api/ia/mercado")
+@protegido
 def api_ia_mercado():
     return jsonify(panorama=ia_mercado.obter(request.args.get("versao")), versoes=ia_mercado.versoes())
 
 
 @app.get("/api/ia/video/<plataforma>/<vid>")
+@protegido
 def api_ia_video(plataforma, vid):
     return jsonify(ia_video.obter(plataforma, vid))
 
 
 @app.post("/api/ia/video/<plataforma>/<vid>")
+@protegido
 def api_ia_analisar_video(plataforma, vid):
-    v = next((x for x in biblioteca.videos() if x["plataforma"] == plataforma and x["id"] == vid), None)
+    todos = biblioteca.videos()
+    v = next((x for x in todos if x["plataforma"] == plataforma and x["id"] == vid), None)
     if not v:
         return jsonify(erro="Vídeo não encontrado."), 404
-    todos = [x for x in biblioteca.videos() if x["plataforma"] == plataforma and x["conta"] == v["conta"]]
+    da_conta = [x for x in todos if x["plataforma"] == plataforma and x["conta"] == v["conta"]]
     try:
-        return jsonify(ia_video.analisar(v, ia_perfil.metricas(todos)))
+        return jsonify(ia_video.analisar(v, ia_perfil.metricas(da_conta)))
     except Exception as e:
         return jsonify(erro=str(e)), 500
 
 
 @app.post("/api/ia/chat")
+@protegido
 def api_ia_chat():
     d = request.json
     try:
@@ -300,26 +399,38 @@ def api_ia_chat():
 
 
 @app.put("/api/ia/monitoramento")
+@protegido
 def api_ia_monitoramento():
     return jsonify(ia_tarefas.salvar_config(request.json))
 
 
 @app.post("/api/ia/monitoramento/agora")
+@protegido
 def api_ia_monitorar_agora():
-    threading.Thread(target=ia_tarefas.executar_monitoramento, args=(ler_contas(),), daemon=True).start()
+    ia_tarefas.executar_monitoramento(ler_contas())
     return jsonify(ok=True)
 
 
-# ---------------------------------------------------------------- interface
+@app.get("/api/cron/monitorar")
+def api_cron_monitorar():
+    """Chamado pelo cron diário da Vercel (vercel.json). Só roda se o monitoramento estiver ligado."""
+    if request.headers.get("Authorization") != f"Bearer {os.getenv('CRON_SECRET', '')}" or not os.getenv("CRON_SECRET"):
+        return jsonify(erro="não autorizado"), 401
+    if ia_tarefas.config()["ativo"]:
+        ia_tarefas.executar_monitoramento(ler_contas())
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- interface (modo local; na nuvem o CDN serve public/)
 
 @app.get("/")
 @app.get("/<path:caminho>")
 def interface(caminho="index.html"):
-    if not DIST.exists():
+    if not PUBLICO.exists():
         return "Interface não compilada. Rode iniciar.bat (ou: cd web && npm install && npm run build).", 500
-    if (DIST / caminho).is_file():
-        return send_from_directory(DIST, caminho)
-    return send_from_directory(DIST, "index.html")
+    if (PUBLICO / caminho).is_file():
+        return send_from_directory(PUBLICO, caminho)
+    return send_from_directory(PUBLICO, "index.html")
 
 
 if __name__ == "__main__":

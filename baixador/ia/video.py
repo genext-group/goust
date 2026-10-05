@@ -1,20 +1,16 @@
 """Análise de um vídeo: transcrição do áudio + quadros-chave + legenda + métricas → JSON."""
 import base64
-import json
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
 
+from .. import armazenamento, midia
 from ..filtros import PASTA_DOWNLOADS
 from . import cliente
-from .cliente import PASTA_IA
+from .cliente import PREFIXO_IA
 
-PASTA_VIDEOS = PASTA_IA / "videos"
-PASTA_VIDEOS.mkdir(parents=True, exist_ok=True)
-SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 VERSAO = 1  # suba quando mudar o schema/prompt para reanalisar
 
 
@@ -62,21 +58,11 @@ Regras:
 
 
 def _caminho_cache(plataforma, vid):
-    return PASTA_VIDEOS / f"{plataforma}_{vid}.json"
+    return f"{PREFIXO_IA}videos/{plataforma}_{vid}.json"
 
 
 def obter(plataforma, vid):
-    p = _caminho_cache(plataforma, vid)
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
-
-
-def _duracao(video):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(video)],
-                       capture_output=True, text=True, creationflags=SEM_JANELA)
-    try:
-        return float(r.stdout.strip())
-    except ValueError:
-        return 0.0
+    return armazenamento.ler_json(_caminho_cache(plataforma, vid))
 
 
 def _quadros(video, duracao, pasta):
@@ -85,9 +71,7 @@ def _quadros(video, duracao, pasta):
     saida = []
     for i, t in enumerate(marcas):
         destino = Path(pasta) / f"q{i}.jpg"
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{max(0, t):.2f}", "-i", str(video),
-                        "-frames:v", "1", "-vf", "scale=384:-2", "-q:v", "5", str(destino)],
-                       creationflags=SEM_JANELA)
+        midia.rodar_ffmpeg("-ss", f"{max(0, t):.2f}", "-i", video, "-frames:v", "1", "-vf", "scale=384:-2", "-q:v", "5", destino)
         if destino.exists():
             saida.append(base64.b64encode(destino.read_bytes()).decode())
     return saida
@@ -95,8 +79,7 @@ def _quadros(video, duracao, pasta):
 
 def _transcricao(video, duracao, pasta):
     audio = Path(pasta) / "audio.mp3"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000",
-                    "-b:a", "32k", "-t", "900", str(audio)], creationflags=SEM_JANELA)
+    midia.rodar_ffmpeg("-i", video, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k", "-t", "900", audio)
     if not audio.exists() or audio.stat().st_size < 2000:
         return ""
     try:
@@ -111,11 +94,17 @@ def analisar(v, metricas_conta=None, forcar=False):
     if existente and not forcar and existente.get("versao") == VERSAO:
         return existente
 
-    video = PASTA_DOWNLOADS / v["plataforma"] / v["conta"] / v["arquivo"]
-    with tempfile.TemporaryDirectory() as tmp:
-        duracao = _duracao(video)
-        transcricao = (existente or {}).get("transcricao") or _transcricao(video, duracao, tmp)
-        quadros = _quadros(video, duracao, tmp)
+    # local: o arquivo baixado; nuvem: baixa só para analisar e apaga em seguida
+    local = PASTA_DOWNLOADS / v["plataforma"] / v["conta"] / v["arquivo"] if v.get("arquivo") else None
+    video = local if local and local.exists() else midia.baixar_temporario(v["url"], v["plataforma"])
+    try:
+        with tempfile.TemporaryDirectory(dir=midia.PASTA_TEMP if midia.NUVEM else None) as tmp:
+            duracao = midia.duracao(video)
+            transcricao = (existente or {}).get("transcricao") or _transcricao(video, duracao, tmp)
+            quadros = _quadros(video, duracao, tmp)
+    finally:
+        if video != local:
+            Path(video).unlink(missing_ok=True)
 
     rel = ""
     if metricas_conta and v.get("views") and metricas_conta.get("mediana_views"):
@@ -141,5 +130,5 @@ def analisar(v, metricas_conta=None, forcar=False):
         "transcricao": transcricao,
         **analise.model_dump(),
     }
-    _caminho_cache(v["plataforma"], v["id"]).write_text(json.dumps(resultado, ensure_ascii=False, indent=1), encoding="utf-8")
+    armazenamento.gravar_json(_caminho_cache(v["plataforma"], v["id"]), resultado)
     return resultado

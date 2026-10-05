@@ -5,12 +5,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from .. import armazenamento
 from . import cliente, memoria, perfil
-from .cliente import PASTA_IA
+from .cliente import PREFIXO_IA
 from .perfil import Ideia, Item, Oportunidade
 
-PASTA_MERCADO = PASTA_IA / "mercado"
-PASTA_MERCADO.mkdir(parents=True, exist_ok=True)
+PREFIXO_MERCADO = PREFIXO_IA + "mercado/"
 
 
 class Concorrente(BaseModel):
@@ -55,7 +55,7 @@ Português do Brasil, específico, com números."""
 
 
 def versoes():
-    return sorted((f.stem for f in PASTA_MERCADO.glob("*.json")), reverse=True)
+    return sorted((k.rsplit("/", 1)[1][:-5] for k in armazenamento.listar(PREFIXO_MERCADO) if k.endswith(".json")), reverse=True)
 
 
 def obter(versao=None):
@@ -63,7 +63,7 @@ def obter(versao=None):
     if not vs:
         return None
     alvo = versao if versao in vs else vs[0]
-    return json.loads((PASTA_MERCADO / f"{alvo}.json").read_text(encoding="utf-8"))
+    return armazenamento.ler_json(f"{PREFIXO_MERCADO}{alvo}.json")
 
 
 def gerar(progresso=lambda etapa, feito, total: None):
@@ -92,6 +92,6 @@ def gerar(progresso=lambda etapa, feito, total: None):
         "aprendizados_versao": memoria.aprendizados()["versao"],
         "panorama": panorama.model_dump(),
     }
-    (PASTA_MERCADO / f"{resultado['versao']}.json").write_text(json.dumps(resultado, ensure_ascii=False, indent=1), encoding="utf-8")
+    armazenamento.gravar_json(f"{PREFIXO_MERCADO}{resultado['versao']}.json", resultado)
     progresso("Concluído", 1, 1)
     return resultado

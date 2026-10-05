@@ -8,9 +8,10 @@ export function StatusInstagram() {
   const [s, setS] = useState<Status | null>(null)
 
   useEffect(() => {
-    const carregar = () => api.instagram().then(setS).catch(() => {})
+    let t: ReturnType<typeof setInterval> | undefined
+    const carregar = () => api.instagram().then((r) => { setS(r); if (r.nuvem && t) clearInterval(t) }).catch(() => {})
     carregar()
-    const t = setInterval(carregar, 3000)
+    t = setInterval(carregar, 3000)
     return () => clearInterval(t)
   }, [])
 
@@ -19,13 +20,19 @@ export function StatusInstagram() {
     <Popover>
       <Button size="sm" variant="tertiary" className="gap-2 rounded-full">
         <IconePlataforma plataforma="instagram" className="size-3.5" />
-        <span className="hidden sm:inline">{conectado ? 'Histórico completo' : 'Sem login'}</span>
+        <span className="hidden sm:inline">{conectado ? 'Histórico completo' : s?.nuvem ? 'Busca ampliada' : 'Sem login'}</span>
         <span className={`size-1.5 rounded-full ${conectado ? 'bg-success' : 'bg-muted'}`} />
       </Button>
       <Popover.Content placement="bottom end" className="w-80">
         <Popover.Dialog className="space-y-3 p-1">
           <Popover.Heading className="font-semibold">Instagram</Popover.Heading>
-          {conectado ? (
+          {s?.nuvem ? (
+            <p className="text-sm text-muted">
+              Na versão online o Instagram não mostra perfis para servidores, então os Reels são encontrados pela
+              <span className="text-foreground"> busca ampliada</span> (buscadores + validação de cada Reel). Posts muito
+              recentes podem levar alguns dias para aparecer. O login opcional só existe no app local.
+            </p>
+          ) : conectado ? (
             <p className="text-sm text-muted">
               Conectado. O app lista o perfil inteiro, inclusive Reels antigos e vídeos do feed.
             </p>
@@ -38,7 +45,7 @@ export function StatusInstagram() {
           )}
           {s?.rodando && <p className="text-sm text-accent">{s.status}</p>}
           {!s?.rodando && s?.status && <p className="text-sm text-danger">{s.status}</p>}
-          <div className="flex justify-end gap-2">
+          {!s?.nuvem && <div className="flex justify-end gap-2">
             {conectado ? (
               <Button size="sm" variant="tertiary" onPress={() => api.desconectarInstagram().then(() => api.instagram().then(setS))}>
                 Desconectar
@@ -48,7 +55,7 @@ export function StatusInstagram() {
                 Conectar conta
               </Button>
             )}
-          </div>
+          </div>}
         </Popover.Dialog>
       </Popover.Content>
     </Popover>

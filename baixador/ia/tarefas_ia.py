@@ -1,74 +1,92 @@
-"""Fila das análises de IA e monitoramento automático dos concorrentes."""
-import itertools
-import json
-import queue
+"""Fila das análises de IA e monitoramento automático dos concorrentes.
+
+O estado fica no armazenamento: na nuvem uma análise pode atravessar várias mensagens da fila.
+"""
 import threading
 import time
 import traceback
 
+from .. import armazenamento, execucao
 from .. import tarefas as downloads
-from ..filtros import PASTA_DADOS
+from ..armazenamento import NUVEM
+from ..execucao import Continuar
 from . import mercado, perfil
 
-_contador = itertools.count(1)
-_fila = queue.Queue()
-tarefas = {}
-ARQ_CONFIG = PASTA_DADOS / "monitoramento.json"
+CHAVE = "dados/tarefas_ia"
+CHAVE_CONFIG = "dados/monitoramento.json"
+ATIVOS = ("na fila", "rodando")
 
 
-class TarefaIA:
-    def __init__(self, tipo, plataforma=None, conta=None):
-        self.id = next(_contador)
-        self.tipo = tipo  # "perfil" | "mercado"
-        self.plataforma, self.conta = plataforma, conta
-        self.status = "na fila"
-        self.etapa, self.feito, self.total = "Aguardando", 0, 0
-        self.erro = None
-        self.criada, self.fim = time.time(), None
+def _ler(tid):
+    return armazenamento.dic_ler_campo(CHAVE, str(tid))
 
-    def progresso(self, etapa, feito, total):
-        self.etapa, self.feito, self.total = etapa, feito, total
 
-    def como_dict(self):
-        return dict(vars(self))
+def _gravar(t):
+    armazenamento.dic_gravar(CHAVE, str(t["id"]), t)
+
+
+def listar():
+    ts = sorted(armazenamento.dic_ler(CHAVE).values(), key=lambda t: t["id"], reverse=True)
+    for velha in [t for t in ts if t["status"] not in ATIVOS][30:]:  # mantém o histórico curto
+        armazenamento.dic_apagar(CHAVE, str(velha["id"]))
+    return ts[:60]
 
 
 def enfileirar(tipo, plataforma=None, conta=None):
-    for t in tarefas.values():  # evita duplicar a mesma análise na fila
-        if t.tipo == tipo and t.plataforma == plataforma and t.conta == conta and t.status in ("na fila", "rodando"):
+    for t in listar():  # evita duplicar a mesma análise na fila
+        if t["tipo"] == tipo and t["plataforma"] == plataforma and t["conta"] == conta and t["status"] in ATIVOS:
             return t
-    t = TarefaIA(tipo, plataforma, conta)
-    tarefas[t.id] = t
-    _fila.put(t)
+    t = {"id": armazenamento.contador("dados/tarefas_ia_contador"), "tipo": tipo, "plataforma": plataforma,
+         "conta": conta, "status": "na fila", "etapa": "Aguardando", "feito": 0, "total": 0, "erro": None,
+         "criada": time.time(), "fim": None}
+    _gravar(t)
+    execucao.despachar("ia", t["id"], faixa="ia")
     return t
 
 
-def _trabalhador():
-    while True:
-        t = _fila.get()
-        t.status = "rodando"
-        try:
-            if t.tipo == "perfil":
-                perfil.gerar(t.plataforma, t.conta, t.progresso)
-            else:
-                mercado.gerar(t.progresso)
-            t.status = "concluído"
-        except Exception as e:
-            t.status, t.erro = "erro", str(e)
-            if not isinstance(e, ValueError):
-                traceback.print_exc()
-        t.fim = time.time()
+def executar(tid, prazo=None):
+    t = _ler(tid)
+    if not t or t["status"] not in ATIVOS:
+        return False
+    t["status"] = "rodando"
+    _gravar(t)
+    ultimo = [0.0]
+
+    def progresso(etapa, feito, total):
+        t.update(etapa=etapa, feito=feito, total=total)
+        if time.time() - ultimo[0] > 2 or feito == total:  # poupa escritas no Redis
+            ultimo[0] = time.time()
+            _gravar(t)
+
+    try:
+        if t["tipo"] == "perfil":
+            perfil.gerar(t["plataforma"], t["conta"], progresso, prazo)
+        else:
+            mercado.gerar(progresso)
+        t["status"] = "concluído"
+    except Continuar:
+        t["etapa"] = "Continuando…"
+        _gravar(t)
+        return True
+    except Exception as e:
+        t["status"], t["erro"] = "erro", str(e)
+        if not isinstance(e, ValueError):
+            traceback.print_exc()
+    t["fim"] = time.time()
+    _gravar(t)
+    return False
 
 
-threading.Thread(target=_trabalhador, daemon=True).start()
+execucao.registrar("ia", executar)
 
 
 # ---------------------------------------------------------------- monitoramento
 
 def config():
     padrao = {"ativo": False, "intervalo_horas": 24, "reanalisar": True, "ultima_execucao": None, "proxima": None}
-    if ARQ_CONFIG.exists():
-        padrao.update(json.loads(ARQ_CONFIG.read_text(encoding="utf-8")))
+    padrao.update(armazenamento.ler_json(CHAVE_CONFIG, {}) or {})
+    if NUVEM:
+        padrao["intervalo_horas"] = 24  # na nuvem roda pelo cron diário da Vercel
     if padrao["ativo"] and padrao["ultima_execucao"]:
         padrao["proxima"] = padrao["ultima_execucao"] + padrao["intervalo_horas"] * 3600
     return padrao
@@ -78,33 +96,22 @@ def salvar_config(dados):
     c = config()
     c.update({k: dados[k] for k in ("ativo", "intervalo_horas", "reanalisar") if k in dados})
     c["intervalo_horas"] = max(1, int(c["intervalo_horas"]))
-    ARQ_CONFIG.write_text(json.dumps(c, indent=1), encoding="utf-8")
+    armazenamento.gravar_json(CHAVE_CONFIG, {k: v for k, v in c.items() if k != "proxima"})
     return config()
 
 
 def executar_monitoramento(contas):
-    """Baixa os vídeos novos de todas as contas e reanalisa as que mudaram."""
+    """Baixa os vídeos novos de todas as contas; quem tiver novidade é reanalisado (se ligado)."""
     c = config()
     c["ultima_execucao"] = time.time()
-    ARQ_CONFIG.write_text(json.dumps({k: v for k, v in c.items() if k != "proxima"}, indent=1), encoding="utf-8")
-
-    criadas = [downloads.enfileirar(x["plataforma"], x["conta"], {"modo": "novos", "somente_reels": True}) for x in contas]
-    while any(t.status not in downloads.FINAIS for t in criadas):
-        time.sleep(10)
-    if not c["reanalisar"]:
-        return
-    analisadas = perfil.resumo_todos()
-    mudou = False
-    for t in criadas:
-        chave = f"{t.plataforma}/{t.conta}"
-        if t.baixados > 0 and chave in analisadas:
-            enfileirar("perfil", t.plataforma, t.conta)
-            mudou = True
-    if mudou and len(analisadas) >= 2:
-        enfileirar("mercado")
+    armazenamento.gravar_json(CHAVE_CONFIG, {k: v for k, v in c.items() if k != "proxima"})
+    opcoes = {"modo": "novos", "somente_reels": True, "analisar_depois": bool(c["reanalisar"])}
+    for x in contas:
+        downloads.enfileirar(x["plataforma"], x["conta"], opcoes)
 
 
 def iniciar_agendador(ler_contas):
+    """Só no modo local; na nuvem quem dispara é o cron da Vercel (/api/cron/monitorar)."""
     def laco():
         while True:
             c = config()
