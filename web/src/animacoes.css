@@ -68,3 +68,16 @@
   .anim-cair, .anim-respirar, .anim-balao, .anim-sinapse, .anim-feixe, .anim-convergir, .anim-florescer,
   .anim-faisca, .anim-onda, .anim-revelar, .anim-coracao, .subir-dock, .magico { animation: none !important; }
 }
+
+/* ---------------------------------------------------------------- baralho da sessão de ideias */
+@keyframes voar-direita { to { transform: translateX(120%) rotate(14deg); opacity: 0; } }
+@keyframes voar-esquerda { to { transform: translateX(-120%) rotate(-14deg); opacity: 0; } }
+@keyframes voar-cima { to { transform: translateY(-120%) scale(.9); opacity: 0; } }
+@keyframes entrar-carta { from { transform: translateY(18px) scale(.94); opacity: .4; } to { transform: none; opacity: 1; } }
+.voar-direita { animation: voar-direita .38s cubic-bezier(.5, 0, .75, .2) forwards; }
+.voar-esquerda { animation: voar-esquerda .38s cubic-bezier(.5, 0, .75, .2) forwards; }
+.voar-cima { animation: voar-cima .38s cubic-bezier(.5, 0, .75, .2) forwards; }
+.entrar-carta { animation: entrar-carta .35s cubic-bezier(.2, .9, .3, 1.15) both; }
+@media (prefers-reduced-motion: reduce) {
+  .voar-direita, .voar-esquerda, .voar-cima, .entrar-carta { animation-duration: .01s !important; }
+}

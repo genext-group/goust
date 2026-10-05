@@ -6,7 +6,7 @@ import type { PedidoImagem } from '../../telas/Criar'
 import { tocar } from '../../sons'
 import { AnimProcesso } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
-import { FORMATOS, STATUS } from './Calendario'
+import { FORMATOS, STATUS } from './comum'
 
 const copiar = (texto: string, o_que = 'Copiado') => {
   navigator.clipboard.writeText(texto).then(() => { tocar('pasta'); toast(o_que) }).catch(() => {})
@@ -95,7 +95,7 @@ export function DetalheConteudo({ conteudo, novo, dataNovo, aoFechar, aoMudar, a
               <div>
                 <p className="mb-1.5 text-sm font-medium">Formato</p>
                 <div className="flex flex-wrap gap-1">
-                  {Object.entries(FORMATOS).map(([k, n]) => (
+                  {Object.entries(FORMATOS).map(([k, { nome: n }]) => (
                     <button key={k} onClick={() => setF({ ...f, formato: k })}
                       className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${f.formato === k ? 'botao-sinal' : 'bg-surface-secondary text-muted hover:text-foreground'}`}>{n}</button>
                   ))}

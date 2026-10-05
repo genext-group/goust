@@ -135,6 +135,7 @@ def gerar_calendario(semanas=2, inicio=None, progresso=lambda e, f, t: None):
     entrada = "\n\n".join([
         f"## Período\nDe {inicio.isoformat()} ({inicio.strftime('%A')}) até {fim.isoformat()} — {semanas} semana(s).",
         _contexto_mercado(),
+        _bloco_escolhas() or "",
         "## Já planejado (não repita)\n" + "\n".join(f"- {j['titulo']}" for j in ja) if ja else "",
     ])
     progresso("Montando o calendário", 1, 2)
@@ -216,6 +217,79 @@ def gerar_roteiro(cid, pedido_extra="", progresso=lambda e, f, t: None):
     atualizar(cid, {"roteiro": roteiro, **({"status": "roteiro"} if c["status"] == "ideia" else {})})
     progresso("Concluído", 1, 1)
     return roteiro
+
+
+# ---------------------------------------------------------------- ideias sob demanda (criador guiado e sessão de escolha)
+
+class IdeiaConteudo(BaseModel):
+    titulo: str
+    formato: Literal["reel", "carrossel", "foto", "story"]
+    pilar: str
+    objetivo: Literal["alcance", "engajamento", "conversao", "autoridade", "relacionamento"]
+    gancho: str
+    ideia: str
+    cta: str
+    por_que: str
+    inspirado_em: list[str]
+
+
+class Ideias(BaseModel):
+    ideias: list[IdeiaConteudo]
+
+
+INSTRUCOES_IDEIAS = """Você é o editor de conteúdo deste criador (Instagram/TikTok, Brasil).
+Proponha ideias de conteúdo DIFERENTES entre si (ângulo, formato de gancho, emoção), prontas para virar post.
+- Respeite as restrições pedidas (pilar, formato, objetivo, tema) quando houver.
+- Use o que funciona nos concorrentes e o que o público pede, adaptado ao tom e ao brief do criador.
+- Aprenda com as escolhas anteriores: repita o que ele aceitou, evite o padrão do que ele recusou.
+- Não repita títulos já planejados.
+- 'gancho' = a primeira frase/tela, específica e forte. 'ideia' em 2 frases. 'por_que' em 1 frase (por que vai funcionar).
+- 'inspirado_em': ids de posts dos dados (pode ser vazio). Nunca escreva ids no texto.
+Português do Brasil."""
+
+
+def _escolhas():
+    return memoria.ler_documento("ideias_escolhas", {"itens": []})["itens"]
+
+
+def registrar_escolha(ideia, aceita):
+    """Guarda as últimas decisões (aceitou/recusou) para as próximas ideias acertarem mais."""
+    itens = _escolhas()
+    itens.append({"titulo": ideia.get("titulo", "")[:160], "gancho": ideia.get("gancho", "")[:200],
+                  "formato": ideia.get("formato"), "pilar": ideia.get("pilar"), "aceita": bool(aceita)})
+    memoria.gravar_documento("ideias_escolhas", {"itens": itens[-60:]})
+
+
+def _bloco_escolhas():
+    itens = _escolhas()[-30:]
+    if not itens:
+        return None
+    aceitas = [f"- {i['titulo']} ({i.get('formato')}, {i.get('pilar')})" for i in itens if i["aceita"]]
+    recusadas = [f"- {i['titulo']} ({i.get('formato')}, {i.get('pilar')})" for i in itens if not i["aceita"]]
+    return ("## Escolhas anteriores do criador\nAceitou:\n" + ("\n".join(aceitas) or "(nenhuma)")
+            + "\nRecusou:\n" + ("\n".join(recusadas) or "(nenhuma)"))
+
+
+def gerar_ideias(qtd=4, pilar=None, formato=None, objetivo=None, tema=None):
+    qtd = max(1, min(int(qtd or 4), 12))
+    pedido = [f"Quantidade: {qtd} ideias."]
+    if pilar:
+        pedido.append(f"Pilar: {pilar}")
+    if formato:
+        pedido.append(f"Formato: {formato}")
+    if objetivo:
+        pedido.append(f"Objetivo: {objetivo}")
+    if tema:
+        pedido.append(f"Tema ou pedido do criador: {tema}")
+    ja = db.todos("select titulo from conteudos where usuario_id = %s order by id desc limit 60", ctx.usuario())
+    entrada = "\n\n".join(filter(None, [
+        "## Pedido\n" + "\n".join(pedido),
+        _contexto_mercado(),
+        _bloco_escolhas(),
+        "## Já planejado (não repita)\n" + "\n".join(f"- {j['titulo']}" for j in ja) if ja else None,
+    ]))
+    r = cliente.estruturado("relatorio", INSTRUCOES_IDEIAS, entrada, Ideias, esforco="low")
+    return [i.model_dump() for i in r.ideias[:qtd]]
 
 
 # ---------------------------------------------------------------- concorrentes sugeridos

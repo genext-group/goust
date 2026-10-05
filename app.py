@@ -634,6 +634,24 @@ def api_gerar_calendario():
     return jsonify(ia_tarefas.enfileirar("calendario", params={"semanas": d.get("semanas", 2), "inicio": d.get("inicio")}))
 
 
+@app.post("/api/conteudos/ideias")
+@protegido
+def api_gerar_ideias():
+    d = request.json or {}
+    try:
+        return jsonify(ia_conteudo.gerar_ideias(d.get("qtd", 4), d.get("pilar"), d.get("formato"), d.get("objetivo"), d.get("tema")))
+    except Exception as e:
+        return jsonify(erro=f"Não deu para gerar ideias: {e}"), 500
+
+
+@app.post("/api/conteudos/ideias/escolha")
+@protegido
+def api_escolha_ideia():
+    d = request.json or {}
+    ia_conteudo.registrar_escolha(d.get("ideia") or {}, d.get("aceita", False))
+    return jsonify(ok=True)
+
+
 @app.post("/api/conteudos/<int:cid>/roteiro")
 @protegido
 def api_gerar_roteiro(cid):

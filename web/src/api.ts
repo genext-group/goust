@@ -339,6 +339,11 @@ export interface Conteudo {
   dados: { gancho?: string; ideia?: string; objetivo?: string; cta?: string; inspirado_em?: string[]; notas?: string }
   roteiro: Roteiro | null; atualizado: string
 }
+export interface IdeiaGerada {
+  titulo: string; formato: 'reel' | 'carrossel' | 'foto' | 'story'; pilar: string
+  objetivo: 'alcance' | 'engajamento' | 'conversao' | 'autoridade' | 'relacionamento'
+  gancho: string; ideia: string; cta: string; por_que: string; inspirado_em: string[]
+}
 export interface Sugestao { plataforma: Plataforma; conta: string; nome: string; por_que: string }
 export interface Eu { id: string; email: string | null; nome: string | null; onboarding: boolean; piloto: { estrategia?: boolean; calendario?: boolean } }
 
@@ -379,11 +384,14 @@ export const criacao = {
   favoritarImagem: (id: number, favorita: boolean) => req(`/api/imagens/${id}`, { method: 'PUT', body: { favorita } }),
   apagarImagem: (id: number) => req(`/api/imagens/${id}`, { method: 'DELETE' }),
   conteudos: () => req<Conteudo[]>('/api/conteudos'),
-  criarConteudo: (c: Partial<Conteudo> & { gancho?: string; ideia?: string; roteiro_base?: string[]; inspirado_em?: string[] }) =>
+  criarConteudo: (c: Partial<Conteudo> & { gancho?: string; ideia?: string; objetivo?: string; cta?: string; roteiro_base?: string[]; inspirado_em?: string[] }) =>
     req<Conteudo>('/api/conteudos', { body: c }),
   atualizarConteudo: (id: number, c: Partial<Conteudo>) => req<Conteudo>(`/api/conteudos/${id}`, { method: 'PUT', body: c }),
   apagarConteudo: (id: number) => req(`/api/conteudos/${id}`, { method: 'DELETE' }),
   gerarCalendario: (semanas: number, inicio?: string) => req<TarefaIA>('/api/conteudos/calendario', { body: { semanas, inicio } }),
+  gerarIdeias: (p: { qtd: number; pilar?: string | null; formato?: string | null; objetivo?: string | null; tema?: string | null }) =>
+    req<IdeiaGerada[]>('/api/conteudos/ideias', { body: p }),
+  escolherIdeia: (ideia: IdeiaGerada, aceita: boolean) => req('/api/conteudos/ideias/escolha', { body: { ideia, aceita } }),
   gerarRoteiro: (id: number, pedido = '') => req<TarefaIA>(`/api/conteudos/${id}/roteiro`, { body: { pedido } }),
 }
 

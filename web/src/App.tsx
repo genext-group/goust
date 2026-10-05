@@ -202,7 +202,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
       </header>
 
       <main className="min-w-0">
-        <div key={aba} className="troca-pagina mx-auto w-full min-w-0 max-w-6xl px-4 pt-8 pb-28 sm:px-8">{tela}</div>
+        <div key={aba} className={`troca-pagina mx-auto w-full min-w-0 px-4 pt-8 pb-28 sm:px-8 ${aba === 'criar' ? 'max-w-[1480px]' : 'max-w-6xl'}`}>{tela}</div>
       </main>
     </div>
     </AtividadeContexto.Provider>
