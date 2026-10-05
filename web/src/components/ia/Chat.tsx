@@ -1,4 +1,5 @@
-import { Button, Drawer, Spinner, TextArea } from '@heroui/react'
+import { Orbita } from '../Animacoes'
+import { Button, Drawer, TextArea } from '@heroui/react'
 import { PaperPlane, Sparkles } from '@gravity-ui/icons'
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ia, type Plataforma } from '../../api'
@@ -71,7 +72,7 @@ export function Chat({ escopo, titulo, isOpen, onOpenChange }: { escopo: Escopo;
                 </div>
               </div>
             ))}
-            {pensando && <div className="flex items-center gap-2 text-sm text-muted"><Spinner size="sm" /> Analisando os dados…</div>}
+            {pensando && <div className="flex items-center gap-2 text-sm text-muted"><Orbita tamanho={22} className="text-foreground" /> Analisando os dados…</div>}
             <div ref={fim} />
           </Drawer.Body>
           <Drawer.Footer>

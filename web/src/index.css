@@ -10,7 +10,7 @@
 */
 :root,
 [data-theme="light"] {
-  --background: #f4f4f8;
+  --background: #f5f5f7;
   --foreground: #14141c;
   --surface: #ffffff;
   --surface-secondary: #f0f0f5;
@@ -36,27 +36,27 @@
 
 .dark,
 [data-theme="dark"] {
-  --background: #0b0b12;
-  --foreground: #ececf3;
-  --surface: #13131c;
-  --surface-secondary: #1b1b26;
-  --surface-tertiary: #242432;
-  --muted: #8d8da0;
+  --background: #000000;
+  --foreground: #f5f5f7;
+  --surface: #121214;
+  --surface-secondary: #1c1c1f;
+  --surface-tertiary: #2a2a2e;
+  --muted: #98989f;
   --accent: #8b70ff;
   --accent-foreground: #ffffff;
-  --border: rgb(255 255 255 / 0.08);
-  --separator: rgb(255 255 255 / 0.07);
-  --field-background: #171722;
-  --hairline: rgb(255 255 255 / 0.07);
-  --glass: rgb(19 19 28 / 0.7);
-  --sidebar: rgb(13 13 20 / 0.72);
+  --border: rgb(255 255 255 / 0.09);
+  --separator: rgb(255 255 255 / 0.08);
+  --field-background: #161618;
+  --hairline: rgb(255 255 255 / 0.08);
+  --glass: rgb(10 10 12 / 0.72);
+  --sidebar: rgb(10 10 12 / 0.72);
   --tiktok: #f2f2f7;
   --instagram: #ff5fa2;
   --sinal-a: #8b70ff;
   --sinal-b: #ff7a4d;
   --menta: #2ee6a6;
   --ambar: #ffb547;
-  --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 20px 40px -24px rgb(0 0 0 / 0.6);
+  --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.07);
 }
 
 html,
@@ -81,11 +81,7 @@ body {
 
 /* fundo ambiente: dois brilhos do gradiente da marca, bem suaves */
 .ambiente {
-  background:
-    radial-gradient(60rem 40rem at 85% -10%, color-mix(in srgb, var(--sinal-a) 16%, transparent), transparent 60%),
-    radial-gradient(50rem 30rem at -10% 10%, color-mix(in srgb, var(--sinal-b) 10%, transparent), transparent 60%),
-    var(--background);
-  background-attachment: fixed;
+  background: var(--background);
 }
 
 .vidro {
@@ -156,3 +152,45 @@ body {
 }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- animações */
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes pulso { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.82); opacity: 0.75; } }
+@keyframes desenhar { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes piscar { 0%, 70%, 100% { opacity: 0.15; transform: scale(0.8); } 80% { opacity: 1; transform: scale(1.25); } }
+@keyframes trocar-pagina {
+  from { opacity: 0; transform: translateY(14px) scale(0.99); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes brilho-carregando { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+@keyframes entrar-cima { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+
+.anim-girar { animation: girar 1.1s linear infinite; }
+.anim-girar-lento { animation: girar 14s linear infinite; }
+.anim-girar-reverso { animation: girar 2.4s linear infinite reverse; }
+.anim-pulso { animation: pulso 1.8s ease-in-out infinite; }
+.anim-desenhar { stroke-dasharray: 1; animation: desenhar 0.5s cubic-bezier(0.65, 0, 0.35, 1) both; }
+.anim-varrer { animation: girar 3.2s linear infinite; }
+.anim-piscar { transform-box: fill-box; transform-origin: center; animation: piscar 3.2s ease-in-out infinite; }
+.troca-pagina { animation: trocar-pagina 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.entrar-cima { animation: entrar-cima 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* itens de lista entrando em sequência (use style={{'--i': indice}}) */
+.cascata > * { animation: surgir 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+
+/* esqueleto com brilho passando */
+.carregando {
+  background: linear-gradient(90deg, var(--surface-secondary) 25%, var(--surface-tertiary) 50%, var(--surface-secondary) 75%);
+  background-size: 200% 100%;
+  animation: brilho-carregando 1.4s linear infinite;
+  border-radius: 1rem;
+}
+
+/* botões respondem ao toque */
+button:not([disabled]):active { transform: scale(0.97); transition: transform 0.08s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-girar, .anim-girar-lento, .anim-girar-reverso, .anim-pulso, .anim-varrer, .anim-piscar,
+  .troca-pagina, .entrar-cima, .cascata > *, .carregando { animation: none !important; }
+  .anim-desenhar { stroke-dasharray: none; }
+}

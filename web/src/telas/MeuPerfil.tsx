@@ -1,4 +1,4 @@
-import { Button, Label, ListBox, Select, Skeleton, toast } from '@heroui/react'
+import { Button, Label, ListBox, Select, toast } from '@heroui/react'
 import { ArrowDownToLine, ArrowsRotateRight, Pencil, Sparkles } from '@gravity-ui/icons'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ia, type Conta, type Marca, type RegistroEstrategia, type ResumoRelatorio, type Tarefa, type TarefaIA, type Video } from '../api'
@@ -8,6 +8,7 @@ import { ContextoIA } from '../components/ia/Compartilhado'
 import { Assistente } from '../components/meuperfil/Assistente'
 import { EstrategiaView } from '../components/meuperfil/EstrategiaView'
 import { Pipeline } from '../components/meuperfil/Pipeline'
+import { Orbita, Radar } from '../components/Animacoes'
 import { fmtNum } from '../formato'
 import { ModalVideo } from './Biblioteca'
 
@@ -88,7 +89,7 @@ export function TelaMeuPerfil({ contas, setContas, versaoBiblioteca, tarefasDown
     aoVotar: (k: string, v: number) => setVotos((s) => ({ ...s, [k]: v })),
   }), [videos, ref, votos])
 
-  if (brief === null) return <Skeleton className="h-96 rounded-3xl" />
+  if (brief === null) return <div className="carregando h-96 rounded-3xl" />
 
   if (mostrarAssistente) {
     return (
@@ -194,18 +195,18 @@ export function TelaMeuPerfil({ contas, setContas, versaoBiblioteca, tarefasDown
 
           {tarefaEst && (
             <div className="aura overflow-hidden rounded-[1.5rem] p-6 text-white" style={auraMarca}>
-              <p className="flex items-center gap-2 font-medium"><Sparkles className="pulsando size-4" />
+              <p className="flex items-center gap-3 font-medium"><Orbita tamanho={28} className="text-white" />
                 {tarefaEst.status === 'na fila' ? 'Na fila…' : tarefaEst.etapa}</p>
               <p className="mt-1 text-sm text-white/70">A IA está cruzando o seu perfil, o seu brief e os concorrentes.</p>
             </div>
           )}
 
-          {est === null ? <Skeleton className="h-48 rounded-3xl" /> : est.estrategia ? (
+          {est === null ? <div className="carregando h-48 rounded-3xl" /> : est.estrategia ? (
             <EstrategiaView r={est.estrategia} />
           ) : !tarefaEst && (
             <div className="cartao px-6 py-14 text-center">
-              <span className="mx-auto grid size-14 place-items-center rounded-2xl botao-sinal"><Sparkles className="size-6" /></span>
-              <h3 className="titulo-display mt-4 text-xl font-semibold">Sua estratégia ainda não foi gerada</h3>
+              <div className="mx-auto w-fit text-foreground"><Radar /></div>
+              <h3 className="titulo-display mt-2 text-xl font-semibold">Sua estratégia ainda não foi gerada</h3>
               <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
                 Ela cruza o seu perfil, o seu brief e os concorrentes já analisados. Quanto mais completo o brief, mais específica ela fica.
               </p>

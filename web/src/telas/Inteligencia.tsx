@@ -1,4 +1,4 @@
-import { Button, Label, ListBox, ProgressBar, Select, Skeleton, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
+import { Button, Label, ListBox, Select, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
 import { ArrowsRotateRight, CircleExclamation, Comments, Sparkles } from '@gravity-ui/icons'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -14,6 +14,7 @@ import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
 import { SeloPlataforma } from '../components/Plataforma'
 import { fmtRelativo } from '../formato'
 import { aura } from '../aura'
+import { Orbita, Radar } from '../components/Animacoes'
 import { ModalVideo } from './Biblioteca'
 import { useNuvem } from '../ambiente'
 
@@ -153,14 +154,14 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
 
         {visao === 'perfis' && (
           <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <aside className="space-y-1 lg:sticky lg:top-20 lg:self-start">
-              {ordenadas.map((c) => {
+            <aside className="cascata space-y-1 lg:sticky lg:top-20 lg:self-start">
+              {ordenadas.map((c, i) => {
                 const r = resumos[chave(c)]
                 const t = tarefaDe(c)
                 const qtd = qtdPorConta.get(chave(c)) ?? 0
                 const ativa = chave(c) === selecionada
                 return (
-                  <button key={chave(c)} onClick={() => { setSelecionada(chave(c)); setVersao(undefined) }}
+                  <button key={chave(c)} style={{ '--i': i } as React.CSSProperties} onClick={() => { setSelecionada(chave(c)); setVersao(undefined) }}
                     className={`flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition-colors ${ativa ? 'bg-surface shadow-sm' : 'hover:bg-surface/60'}`}>
                     <AvatarConta conta={c} tamanho="sm" />
                     <div className="min-w-0 flex-1">
@@ -210,7 +211,7 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
               {conta && tarefaDe(conta) && <Progresso t={tarefaDe(conta)!} />}
 
               {!conta ? null : relatorio === null ? (
-                <div className="space-y-4"><Skeleton className="h-48 rounded-3xl" /><Skeleton className="h-64 rounded-3xl" /></div>
+                <div className="space-y-4"><div className="carregando h-48 rounded-3xl" /><div className="carregando h-64 rounded-3xl" /></div>
               ) : relatorio.relatorio ? (
                 <RelatorioPerfil r={relatorio.relatorio} />
               ) : !tarefaDe(conta) && (
@@ -249,7 +250,7 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
             </div>
             {tarefaMercado && <Progresso t={tarefaMercado} />}
             {panorama === null ? (
-              <Skeleton className="h-64 rounded-3xl" />
+              <div className="carregando h-64 rounded-3xl" />
             ) : panorama.panorama ? (
               <PanoramaMercado r={panorama.panorama} contas={contas} />
             ) : !tarefaMercado && (
@@ -276,16 +277,21 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
 
 function Progresso({ t }: { t: TarefaIA }) {
   const pct = t.total ? Math.round((t.feito / t.total) * 100) : 0
+  const indeterminado = t.status === 'na fila' || t.total <= 1
   return (
-    <div className="cartao space-y-3 p-5">
-      <div className="flex items-center gap-2">
-        <Sparkles className="size-4 animate-pulse text-accent" />
-        <p className="flex-1 text-sm font-medium">{t.status === 'na fila' ? 'Na fila…' : t.etapa}</p>
-        {t.total > 1 && <span className="num text-sm text-muted">{t.feito}/{t.total}</span>}
+    <div className="cartao entrar-cima flex items-center gap-4 p-5">
+      <Orbita tamanho={44} className="shrink-0 text-foreground" />
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <div className="flex items-baseline gap-2">
+          <p className="flex-1 truncate text-sm font-medium">{t.status === 'na fila' ? 'Na fila…' : t.etapa}</p>
+          {t.total > 1 && <span className="num text-sm text-muted">{t.feito}/{t.total}</span>}
+        </div>
+        <div className="relative h-1.5 overflow-hidden rounded-full bg-surface-secondary">
+          {indeterminado
+            ? <div className="carregando absolute inset-0 rounded-full opacity-80" />
+            : <div className="botao-sinal h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.max(4, pct)}%` }} />}
+        </div>
       </div>
-      <ProgressBar aria-label="Progresso da análise" size="sm" value={pct} isIndeterminate={t.status === 'na fila' || t.total <= 1}>
-        <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
-      </ProgressBar>
     </div>
   )
 }
@@ -293,8 +299,8 @@ function Progresso({ t }: { t: TarefaIA }) {
 function Vazio({ titulo, texto, acao }: { titulo: string; texto: string; acao: React.ReactNode }) {
   return (
     <div className="cartao flex flex-col items-center px-6 py-16 text-center">
-      <span className="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent"><Sparkles className="size-6" /></span>
-      <h3 className="titulo-display mt-4 text-xl font-semibold">{titulo}</h3>
+      <div className="text-foreground"><Radar /></div>
+      <h3 className="titulo-display mt-2 text-xl font-semibold">{titulo}</h3>
       <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">{texto}</p>
       {acao && <div className="mt-5">{acao}</div>}
     </div>

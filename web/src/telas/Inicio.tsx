@@ -1,6 +1,7 @@
 import { Button } from '@heroui/react'
-import { ArrowRight, Check, Sparkles } from '@gravity-ui/icons'
-import { useEffect, useState } from 'react'
+import { ArrowRight } from '@gravity-ui/icons'
+import { CheckDesenhado, Radar } from '../components/Animacoes'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { ia, type Conta, type Marca, type ResumoRelatorio, type Tarefa } from '../api'
 import { aura, auraMarca } from '../aura'
 import { AvatarConta } from '../components/Avatar'
@@ -73,17 +74,17 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
             <div className="h-full rounded-full botao-sinal transition-all" style={{ width: `${(feitos / passos.length) * 100}%` }} />
           </div>
         </div>
-        <ol className="grid gap-2 md:grid-cols-5">
+        <ol className="cascata grid gap-2 md:grid-cols-5">
           {passos.map((p, i) => {
             const atual = i === proximo
             return (
-              <li key={p.titulo}>
+              <li key={p.titulo} style={{ '--i': i } as CSSProperties}>
                 <button onClick={() => irPara(p.ir)}
                   className={`flex h-full w-full flex-col gap-2 rounded-2xl p-4 text-left transition-all outline-none hover:-translate-y-0.5 ${
                     atual ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-secondary/70 hover:bg-surface-secondary'}`}>
                   <span className={`grid size-7 place-items-center rounded-full text-xs font-semibold ${
                     p.feito ? 'bg-[var(--menta)] text-black' : atual ? 'botao-sinal' : 'bg-surface-tertiary text-muted'}`}>
-                    {p.feito ? <Check className="size-3.5" /> : <span className="num">{i + 1}</span>}
+                    {p.feito ? <CheckDesenhado tamanho={14} /> : <span className="num">{i + 1}</span>}
                   </span>
                   <span className="font-medium leading-snug">{p.titulo}</span>
                   <span className="text-xs leading-relaxed text-muted">{p.texto}</span>
@@ -95,14 +96,14 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
       </section>
 
       {/* números */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <section className="cascata grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           ['Concorrentes', fmtNum(concorrentes.length), 'contas' as Aba],
           ['Posts catalogados', fmtNum(posts), 'biblioteca' as Aba],
           ['Análises de IA', fmtNum(Object.keys(relatorios ?? {}).length), 'inteligencia' as Aba],
           ['Em andamento', fmtNum(ativas), 'downloads' as Aba],
-        ].map(([rotulo, valor, ir]) => (
-          <button key={rotulo as string} onClick={() => irPara(ir as Aba)} className="cartao p-5 text-left transition-transform hover:-translate-y-0.5">
+        ].map(([rotulo, valor, ir], i) => (
+          <button key={rotulo as string} style={{ '--i': i + 5 } as CSSProperties} onClick={() => irPara(ir as Aba)} className="cartao p-5 text-left transition-transform hover:-translate-y-0.5">
             <p className="text-xs text-muted">{rotulo}</p>
             <p className="num titulo-display mt-1 text-3xl font-semibold">{valor}</p>
           </button>
@@ -117,7 +118,7 @@ export function TelaInicio({ contas, tarefas, irPara }: Props) {
         </div>
         {recentes.length === 0 ? (
           <div className="rounded-2xl bg-surface-secondary/70 p-6 text-center text-sm text-muted">
-            <Sparkles className="mx-auto mb-2 size-5 text-accent" />
+            <div className="mx-auto w-fit text-foreground"><Radar tamanho={90} /></div>
             Nenhuma análise ainda. Comece analisando um concorrente na aba Inteligência.
           </div>
         ) : (

@@ -1,4 +1,4 @@
-import { Button, Label, ListBox, Modal, SearchField, Select, Skeleton, ToggleButton, ToggleButtonGroup } from '@heroui/react'
+import { Button, Label, ListBox, Modal, SearchField, Select, ToggleButton, ToggleButtonGroup } from '@heroui/react'
 import { ArrowDownToLine, ArrowUpRightFromSquare, Comment, Eye, FolderOpen, Heart, Play, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, baixarArquivo, ia, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Plataforma, type Video } from '../api'
@@ -159,7 +159,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
       {videos === null ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
           {Array.from({ length: 12 }, (_, i) => (
-            <Skeleton key={i} className="aspect-[9/16] rounded-2xl" />
+            <div key={i} className="carregando aspect-[9/16] rounded-2xl" />
           ))}
         </div>
       ) : filtrados.length === 0 ? (

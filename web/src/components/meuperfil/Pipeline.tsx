@@ -1,4 +1,4 @@
-import { Check } from '@gravity-ui/icons'
+import { CheckDesenhado, Orbita } from '../Animacoes'
 import type { Conta, Tarefa, TarefaIA } from '../../api'
 
 type Estado = 'feito' | 'agora' | 'espera'
@@ -46,8 +46,8 @@ export function Pipeline({ conta, downloads, tarefasIA, temRelatorio }: {
         <li key={e.nome} className={`relative rounded-2xl p-3.5 transition-colors ${e.estado === 'agora' ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-secondary/70'}`}>
           <div className="flex items-center gap-2">
             <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
-              e.estado === 'feito' ? 'bg-[var(--menta)] text-black' : e.estado === 'agora' ? 'botao-sinal pulsando' : 'bg-surface-tertiary text-muted'}`}>
-              {e.estado === 'feito' ? <Check className="size-3" /> : <span className="num">{i + 1}</span>}
+              e.estado === 'feito' ? 'bg-[var(--menta)] text-black' : e.estado === 'agora' ? '' : 'bg-surface-tertiary text-muted'}`}>
+              {e.estado === 'feito' ? <CheckDesenhado tamanho={12} /> : e.estado === 'agora' ? <Orbita tamanho={24} className="text-foreground" /> : <span className="num">{i + 1}</span>}
             </span>
             <span className="text-sm font-medium">{e.nome}</span>
           </div>
