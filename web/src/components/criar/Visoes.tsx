@@ -2,6 +2,7 @@ import { FileText, Plus } from '@gravity-ui/icons'
 import type { CSSProperties } from 'react'
 import type { Conteudo, StatusConteudo } from '../../api'
 import { Menu } from '../Menu'
+import { Carrossel } from '../ui/Carrossel'
 import {
   AreaSoltar, CartaoConteudo, OBJETIVOS, ORDEM_STATUS, STATUS, atrasado, formatoDe, hojeIso, iso, rotuloDia, segunda, somarDias,
   type Previa,
@@ -237,7 +238,7 @@ export function FilaProducao({ x }: { x: Comum }) {
         <h3 className="titulo-display text-lg font-semibold">Para produzir nos próximos 7 dias</h3>
         <span className="num text-sm text-muted">{lista.length}</span>
       </div>
-      <div data-rolavel="x" className="flex gap-3 overflow-x-auto pb-1">
+      <Carrossel rotulo="Para produzir nos próximos 7 dias" className="gap-3 pb-1">
         {lista.map((c) => {
           const f = formatoDe(c.formato)
           const prox = proximo(c.status)
@@ -261,7 +262,7 @@ export function FilaProducao({ x }: { x: Comum }) {
             </div>
           )
         })}
-      </div>
+      </Carrossel>
     </section>
   )
 }

@@ -5,6 +5,7 @@ import { ia, type Conta, type Marca, type Tarefa, type TarefaIA } from '../../ap
 import { AvatarConta } from '../Avatar'
 import { BuscaPerfis } from '../BuscaPerfis'
 import { Pipeline } from './Pipeline'
+import { pedacoDoDegrade } from '../../degrade'
 
 type Campo = { k: string; rotulo: string; dica: string; longo?: boolean; atalhos?: string[]; multiplo?: boolean }
 
@@ -102,7 +103,9 @@ export function Assistente({ contas, setContas, downloads, tarefasIA, relatorios
       <div className="flex gap-1 px-6 pt-6">
         {ETAPAS.map((e, i) => (
           <button key={e.id} onClick={() => setEtapa(i)} aria-label={`Ir para ${e.titulo}`} className="group flex-1 text-left outline-none">
-            <span className={`block h-1 rounded-full transition-colors ${i <= etapa ? 'botao-sinal' : 'bg-surface-tertiary'}`} />
+            {/* um único degradê atravessa todas as etapas: cada segmento mostra o seu pedaço dele */}
+            <span className="block h-1 rounded-full bg-surface-tertiary transition-[background] duration-500"
+              style={i <= etapa ? pedacoDoDegrade(i, ETAPAS.length) : undefined} />
             <span className={`mt-2 hidden text-xs sm:block ${i === etapa ? 'font-medium text-foreground' : 'text-muted group-hover:text-foreground'}`}>{e.titulo}</span>
           </button>
         ))}
@@ -205,7 +208,7 @@ function EtapaPerfil({ proprias, setContas, downloads, tarefasIA, relatoriosProp
           <Pipeline conta={c} downloads={downloads} tarefasIA={tarefasIA} temRelatorio={relatoriosProprios.has(`${c.plataforma}/${c.conta}`)} />
         </Bloco>
       ))}
-      <BuscaPerfis proprio aoAdicionar={(lista) => { setContas(lista); aoColetar() }}
+      <BuscaPerfis proprio emLinha aoAdicionar={(lista) => { setContas(lista); aoColetar() }}
         placeholder={proprias.length ? 'Conectar outro perfil: busque pelo nome ou @' : 'Busque seu perfil pelo nome ou @, ou cole o link'} />
     </div>
   )

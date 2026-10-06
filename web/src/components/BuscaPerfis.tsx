@@ -38,13 +38,15 @@ function Avatar({ p, tamanho = 40 }: { p: PerfilEncontrado; tamanho?: number }) 
 
 /** Busca de perfis com prévia (foto, nome, seguidores) para seguir como concorrente ou referência.
  *  Seguir já dispara a coleta e a análise. Links de vídeo continuam indo para `aoVideo`. */
-export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente', proprio = false, placeholder }: {
+export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente', proprio = false, placeholder, emLinha = false }: {
   aoAdicionar: (contas: Conta[]) => void
   aoVideo?: (url: string) => void
   papelPadrao?: Papel
   /** conectar o seu próprio perfil: sem escolha de papel, coleta o perfil inteiro */
   proprio?: boolean
   placeholder?: string
+  /** resultados no fluxo da página (dentro de cartões com overflow, como o assistente), em vez de flutuando */
+  emLinha?: boolean
 }) {
   const [texto, setTexto] = useState('')
   const [resultados, setResultados] = useState<PerfilEncontrado[] | null>(null)
@@ -149,7 +151,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
       </div>
 
       {mostrar && (
-        <div className="entrar-cima absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-3xl border bg-surface shadow-2xl linha-fina">
+        <div className={`entrar-cima mt-2 overflow-hidden rounded-3xl border bg-surface linha-fina ${emLinha ? 'relative' : 'absolute inset-x-0 top-full z-40 shadow-2xl'}`}>
           {escolhido ? (
             <div className="p-5">
               <button onClick={() => setEscolhido(null)} className="mb-3 flex items-center gap-1 text-xs text-muted hover:text-foreground"><ArrowLeft className="size-3" /> Voltar aos resultados</button>

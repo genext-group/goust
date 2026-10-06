@@ -14,6 +14,8 @@ import { FORMATOS } from '../components/criar/comum'
 import { fmtNum } from '../formato'
 import { tocar } from '../sons'
 import { ModalVideo } from './Biblioteca'
+import { pedacoDoDegrade } from '../degrade'
+import { Carrossel } from '../components/ui/Carrossel'
 
 type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'criar' | 'downloads'
 
@@ -280,7 +282,7 @@ function JornadaCompacta({ jornada, irPara }: { jornada: Central['jornada']; irP
     <section className="cartao flex flex-wrap items-center gap-4 px-5 py-3.5">
       <p className="text-sm"><span className="font-medium">Configuração</span> <span className="num text-muted">{feitos}/6</span></p>
       <div className="flex flex-1 gap-1">
-        {NOMES_JORNADA.map(([k, n]) => <span key={k} title={n} className={`h-1.5 flex-1 rounded-full ${jornada[k] ? 'botao-sinal' : 'bg-surface-tertiary'}`} />)}
+        {NOMES_JORNADA.map(([k, n], i) => <span key={k} title={n} className="h-1.5 flex-1 rounded-full bg-surface-tertiary" style={jornada[k] ? pedacoDoDegrade(i, NOMES_JORNADA.length) : undefined} />)}
       </div>
       {prox && <Button size="sm" variant="tertiary" onPress={() => irPara(prox[2])}>{prox[1]} <ArrowRight /></Button>}
     </section>
@@ -550,7 +552,7 @@ function Descobertas({ lista, setLista, setContas }: { lista: DescobertaRef[]; s
     }
   }
   return (
-    <div data-rolavel="x" className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
+    <Carrossel rotulo="Perfis sugeridos" className="-mx-1 snap-x gap-3 px-1 pb-2">
       {lista.map((d, n) => {
         const estado = feitos[d.id]
         const papel = d.tipo
@@ -590,6 +592,6 @@ function Descobertas({ lista, setLista, setContas }: { lista: DescobertaRef[]; s
           </article>
         )
       })}
-    </div>
+    </Carrossel>
   )
 }

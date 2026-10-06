@@ -8,6 +8,7 @@ import { Radar } from '../Animacoes'
 import { AnimProcesso, Explosao } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { Menu } from '../Menu'
+import { Carrossel } from '../ui/Carrossel'
 
 const PROPORCAO: Record<string, string> = { post: 'aspect-[4/5]', quadrado: 'aspect-square', story: 'aspect-[9/16]', paisagem: 'aspect-video' }
 const ROTULO: Record<string, string> = { post: 'Post 4:5', quadrado: '1:1', story: 'Story 9:16', paisagem: '16:9' }
@@ -120,7 +121,7 @@ export function Imagens({ pedidoInicial, aoConsumirPedido, irParaEstilos }: {
             <p className="text-sm font-medium">Estilo visual</p>
             <button onClick={irParaEstilos} className="text-xs text-accent hover:underline">Gerenciar estilos</button>
           </div>
-          <div data-rolavel="x" className="flex gap-2 overflow-x-auto pb-1">
+          <Carrossel rotulo="Imagens" className="gap-2 pb-1">
             <button onClick={() => setEstilo(null)}
               className={`grid h-16 w-14 shrink-0 place-items-center rounded-xl border text-[11px] text-muted ${estilo === null ? 'border-accent ring-2 ring-accent/30' : 'linha-fina'}`}>Livre</button>
             {estilos.map((e) => (
@@ -130,7 +131,7 @@ export function Imagens({ pedidoInicial, aoConsumirPedido, irParaEstilos }: {
                 <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1 py-0.5 text-[10px] text-white">{e.nome}</span>
               </button>
             ))}
-          </div>
+          </Carrossel>
           {estiloAtual?.guia && (
             <div className="mt-2 flex gap-1">{estiloAtual.guia.paleta.slice(0, 7).map((c) => <span key={c.hex} className="h-2 flex-1 rounded-full" style={{ background: c.hex }} />)}</div>
           )}

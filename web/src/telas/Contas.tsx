@@ -1,5 +1,5 @@
-import { Button, Checkbox, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
-import { ArrowDownToLine, FolderOpen, TrashBin } from '@gravity-ui/icons'
+import { Button, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
+import { FolderOpen, TrashBin } from '@gravity-ui/icons'
 import { useMemo, useState } from 'react'
 import { api, type Conta, type Opcoes, type Plataforma } from '../api'
 import { AnimProcesso } from '../components/AnimProcessos'
@@ -26,8 +26,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
   const nuvem = useNuvem()
   const [filtro, setFiltro] = useState<Filtro>('todas')
   const [papel, setPapel] = useState<'todos' | 'concorrente' | 'referencia'>('todos')
-  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
-  const [modalAberto, setModalAberto] = useState(false)
+  const [maisPosts, setMaisPosts] = useState<Conta | null>(null)
   const [editando, setEditando] = useState<Conta | null>(null)
   const [salvandoCtx, setSalvandoCtx] = useState(false)
   const { recarregar } = useAtividade()
@@ -55,24 +54,6 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
       toast.warning('Não dá para mudar o papel', { description: (e as Error).message })
     }
   }
-  const escolhidas = contas.filter((c) => selecionadas.has(chave(c)))
-  const todasVisiveisMarcadas = visiveis.length > 0 && visiveis.every((c) => selecionadas.has(chave(c)))
-
-  const alternar = (c: Conta) =>
-    setSelecionadas((s) => {
-      const n = new Set(s)
-      if (n.has(chave(c))) n.delete(chave(c))
-      else n.add(chave(c))
-      return n
-    })
-
-  const marcarVisiveis = () =>
-    setSelecionadas((s) => {
-      const n = new Set(s)
-      visiveis.forEach((c) => (todasVisiveisMarcadas ? n.delete(chave(c)) : n.add(chave(c))))
-      return n
-    })
-
   async function baixarVideo(url: string) {
     try {
       await api.baixarLink(url)
@@ -91,19 +72,14 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
 
   async function remover(c: Conta) {
     setContas(await api.removerConta(c))
-    setSelecionadas((s) => {
-      const n = new Set(s)
-      n.delete(chave(c))
-      return n
-    })
   }
 
   async function baixar(opcoes: Opcoes) {
-    const r = await api.baixar(escolhidas, opcoes)
-    toast.success(`${r.criadas.length} ${r.criadas.length === 1 ? 'conta' : 'contas'} na fila`, {
-      description: 'TikTok e Instagram baixam em paralelo.',
-    })
-    setSelecionadas(new Set())
+    if (!maisPosts) return
+    await api.baixar([maisPosts], opcoes)
+    tocar('coleta')
+    toast.success(`Buscando mais posts de @${maisPosts.conta}`, { description: 'Eles aparecem na Biblioteca conforme chegam.' })
+    setMaisPosts(null)
     aoBaixar()
   }
 
@@ -127,7 +103,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="titulo-display text-2xl font-semibold">Contas</h2>
-            <p className="text-sm text-muted">Selecione as contas e escolha o que baixar.</p>
+            <p className="text-sm text-muted">Diga à IA como você vê cada perfil. Os posts coletados ficam na Biblioteca.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-full bg-surface-secondary/60 p-0.5 text-sm">
@@ -156,9 +132,6 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
                 Instagram
               </ToggleButton>
             </ToggleButtonGroup>
-            <Button size="sm" variant="tertiary" onPress={marcarVisiveis}>
-              {todasVisiveisMarcadas ? 'Desmarcar' : 'Selecionar'} todas
-            </Button>
           </div>
         </div>
 
@@ -167,18 +140,12 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {visiveis.map((c, i) => {
-              const marcada = selecionadas.has(chave(c))
               return (
                 <div
                   key={chave(c)}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => alternar(c)}
-                  onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && (e.preventDefault(), alternar(c))}
-                  className="cartao surgir group relative cursor-pointer p-4 outline-none transition-all hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-accent"
+                  className="cartao surgir group relative p-4 transition-all hover:-translate-y-0.5"
                   style={{
                     animationDelay: `${Math.min(i, 12) * 25}ms`,
-                    boxShadow: marcada ? '0 0 0 2px var(--accent), var(--card-shadow)' : undefined,
                   }}
                 >
                   <div className="flex items-center gap-3">
@@ -198,19 +165,10 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
                           { id: 'referencia', rotulo: 'Referência (inspiração)', marcado: c.papel === 'referencia', aoEscolher: () => mudarPapel(c, 'referencia') },
                           { id: 'proprio', rotulo: 'Meu perfil', marcado: c.papel === 'proprio', aoEscolher: () => mudarPapel(c, 'proprio') },
                           ...(c.papel !== 'proprio' ? [{ id: 'contexto', rotulo: 'Contexto para a IA…', aoEscolher: () => setEditando(c) }] : []),
+                          { id: 'mais', rotulo: 'Buscar mais posts…', aoEscolher: () => setMaisPosts(c) },
                         ]} />
                       </div>
                     </div>
-                    <Checkbox
-                      isSelected={marcada}
-                      onChange={() => alternar(c)}
-                      aria-label={`Selecionar ${c.conta}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Checkbox.Control>
-                        <Checkbox.Indicator />
-                      </Checkbox.Control>
-                    </Checkbox>
                   </div>
                   {c.papel !== 'proprio' && (
                     <button onClick={(e) => { e.stopPropagation(); setEditando(c) }}
@@ -247,28 +205,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
         )}
       </section>
 
-      {/* Barra de ação flutuante */}
-      <div
-        className={`fixed inset-x-0 bottom-6 z-30 flex justify-center px-4 transition-all duration-300 ${
-          escolhidas.length ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-6 opacity-0'
-        }`}
-      >
-        <div className="vidro flex items-center gap-4 rounded-full border py-2 pr-2 pl-5 shadow-xl linha-fina">
-          <span className="text-sm">
-            <span className="num font-semibold">{escolhidas.length}</span>{' '}
-            {escolhidas.length === 1 ? 'conta selecionada' : 'contas selecionadas'}
-          </span>
-          <Button size="sm" variant="tertiary" className="rounded-full" onPress={() => setSelecionadas(new Set())}>
-            Limpar
-          </Button>
-          <Button size="sm" className="rounded-full" onPress={() => setModalAberto(true)}>
-            <ArrowDownToLine />
-            Baixar…
-          </Button>
-        </div>
-      </div>
-
-      <ModalDownload contas={escolhidas} isOpen={modalAberto} onOpenChange={setModalAberto} onConfirmar={baixar} />
+      <ModalDownload contas={maisPosts ? [maisPosts] : []} isOpen={!!maisPosts} onOpenChange={(v) => !v && setMaisPosts(null)} onConfirmar={baixar} />
       {editando && (
         <ContextoPerfil aberto editando salvando={salvandoCtx}
           perfil={{ plataforma: editando.plataforma, conta: editando.conta, nome: editando.perfil?.nome || editando.nome, foto: editando.perfil?.foto }}

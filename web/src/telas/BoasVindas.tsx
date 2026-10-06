@@ -122,7 +122,7 @@ function PassoPerfil({ proprio, setContas, aoSeguir, aoVoltar }: {
         </div>
       ) : (
         <div className="mt-8">
-          <BuscaPerfis proprio aoAdicionar={(lista) => { setContas(lista); aoSeguir() }} placeholder="Busque seu perfil pelo nome ou @, ou cole o link" />
+          <BuscaPerfis proprio emLinha aoAdicionar={(lista) => { setContas(lista); aoSeguir() }} placeholder="Busque seu perfil pelo nome ou @, ou cole o link" />
         </div>
       )}
       <Rodape aoVoltar={aoVoltar}>

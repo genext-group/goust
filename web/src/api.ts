@@ -129,6 +129,21 @@ export async function baixarArquivo(v: Video) {
   const url = `/api/arquivo/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.id)}`
   window.location.href = token ? `${url}?t=${encodeURIComponent(token)}` : url
 }
+/** Baixa vários vídeos em sequência (um iframe oculto por arquivo; o navegador pode pedir para permitir múltiplos downloads). */
+export async function baixarVarios(lista: Video[], aoAvancar?: (feitos: number) => void) {
+  const token = obterToken ? await obterToken() : null
+  for (let i = 0; i < lista.length; i++) {
+    const v = lista[i]
+    const url = `/api/arquivo/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.id)}`
+    const f = document.createElement('iframe')
+    f.style.display = 'none'
+    f.src = token ? `${url}?t=${encodeURIComponent(token)}` : url
+    document.body.appendChild(f)
+    setTimeout(() => f.remove(), 120000)
+    aoAvancar?.(i + 1)
+    if (i < lista.length - 1) await new Promise((r) => setTimeout(r, 1500))
+  }
+}
 /** Player oficial da plataforma, usado quando o vídeo não está guardado (versão online). */
 export const urlEmbed = (v: Video) =>
   v.plataforma === 'tiktok'

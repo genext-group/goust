@@ -6,6 +6,7 @@ import { tocar } from '../../sons'
 import { AnimProcesso, Explosao } from '../AnimProcessos'
 import { FORMATOS, OBJETIVOS, diasLivres, rotuloDia } from './comum'
 import { SeletorData } from '../ui/SeletorData'
+import { pedacoDoDegrade } from '../../degrade'
 
 const PASSOS = ['Assunto', 'Formato', 'Ideia', 'Quando'] as const
 
@@ -81,7 +82,7 @@ export function Criador({ aberto, aoFechar, estrategia, itens, dataInicial, aoCr
           <div className="flex gap-1.5 px-7 pt-7">
             {PASSOS.map((p, i) => (
               <div key={p} className="flex-1">
-                <span className={`block h-1 rounded-full transition-all duration-500 ${i <= passo ? 'botao-sinal' : 'bg-surface-tertiary'}`} />
+                <span className="block h-1 rounded-full bg-surface-tertiary transition-all duration-500" style={i <= passo ? pedacoDoDegrade(i, PASSOS.length) : undefined} />
                 <span className={`mt-1.5 block text-[11px] ${i === passo ? 'font-medium text-foreground' : 'text-muted'}`}>{p}</span>
               </div>
             ))}

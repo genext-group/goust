@@ -6,6 +6,7 @@ import { aura } from '../../aura'
 import { tocar } from '../../sons'
 import { AnimProcesso, Explosao } from '../AnimProcessos'
 import { FORMATOS, OBJETIVOS, diasLivres, rotuloDia } from './comum'
+import { pedacoDoDegrade } from '../../degrade'
 
 type Decisao = 'quero' | 'super' | 'pular'
 interface Escolha { ideia: IdeiaGerada; super: boolean; data: string | null }
@@ -167,7 +168,7 @@ export function Sessao({ aberto, aoFechar, estrategia, itens, aoConcluir }: {
             <div className="p-6 sm:p-7">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex flex-1 gap-1">
-                  {baralho.map((_, i) => <span key={i} className={`h-1 flex-1 rounded-full transition-colors ${i < pos ? 'bg-accent' : i === pos ? 'botao-sinal' : 'bg-surface-tertiary'}`} />)}
+                  {baralho.map((_, i) => <span key={i} className={`h-1 flex-1 rounded-full bg-surface-tertiary transition-all ${i === pos ? 'opacity-100' : i < pos ? 'opacity-70' : ''}`} style={i <= pos ? pedacoDoDegrade(i, baralho.length) : undefined} />)}
                 </div>
                 <span className="num text-sm text-muted">{pos + 1}/{baralho.length}</span>
                 <span className="num flex items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-1 text-sm"><Heart className="size-3.5 text-[#ff4d6d]" />{escolhas.length}</span>
