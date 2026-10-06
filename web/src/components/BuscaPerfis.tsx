@@ -5,6 +5,7 @@ import { interpretarEntrada, perfis, type Conta, type PerfilEncontrado, type Pla
 import { aura } from '../aura'
 import { fmtNum } from '../formato'
 import { tocar } from '../sons'
+import { ContextoPerfil, type ContextoEscolhido } from './ContextoPerfil'
 import { IconePlataforma } from './Plataforma'
 
 type Papel = 'concorrente' | 'referencia'
@@ -52,7 +53,6 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
   const [aberto, setAberto] = useState(false)
   const [ativo, setAtivo] = useState(0)
   const [escolhido, setEscolhido] = useState<PerfilEncontrado | null>(null)
-  const [papel, setPapel] = useState<Papel>(papelPadrao)
   const [salvando, setSalvando] = useState(false)
   const caixa = useRef<HTMLDivElement>(null)
   const pedido = useRef(0)
@@ -102,11 +102,13 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
     tocar('clique')
     setEscolhido(p)
   }
-  const acompanhar = async () => {
+  const acompanhar = async (ctx?: ContextoEscolhido) => {
     if (!escolhido) return
+    const papel = ctx?.papel ?? papelPadrao
     setSalvando(true)
     try {
-      const r = await perfis.acompanhar({ conta: escolhido.conta, plataforma: escolhido.plataforma, papel: proprio ? 'proprio' : papel, nome: escolhido.nome })
+      const r = await perfis.acompanhar({ conta: escolhido.conta, plataforma: escolhido.plataforma, papel: proprio ? 'proprio' : papel,
+                                          nome: escolhido.nome, aspectos: ctx?.aspectos, nota: ctx?.nota })
       aoAdicionar(r.contas)
       tocar('coleta')
       toast.success(proprio ? `@${escolhido.conta} conectado` : `@${escolhido.conta} adicionado como ${papel === 'concorrente' ? 'concorrente' : 'referência'}`,
@@ -119,7 +121,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
   }
   const teclado = (e: React.KeyboardEvent) => {
     if (escolhido) {
-      if (e.key === 'Enter') { e.preventDefault(); acompanhar() }
+      if (e.key === 'Enter' && proprio) { e.preventDefault(); acompanhar() }
       if (e.key === 'Escape') setEscolhido(null)
       return
     }
@@ -130,7 +132,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
     if (e.key === 'Enter') { e.preventDefault(); escolher(resultados[ativo]) }
     if (e.key === 'Escape') setAberto(false)
   }
-  const mostrar = aberto && (buscando || resultados !== null)
+  const mostrar = aberto && (buscando || resultados !== null) && !(escolhido && !proprio)
 
   return (
     <div ref={caixa} className="relative text-left">
@@ -158,17 +160,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
                   <p className="truncate text-sm text-muted">@{escolhido.conta} · {escolhido.plataforma === 'tiktok' ? 'TikTok' : 'Instagram'}{escolhido.seguidores != null ? ` · ${fmtNum(escolhido.seguidores)} seguidores` : ''}</p>
                 </div>
               </div>
-              {!proprio && <p className="mt-5 mb-2 text-sm font-medium">Acompanhar como</p>}
-              {!proprio && <div className="grid grid-cols-2 gap-2">
-                {([['concorrente', 'Concorrente', 'Disputa o mesmo cliente que você'], ['referencia', 'Referência', 'Inspiração, mesmo de outro mercado']] as const).map(([k, n, d]) => (
-                  <button key={k} onClick={() => { tocar('clique'); setPapel(k) }}
-                    className={`rounded-2xl p-3 text-left transition-all ${papel === k ? 'bg-accent/12 ring-2 ring-accent' : 'bg-surface-secondary/60 hover:bg-surface-secondary'}`}>
-                    <span className="block font-medium">{n}</span>
-                    <span className="block text-xs text-muted">{d}</span>
-                  </button>
-                ))}
-              </div>}
-              <Button className="botao-sinal mt-4 w-full" size="lg" isPending={salvando} onPress={acompanhar}>
+              <Button className="botao-sinal mt-4 w-full" size="lg" isPending={salvando} onPress={() => acompanhar()}>
                 <Plus /> {proprio ? 'Este é o meu perfil: conectar e analisar' : 'Acompanhar e analisar'}
               </Button>
               <p className="mt-2 text-center text-xs text-muted">{proprio ? 'Coletamos seus posts e a IA analisa em seguida.' : 'Coletamos os 30 posts mais recentes e a IA analisa em seguida.'}</p>
@@ -212,6 +204,10 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
             </>
           )}
         </div>
+      )}
+      {escolhido && !proprio && (
+        <ContextoPerfil aberto perfil={escolhido} inicial={{ papel: undefined }} salvando={salvando}
+          aoConfirmar={(c) => acompanhar(c)} aoFechar={() => setEscolhido(null)} />
       )}
     </div>
   )

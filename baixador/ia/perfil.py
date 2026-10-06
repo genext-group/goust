@@ -119,8 +119,9 @@ class Relatorio(BaseModel):
 
 
 INSTRUCOES = """Você é um estrategista sênior de marca e conteúdo para vídeos curtos (TikTok e Reels) no Brasil.
-Recebe a análise individual dos vídeos de UM perfil concorrente, com métricas, e produz um relatório
-estratégico para o usuário, que compete nesse mercado.
+Recebe a análise individual dos vídeos de UM perfil, com métricas, e produz um relatório estratégico para o
+usuário. O perfil pode ser um CONCORRENTE, uma REFERÊNCIA (inspiração, talvez de outro mercado) ou o PRÓPRIO
+perfil do usuário: siga o enquadramento informado no contexto, ele define o tom e o foco do relatório.
 
 Como escrever:
 - Português do Brasil. Específico, com números e exemplos tirados dos dados. Nada genérico.
@@ -128,15 +129,15 @@ Como escrever:
   fornecidos). Não invente ids. NUNCA escreva ids no meio do texto: o painel mostra as miniaturas a partir
   do campo 'videos'. No texto, cite o vídeo pelo que ele mostra (ex.: "o vídeo da fatura de R$ 5 mil, 3,7 mi de views").
 - Desempenho: compare com a mediana DA PRÓPRIA CONTA ("acima" = claramente melhor). Sem métricas → "sem_dados".
-- 'oportunidades_para_voce': o que o USUÁRIO pode fazer para ganhar desse concorrente (lacunas, fraquezas
-  exploráveis, formatos que funcionam e ele pode adaptar). Ação concreta, testável na próxima semana.
-- 'ideias_de_conteudo': 5 ideias originais para o usuário (não copie o concorrente), roteiro em 3 a 6 passos.
+- 'oportunidades_para_voce': para concorrente, como ganhar dele (lacunas, fraquezas exploráveis); para referência,
+  o que adaptar ao negócio do usuário. Ação concreta, testável na próxima semana.
+- 'ideias_de_conteudo': 5 ideias originais para o usuário (não copie o perfil), roteiro em 3 a 6 passos.
 - 'mudancas_desde_ultima_analise': compare com o relatório anterior se houver; senão compare os últimos 30 dias
   com o período anterior. Se não houver mudança relevante, devolva lista vazia.
 - 'notas' de 0 a 10.
 - Pilares: agrupe os rótulos 'pilar' dos vídeos em 3 a 7 pilares; participação somando cerca de 100.
 - Os posts podem ser Reels/vídeos, carrosséis ou fotos: compare o desempenho de cada tipo (o "Mix de formatos"
-  traz contagem e medianas) e diga o que o concorrente faz em cada um.
+  traz contagem e medianas) e diga o que o perfil faz em cada um.
 - 'perfil_e_bio': avalie bio, links e CTA do perfil (clareza da proposta, prova, chamada para ação, para onde o
   link leva) e o que o usuário pode aprender ou fazer melhor. Lista vazia se não houver dados do perfil.
 - 'cadencia': use a tabela de dias/horários (horário de Brasília) para dizer quando publicam e quando performa
@@ -264,6 +265,45 @@ def _compactar(a, v):
     }
 
 
+ASPECTOS = {
+    # referência: o que o usuário quer aprender
+    "estilo_videos": "estilo dos vídeos (edição, ritmo, cortes, enquadramento)", "comunicacao": "comunicação e tom de voz",
+    "formatos": "formatos de conteúdo", "ganchos": "ganchos e aberturas", "estetica": "estética visual e identidade",
+    "posicionamento": "posicionamento de marca", "crescimento": "estratégia de crescimento",
+    "comunidade": "comunidade e engajamento", "oferta": "como apresenta produto e oferta", "roteiro": "roteiro e narrativa",
+    # concorrente: em que disputam
+    "mesmo_publico": "disputa o mesmo público", "mesmo_produto": "vende algo parecido", "mesma_regiao": "atua na mesma região",
+    "preco": "compete em preço", "lider": "é o líder com quem o mercado compara",
+}
+
+
+def enquadramento(vinculo):
+    """Como a IA deve olhar o perfil, a partir do que o usuário disse sobre ele (papel, interesses, anotação)."""
+    papel = vinculo.get("papel") or "concorrente"
+    interesses = [ASPECTOS.get(a, a) for a in (vinculo.get("aspectos") or [])]
+    nota = (vinculo.get("nota") or "").strip()
+    if papel == "proprio":
+        return ("\n\nATENÇÃO: este é o PERFIL DO PRÓPRIO USUÁRIO, não um concorrente. Escreva para ele melhorar: "
+                "'oportunidades_para_voce' = melhorias no próprio perfil; 'ideias_de_conteudo' = próximos posts dele; "
+                "'pontos_fracos' = o que corrigir primeiro.")
+    partes = []
+    if papel == "referencia":
+        partes.append("ATENÇÃO: este perfil é uma REFERÊNCIA, NÃO um concorrente. O usuário acompanha para aprender com ele "
+                      "(pode ser de outro mercado). Não use linguagem de disputa, ameaça ou brecha competitiva. "
+                      "'oportunidades_para_voce' = o que adaptar para o negócio do usuário, de forma concreta; "
+                      "'pontos_fracos' = o que NÃO copiar; 'ideias_de_conteudo' = ideias do usuário inspiradas no que "
+                      "este perfil faz bem.")
+        if interesses:
+            partes.append("O que interessa ao usuário neste perfil (dê mais profundidade a isso): " + "; ".join(interesses) + ".")
+    else:
+        partes.append("Este perfil é um CONCORRENTE direto do usuário: compare, ache brechas e diferenciais.")
+        if interesses:
+            partes.append("Em que eles competem, segundo o usuário: " + "; ".join(interesses) + ".")
+    if nota:
+        partes.append(f'Anotação do usuário sobre este perfil (contexto prioritário): "{nota}"')
+    return "\n\n" + "\n".join(partes)
+
+
 def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=None):
     """Com prazo (nuvem), levanta Continuar se o tempo da mensagem acabar; as análises
     de vídeo já feitas ficam em cache, então a próxima mensagem retoma de onde parou."""
@@ -304,11 +344,9 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=N
     cid = catalogo.conta_id(plataforma, conta)
     seguidores_hist = [f"{r['dia']}: {r['seguidores']}" for r in catalogo.evolucao_seguidores(cid)][-30:]
     comentarios = _comentarios_para_prompt(plataforma, conta)
-    proprio = db.um("""select 1 from acompanhamentos where usuario_id = %s and conta_id = %s and papel = 'proprio'""",
-                    ctx.usuario(), cid)
-    aviso = ("\n\nATENÇÃO: este é o PERFIL DO PRÓPRIO USUÁRIO, não um concorrente. Escreva para ele melhorar: "
-             "'oportunidades_para_voce' = melhorias no próprio perfil; 'ideias_de_conteudo' = próximos posts dele; "
-             "'pontos_fracos' = o que corrigir primeiro." if proprio else "")
+    vinculo = db.um("""select papel, aspectos, nota from acompanhamentos where usuario_id = %s and conta_id = %s""",
+                    ctx.usuario(), cid) or {"papel": "concorrente", "aspectos": [], "nota": None}
+    aviso = enquadramento(vinculo)
     entrada = (
         memoria.contexto() + aviso
         + f"\n\n## Perfil analisado\n@{conta} no {plataforma} · nome: {perfil.get('nome')} · seguidores: {perfil.get('seguidores')}"
@@ -336,6 +374,8 @@ def gerar(plataforma, conta, progresso=lambda etapa, feito, total: None, prazo=N
         "metricas": met,
         "videos_analisados": [v["id"] for _, v in pares],
         "aprendizados_versao": memoria.aprendizados()["versao"],
+        "papel": vinculo["papel"],
+        "contexto": {"aspectos": vinculo["aspectos"] or [], "nota": vinculo["nota"]},
         "relatorio": relatorio.model_dump(),
     }
     db.executar("insert into relatorios (usuario_id, conta_id, versao, gerado_em, dados) values (%s, %s, %s, %s, %s)",

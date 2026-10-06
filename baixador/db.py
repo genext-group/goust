@@ -268,6 +268,10 @@ create table if not exists descobertas (
   unique (usuario_id, plataforma, conta)
 );
 
+-- como o usuário enxerga cada perfil que acompanha (contexto para a IA antes de analisar)
+alter table acompanhamentos add column if not exists aspectos jsonb not null default '[]';
+alter table acompanhamentos add column if not exists nota text;
+
 -- custo real por usuário, dia, operação e modelo (base para limites, planos e margem)
 create table if not exists custos (
   usuario_id text not null references usuarios(id) on update cascade on delete cascade,
@@ -282,6 +286,46 @@ create table if not exists custos (
   creditos int not null default 0,
   usd numeric(12, 6) not null default 0,
   primary key (usuario_id, dia, operacao, modelo)
+);
+
+-- pedidos de IA que vão pela Batch API (metade do preço; rotina diária)
+create table if not exists lote_pedidos (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  tipo text not null,
+  operacao text not null,
+  modelo text not null,
+  corpo jsonb not null,
+  dados jsonb not null default '{}',
+  estado text not null default 'pendente',
+  lote_id text,
+  erro text,
+  criado_em timestamptz not null default now(),
+  enviado_em timestamptz,
+  feito_em timestamptz
+);
+create index if not exists lote_pedidos_estado on lote_pedidos (estado, lote_id);
+create index if not exists lote_pedidos_usuario on lote_pedidos (usuario_id, estado);
+
+-- linha do tempo e atividade (painel de super-admin)
+create table if not exists eventos (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  ts timestamptz not null default now(),
+  tipo text not null,
+  dados jsonb not null default '{}'
+);
+create index if not exists eventos_usuario on eventos (usuario_id, ts desc);
+create index if not exists eventos_ts on eventos (ts desc);
+
+create table if not exists atividade_diaria (
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  dia date not null,
+  requisicoes int not null default 0,
+  sessoes int not null default 0,
+  primeira timestamptz,
+  ultima timestamptz,
+  primary key (usuario_id, dia)
 );
 
 -- regra de negócio: o perfil principal nunca aparece como concorrente/referência de si mesmo

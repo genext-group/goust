@@ -1,5 +1,5 @@
 import { Button, Toast } from '@heroui/react'
-import { House, MagicWand, Moon, Person, Persons, Picture, Sparkles, Sun, Volume, VolumeXmark } from '@gravity-ui/icons'
+import { House, MagicWand, Moon, Person, Persons, Picture, Shield, Sparkles, Sun, Volume, VolumeXmark } from '@gravity-ui/icons'
 import { ClerkProvider, Show, SignIn, UserButton, useAuth } from '@clerk/react'
 import { ptBR } from '@clerk/localizations'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -7,6 +7,7 @@ import { api, definirObtencaoToken, ia, inicio, type Ambiente, type Conta, type 
 import { AtividadeContexto, CentralAtividade, processos, useSonsDosProcessos } from './components/Atividade'
 import { BoasVindas } from './telas/BoasVindas'
 import { TelaCriar } from './telas/Criar'
+import { TelaAdmin } from './telas/Admin'
 import { AmbienteContexto } from './ambiente'
 import { LogoAnimado, TelaCarregando } from './components/Animacoes'
 import { instalarFadeDeRolagem } from './rolagem'
@@ -18,7 +19,7 @@ import { TelaInteligencia } from './telas/Inteligencia'
 import { TelaMeuPerfil } from './telas/MeuPerfil'
 import { TelaInicio } from './telas/Inicio'
 
-type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'criar' | 'downloads'
+type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'criar' | 'downloads' | 'admin'
 
 /** Verifica o ambiente. Online: login pelo Clerk (cada criador vê só os próprios dados). Local: direto. */
 export default function App() {
@@ -162,6 +163,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
     biblioteca: <TelaBiblioteca contas={contas} versao={versaoBiblioteca} />,
     criar: <TelaCriar contas={contas} versaoBiblioteca={versaoBiblioteca} />,
     downloads: <TelaDownloads tarefas={tarefas} aoMudar={carregarTarefas} />,
+    admin: <TelaAdmin />,
   }[aba]
 
   const contexto = { downloads: tarefas, ia: tarefasIA, recarregar }
@@ -188,6 +190,12 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
           </button>
           <NavDeslizante itens={itens} aba={aba} irPara={irPara} className="mx-auto hidden md:flex" />
           <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
+            {eu?.admin && (
+              <Button isIconOnly size="sm" variant={aba === 'admin' ? 'secondary' : 'ghost'} aria-label="Painel de super-admin"
+                className={aba === 'admin' ? 'text-[var(--ambar)]' : ''} onPress={() => irPara('admin')}>
+                <Shield />
+              </Button>
+            )}
             <Button isIconOnly size="sm" variant="ghost" aria-label={som ? 'Desligar sons' : 'Ligar sons'} data-sem-som
               onPress={() => definirSons(!som)}>
               {som ? <Volume /> : <VolumeXmark />}
@@ -204,7 +212,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
       </header>
 
       <main className="min-w-0">
-        <div key={aba} className={`troca-pagina mx-auto w-full min-w-0 px-4 pt-8 pb-28 sm:px-8 ${aba === 'criar' ? 'max-w-[1480px]' : 'max-w-6xl'}`}>{tela}</div>
+        <div key={aba} className={`troca-pagina mx-auto w-full min-w-0 px-4 pt-8 pb-28 sm:px-8 ${aba === 'criar' || aba === 'admin' ? 'max-w-[1480px]' : 'max-w-6xl'}`}>{tela}</div>
       </main>
     </div>
     </AtividadeContexto.Provider>

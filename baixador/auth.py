@@ -74,6 +74,8 @@ def garantir_usuario(usuario_id):
         else:
             db.executar("insert into usuarios (id, email, nome) values (%s, %s, %s) on conflict (id) do nothing",
                         usuario_id, email, nome)
+            from . import eventos
+            eventos.registrar("cadastro", {"email": email}, usuario_id)
         _conhecidos.add(usuario_id)
 
 

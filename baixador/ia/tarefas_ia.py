@@ -8,7 +8,7 @@ import time
 import traceback
 
 from .. import contexto as ctx
-from .. import db, execucao
+from .. import db, eventos, execucao
 from .. import tarefas as downloads
 from ..armazenamento import NUVEM
 from ..execucao import Continuar
@@ -49,6 +49,8 @@ def enfileirar(tipo, plataforma=None, conta=None, params=None):
     r = db.um("insert into tarefas (usuario_id, tipo, status, dados) values (%s, 'ia', 'na fila', %s) returning id",
               ctx.usuario(), dados)
     execucao.despachar("ia", r["id"], faixa="ia")
+    if not params.get("silencioso"):
+        eventos.registrar(f"ia:{tipo}", {"conta": conta, "tarefa": r["id"]})
     return {**dados, "id": r["id"]}
 
 
@@ -83,7 +85,7 @@ def executar(tid, prazo=None):
             t["resultado"] = conteudo.gerar_calendario(t["params"].get("semanas", 2), t["params"].get("inicio"), progresso)
         elif t["tipo"] == "inteligencia":
             from ..inteligencia import rotina
-            t["resultado"] = rotina.rotina(progresso)
+            t["resultado"] = rotina.rotina(progresso, em_lote=bool(t["params"].get("lote")))
         elif t["tipo"] == "roteiro":
             conteudo.gerar_roteiro(t["params"]["alvo"], t["params"].get("pedido", ""), progresso)
         else:
@@ -95,6 +97,7 @@ def executar(tid, prazo=None):
         return True
     except Exception as e:
         t["status"], t["erro"] = "erro", str(e)
+        eventos.registrar(f"erro:{t['tipo']}", {"conta": t.get("conta"), "tarefa": t["id"], "erro": str(e)[:300]})
         if not isinstance(e, ValueError):
             traceback.print_exc()
     t["fim"] = time.time()
@@ -212,7 +215,7 @@ def inteligencia_todos():
     for uid in rotina.usuarios_ativos():
         ctx.definir(uid)
         try:
-            enfileirar("inteligencia", params={"silencioso": True})
+            enfileirar("inteligencia", params={"silencioso": True, "lote": True})
         except Exception:
             traceback.print_exc()
 

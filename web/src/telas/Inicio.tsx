@@ -105,7 +105,7 @@ export function TelaInicio({ contas, setContas, irPara }: Props) {
   const hora = new Date().getHours()
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
   const passos = Object.values(c.jornada).filter(Boolean).length
-  const atualizadoTexto = c.rodando ? 'Atualizando em segundo plano' : c.atualizado ? `Atualizado ${quando(c.atualizado)}` : 'Primeira análise a caminho'
+  const atualizadoTexto = c.rodando ? 'Atualizando em segundo plano' : c.preparando ? 'A IA está preparando os insights de hoje' : c.atualizado ? `Atualizado ${quando(c.atualizado)}` : 'Primeira análise a caminho'
   const mercadoVisivel = c.mercado.slice(0, 4)
 
   return (
@@ -216,7 +216,7 @@ function Situacao({ c, nome, saudacao, atualizadoTexto, aoAtualizar, irPara }: {
         <div className="flex flex-wrap items-center gap-3 text-sm text-white/75">
           <span>{saudacao}{nome ? `, ${nome}` : ''}</span>
           <span className="ml-auto flex items-center gap-2 rounded-full bg-black/20 px-3 py-1 text-xs backdrop-blur-md">
-            <span className={`size-1.5 rounded-full ${c.rodando ? 'bg-[var(--ambar)] pulsando' : 'bg-[var(--menta)]'}`} />{atualizadoTexto}
+            <span className={`size-1.5 rounded-full ${c.rodando || c.preparando ? 'bg-[var(--ambar)] pulsando' : 'bg-[var(--menta)]'}`} />{atualizadoTexto}
             {!c.rodando && <button onClick={aoAtualizar} aria-label="Atualizar agora" title="Atualizar agora" className="ml-1 opacity-70 hover:opacity-100"><ArrowRotateRight className="size-3" /></button>}
           </span>
         </div>

@@ -274,7 +274,7 @@ def validar_papel(usuario_id, plataforma, conta, papel):
                             f"adicionado como {'referência' if papel == 'referencia' else 'concorrente'}.")
 
 
-def acompanhar(plataforma, conta, papel="concorrente", nome=None, usuario_id=None, so_se_novo=False):
+def acompanhar(plataforma, conta, papel="concorrente", nome=None, usuario_id=None, so_se_novo=False, aspectos=None, nota=None):
     """Marca que o usuário acompanha a conta (cria a conta no catálogo compartilhado se preciso).
     `so_se_novo`: só cria o vínculo, sem mudar o papel de quem já existe (ex.: baixar um vídeo avulso)."""
     usuario_id = usuario_id or contexto.usuario()
@@ -286,11 +286,22 @@ def acompanhar(plataforma, conta, papel="concorrente", nome=None, usuario_id=Non
         return cid
     validar_papel(usuario_id, plataforma, conta, papel)
     cid = catalogo.conta_id(plataforma, conta)
-    db.executar("""insert into acompanhamentos (usuario_id, conta_id, papel, nome) values (%s, %s, %s, %s)
+    db.executar("""insert into acompanhamentos (usuario_id, conta_id, papel, nome, aspectos, nota) values (%s, %s, %s, %s, %s, %s)
                    on conflict (usuario_id, conta_id) do update set papel = excluded.papel,
-                   nome = coalesce(excluded.nome, acompanhamentos.nome)""",
-                usuario_id, cid, papel, nome)
+                   nome = coalesce(excluded.nome, acompanhamentos.nome),
+                   aspectos = case when %s then excluded.aspectos else acompanhamentos.aspectos end,
+                   nota = coalesce(excluded.nota, acompanhamentos.nota)""",
+                usuario_id, cid, papel, nome, aspectos or [], (nota or "").strip()[:1000] or None, aspectos is not None)
     return cid
+
+
+def definir_contexto(plataforma, conta, papel, aspectos, nota, usuario_id=None):
+    """Atualiza como o usuário vê o perfil (papel, o que interessa nele e a anotação livre)."""
+    usuario_id = usuario_id or contexto.usuario()
+    validar_papel(usuario_id, plataforma, conta, papel)
+    db.executar("""update acompanhamentos set papel = %s, aspectos = %s, nota = %s
+                   where usuario_id = %s and conta_id = (select id from contas where plataforma = %s and conta = %s)""",
+                papel, list(aspectos or [])[:12], (nota or "").strip()[:1000] or None, usuario_id, plataforma, conta)
 
 
 execucao.registrar("download", executar)

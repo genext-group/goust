@@ -8,6 +8,9 @@ export interface Perfil {
 
 export interface Conta {
   papel?: 'proprio' | 'concorrente' | 'referencia'
+  /** o que o usuário vê no perfil (vai para a IA antes da análise) */
+  aspectos?: string[]
+  nota?: string | null
   nome: string
   plataforma: Plataforma
   conta: string
@@ -100,6 +103,8 @@ export const api = {
     req<Conta[]>('/api/contas', { body: { conta, plataforma, papel } }),
   papelConta: (c: Pick<Conta, 'plataforma' | 'conta'>, papel: 'proprio' | 'concorrente' | 'referencia') =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}/papel`, { method: 'PUT', body: { papel } }),
+  contextoConta: (c: Pick<Conta, 'plataforma' | 'conta'>, d: { papel: 'concorrente' | 'referencia'; aspectos: string[]; nota: string; reanalisar: boolean }) =>
+    req<{ contas: Conta[]; tarefa: number | null }>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}/contexto`, { method: 'PUT', body: d }),
   removerConta: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}`, { method: 'DELETE' }),
   baixar: (contas: Pick<Conta, 'plataforma' | 'conta'>[], opcoes: Opcoes) =>
@@ -188,6 +193,9 @@ export interface RegistroRelatorio {
   conta: string
   metricas: Metricas
   videos_analisados: string[]
+  /** como o usuário via o perfil quando a análise foi feita */
+  papel?: 'proprio' | 'concorrente' | 'referencia'
+  contexto?: { aspectos: string[]; nota: string | null }
   relatorio: Relatorio
 }
 
@@ -345,7 +353,7 @@ export interface IdeiaGerada {
   gancho: string; ideia: string; cta: string; por_que: string; inspirado_em: string[]
 }
 export interface Sugestao { plataforma: Plataforma; conta: string; nome: string; por_que: string }
-export interface Eu { id: string; email: string | null; nome: string | null; onboarding: boolean; piloto: { estrategia?: boolean; calendario?: boolean } }
+export interface Eu { id: string; email: string | null; nome: string | null; onboarding: boolean; piloto: { estrategia?: boolean; calendario?: boolean }; admin?: boolean; plano?: string }
 
 async function enviarArquivos<T>(url: string, arquivos: File[]): Promise<T> {
   const token = obterToken ? await obterToken() : null
@@ -431,7 +439,7 @@ export interface DescobertaRef {
 export interface Central {
   perfil: PerfilSemana; atencao: Insight[]; mercado: Insight[]; ideias: Insight[]; desde: Insight[]
   descobertas: DescobertaRef[]; jornada: Record<'perfil' | 'brief' | 'concorrentes' | 'analise' | 'estrategia' | 'planejamento', boolean>
-  atualizado: number | null; rodando: boolean; primeira_vez: boolean
+  atualizado: number | null; rodando: boolean; preparando?: boolean; primeira_vez: boolean
 }
 
 export const central = {
@@ -454,6 +462,68 @@ export const perfis = {
   buscar: (q: string, plataforma?: Plataforma) =>
     req<{ resultados: PerfilEncontrado[]; limitada: boolean; sem_credito: boolean }>(
       `/api/buscar-perfis?q=${encodeURIComponent(q)}${plataforma ? `&plataforma=${plataforma}` : ''}`),
-  acompanhar: (p: { conta: string; plataforma: Plataforma; papel: 'concorrente' | 'referencia' | 'proprio'; nome?: string | null }) =>
+  acompanhar: (p: { conta: string; plataforma: Plataforma; papel: 'concorrente' | 'referencia' | 'proprio'; nome?: string | null; aspectos?: string[]; nota?: string }) =>
     req<{ contas: Conta[]; aviso: string | null; tarefa: number; conta: { plataforma: Plataforma; conta: string } }>('/api/contas/acompanhar', { body: p }),
+}
+
+// ---------------------------------------------------------------- super-admin
+
+export type PlanoId = 'gratis' | 'criador' | 'pro' | 'agencia'
+export interface ControlesAdmin { plano?: PlanoId; limite_usd_mes?: number | null; bloqueado?: boolean; nota?: string | null }
+export interface SaudeAdmin {
+  tarefas: { ativas: number; travadas: number; erros_24h: number }
+  lote: Record<string, number>
+  rotina: { ultima: number | null; com_falha: number }
+  saldo_dados: number | null
+  openai: boolean
+  lote_ativo: boolean
+}
+export interface VisaoAdmin {
+  gerado: number; dias: number; dolar: number; receita_mensal_brl: number
+  planos: { plano: PlanoId; n: number }[]
+  kpis: Record<string, number>
+  custo: { hoje: number; d7: number; d30: number; mes: number; dados_30: number; imagens_30: number; lote_30: number; projecao_mes: number; por_ativo_30d: number; ia_30: number }
+  serie: { dia: string; novos: number; ativos: number; sessoes: number; requisicoes: number; ia: number; dados: number; tarefas_ia: number; erros: number }[]
+  por_operacao: { operacao: string; usd: number; chamadas: number; usuarios: number }[]
+  por_modelo: { modelo: string; usd: number; chamadas: number; entrada: number; saida: number; creditos: number }[]
+  saude: SaudeAdmin
+}
+export interface UsuarioAdmin {
+  id: string; email: string | null; nome: string | null; criado_em: string; ultima_visita: number | null; onboarding: boolean
+  proprios: number; concorrentes: number; referencias: number; relatorios: number; conteudos: number; imagens: number
+  sessoes_30d: number; dias_ativos_30d: number; custo_mes: number; custo_30d: number; custo_total: number; erros_7d: number
+  plano: PlanoId; controles: ControlesAdmin; margem_30d: number | null; admin: boolean
+}
+export interface EventoAdmin { ts: string; tipo: string; dados: Record<string, unknown>; email?: string }
+export interface TarefaAdmin { id: number; status: string; tipo: string; conta: string | null; erro: string | null; etapa: string | null; criada: string; fim: string | null; email?: string }
+export interface DetalheUsuarioAdmin {
+  id: string; email: string | null; nome: string | null; criado_em: string
+  controles: ControlesAdmin; visita: { atual?: number; anterior?: number }
+  rotina: { ultima?: number; resultado?: Record<string, unknown>; falhas?: string[] }
+  contas: { plataforma: Plataforma; conta: string; nome: string; papel: string; aspectos: string[]; nota: string | null; criado_em: string; seguidores: number | null; posts: number; ultima_analise: string | null }[]
+  custos_dia: { dia: string; ia: number; dados: number }[]
+  por_operacao: { operacao: string; modelo: string; chamadas: number; entrada: number; saida: number; creditos: number; usd: number }[]
+  atividade: { dia: string; requisicoes: number; sessoes: number }[]
+  linha_tempo: EventoAdmin[]
+  tarefas: TarefaAdmin[]
+  insights: { total: number; uteis: number; descartados: number; vistos: number }
+  lote: { tipo: string; estado: string; erro: string | null; criado_em: string; feito_em: string | null }[]
+}
+export interface OperacaoAdmin {
+  tarefas: TarefaAdmin[]
+  erros: EventoAdmin[]
+  rotinas: { email: string; ultima: number | null; resultado: Record<string, unknown> | null; falhas: string[] | null }[]
+  lotes: { lote_id: string | null; criado: string; feito: string | null; pedidos: number; feitos: number; erros: number; estados: string }[]
+  eventos: EventoAdmin[]
+  saude: SaudeAdmin
+}
+
+export const admin = {
+  visao: (dias = 30) => req<VisaoAdmin>(`/api/admin/visao?dias=${dias}`),
+  usuarios: () => req<UsuarioAdmin[]>('/api/admin/usuarios'),
+  usuario: (id: string) => req<DetalheUsuarioAdmin>(`/api/admin/usuarios/${encodeURIComponent(id)}`),
+  atualizar: (id: string, c: ControlesAdmin) => req<{ controles: ControlesAdmin }>(`/api/admin/usuarios/${encodeURIComponent(id)}`, { method: 'PUT', body: c }),
+  rodarRotina: (id: string) => req<{ tarefa: number }>(`/api/admin/usuarios/${encodeURIComponent(id)}/rotina`, { body: {} }),
+  operacao: () => req<OperacaoAdmin>('/api/admin/operacao'),
+  coletarLote: () => req<{ aplicados: number }>('/api/admin/lote/coletar', { body: {} }),
 }

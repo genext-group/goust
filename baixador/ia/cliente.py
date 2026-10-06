@@ -5,7 +5,7 @@ import time
 
 from dotenv import load_dotenv
 
-from .. import contexto, db
+from .. import contexto, db, eventos
 from ..armazenamento import RAIZ
 
 load_dotenv(RAIZ / ".env")
@@ -66,6 +66,7 @@ def _raciocina(modelo):
 
 def com_busca_na_web(tipo, instrucoes, conteudo, formato, esforco="low"):
     """Resposta estruturada usando a ferramenta de busca na web (cobrada por chamada + tokens)."""
+    eventos.verificar_limite()
     modelo = MODELOS[tipo]
     args = dict(model=modelo, instructions=instrucoes, input=conteudo, text_format=formato, tools=[{"type": "web_search"}])
     if _raciocina(modelo):
@@ -78,6 +79,7 @@ def com_busca_na_web(tipo, instrucoes, conteudo, formato, esforco="low"):
 
 def estruturado(tipo, instrucoes, conteudo, formato, esforco="medium"):
     """Chamada com saída em JSON validado por um modelo pydantic."""
+    eventos.verificar_limite()
     modelo = MODELOS[tipo]
     args = dict(model=modelo, instructions=instrucoes, input=conteudo, text_format=formato)
     if _raciocina(modelo):
@@ -90,6 +92,7 @@ def estruturado(tipo, instrucoes, conteudo, formato, esforco="medium"):
 
 
 def texto(tipo, instrucoes, conteudo, esforco="medium"):
+    eventos.verificar_limite()
     modelo = MODELOS[tipo]
     args = dict(model=modelo, instructions=instrucoes, input=conteudo)
     if _raciocina(modelo):

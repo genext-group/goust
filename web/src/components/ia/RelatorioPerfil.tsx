@@ -10,6 +10,7 @@ const NOME_NOTA: Record<string, string> = {
 
 export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
   const rel = r.relatorio
+  const ref = r.papel === 'referencia'
   const m = r.metricas
   const notas = Object.entries(rel.notas).filter(([k]) => k !== 'justificativa') as [string, number][]
   const media = notas.reduce((s, [, n]) => s + n, 0) / notas.length
@@ -22,7 +23,13 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
           <div className="group/insight relative">
             <p className="mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wide text-accent uppercase">
               <Sparkles className="size-3.5" /> Resumo executivo
+              {r.papel && r.papel !== 'proprio' && (
+                <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] normal-case tracking-normal ${ref ? 'bg-accent/15' : 'bg-[var(--sinal-b)]/15 text-[var(--sinal-b)]'}`}>
+                  analisado como {ref ? 'referência' : 'concorrente'}
+                </span>
+              )}
             </p>
+            {r.contexto?.nota && <p className="mb-3 text-xs text-muted italic">Seu contexto: “{r.contexto.nota}”</p>}
             <p className="text-[17px] leading-[1.7] text-foreground/90"><TextoComVideos texto={rel.resumo_executivo} /></p>
             <div className="mt-3 flex justify-end"><Feedback secao="resumo_executivo" item={rel.resumo_executivo} /></div>
           </div>
@@ -181,7 +188,7 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
         <Secao titulo="O que performa" icone={<Rocket />}><ListaItens secao="o_que_performa" itens={rel.o_que_performa} /></Secao>
         <Secao titulo="O que não performa" icone={<CircleExclamation />}><ListaItens secao="o_que_nao_performa" itens={rel.o_que_nao_performa} /></Secao>
         <Secao titulo="Pontos fortes" icone={<Star />}><ListaItens secao="pontos_fortes" itens={rel.pontos_fortes} /></Secao>
-        <Secao titulo="Pontos fracos" icone={<CircleExclamation />}><ListaItens secao="pontos_fracos" itens={rel.pontos_fracos} /></Secao>
+        <Secao titulo={ref ? "O que não copiar" : "Pontos fracos"} icone={<CircleExclamation />}><ListaItens secao="pontos_fracos" itens={rel.pontos_fracos} /></Secao>
       </div>
 
       {rel.mudancas_desde_ultima_analise.length > 0 && (
@@ -190,7 +197,7 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
         </Secao>
       )}
 
-      <Secao titulo="Oportunidades para você" icone={<Target />} descricao="Onde você pode ganhar desse concorrente. Ações testáveis já na próxima semana.">
+      <Secao titulo={ref ? "O que adaptar para você" : "Oportunidades para você"} icone={<Target />} descricao={ref ? "O que levar dessa referência para o seu negócio. Ações testáveis já na próxima semana." : "Onde você pode ganhar desse concorrente. Ações testáveis já na próxima semana."}>
         <ListaOportunidades secao="oportunidades_para_voce" itens={rel.oportunidades_para_voce} />
       </Secao>
 

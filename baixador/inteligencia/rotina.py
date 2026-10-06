@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from .. import db
 from .. import contexto as ctx
-from ..ia import cliente, conteudo, estrategia, memoria
+from ..ia import cliente, conteudo, estrategia, lote, memoria
 from . import analise, insights
 
 LIMITE_COLETA_DIARIA = 6        # contas acompanhadas por dia (além do seu perfil)
@@ -93,18 +93,31 @@ Se os perfis acompanhados forem de outro nicho, diga o que dá para ADAPTAR, sem
 Mantenha a 'chave' exatamente como recebida. Português do Brasil."""
 
 
-def _redigir(sinais):
-    if not sinais:
-        return {}
-    entrada = "\n\n".join(filter(None, [
+def _entrada_redacao(sinais):
+    return "\n\n".join(filter(None, [
         memoria.contexto(),
         "## Perfis acompanhados\n" + ", ".join(f"@{c['conta']} ({c['papel']})" for c in analise.contas(("concorrente", "referencia"))),
         "## Sinais\n" + json.dumps([{k: s[k] for k in ("chave", "tipo", "categoria", "assunto", "direcao", "magnitude", "confianca", "rotulo", "dados")}
                                      for s in sinais], ensure_ascii=False),
         insights.resumo_feedback(),
     ]))
-    r = cliente.estruturado("criacao", INSTRUCOES_REDACAO, entrada, Redacao, esforco="low")
-    return {s.chave: s for s in r.sinais}
+
+
+@lote.tipo("redacao", Redacao)
+def _aplicar_redacao(r, dados):
+    """Registra como insight cada sinal redigido (os sinais vêm em `dados`, calculados na hora do pedido)."""
+    pesos = insights.pesos_do_usuario()
+    textos = {x.chave: x for x in r.sinais}
+    for x in dados["sinais"]:
+        t = textos.get(x["chave"])
+        if not t:
+            continue
+        insights.registrar(x["tipo"], x["chave"], t.titulo, t.detectamos,
+                           {"categoria": x["categoria"], "direcao": x["direcao"], "rotulo": x["rotulo"], "assunto": x["assunto"],
+                            "por_que_importa": t.por_que_importa, "acao_texto": t.acao, "evidencias": x["evidencias"],
+                            "estatistica": x["dados"],
+                            "acao": {"tipo": "gerar_ideia", "tema": t.tema_para_ideia, "rotulo": "Gerar ideia"}},
+                           magnitude=x["magnitude"], confianca=x["confianca"], pesos=pesos)
 
 
 # ---------------------------------------------------------------- descoberta + auditoria (IA com busca na web)
@@ -244,10 +257,10 @@ concorrente, uma dúvida do público, a estratégia) — nada genérico que serv
 Português do Brasil."""
 
 
-def ideias_do_dia(perfil, sinais_redigidos, pesos):
+def _entrada_ideias(perfil, sinais_redigidos):
     est = estrategia.obter()
     destaques = analise.destaques_proprios()
-    entrada = "\n\n".join(filter(None, [
+    return "\n\n".join(filter(None, [
         memoria.contexto(),
         "## Seu perfil agora\n" + json.dumps({k: perfil.get(k) for k in ("leitura", "dias_sem_postar", "metricas")}, ensure_ascii=False, default=str),
         "## Seus posts\n" + json.dumps(destaques, ensure_ascii=False),
@@ -256,7 +269,11 @@ def ideias_do_dia(perfil, sinais_redigidos, pesos):
         conteudo._bloco_escolhas(),
         insights.resumo_feedback(),
     ]))
-    r = cliente.estruturado("criacao", INSTRUCOES_IDEIAS, entrada, IdeiasDoDia, esforco="low")
+
+
+@lote.tipo("ideias", IdeiasDoDia)
+def _aplicar_ideias(r, dados=None):
+    pesos = insights.pesos_do_usuario()
     hoje = datetime.now().strftime("%Y%m%d")
     for n, i in enumerate(r.ideias[:3]):
         posts = db.todos("select plataforma, codigo, (select conta from contas where id = conta_id) as conta from posts where codigo = any(%s)",
@@ -270,7 +287,10 @@ def ideias_do_dia(perfil, sinais_redigidos, pesos):
 
 # ---------------------------------------------------------------- orquestração
 
-def rotina(progresso=lambda e, f, t: None):
+def rotina(progresso=lambda e, f, t: None, em_lote=False):
+    """em_lote (cron): as chamadas de IA vão pela Batch API, pela metade do preço, e os resultados chegam
+    algumas horas depois (lote.coletar). Quando o usuário está esperando (visita), roda direto."""
+    em_lote = em_lote and lote.ativo()
     pesos = insights.pesos_do_usuario()
     resultado, falhas = {}, []
     _gravar_estado(rodando_desde=time.time())
@@ -304,17 +324,13 @@ def rotina(progresso=lambda e, f, t: None):
         resultado["sinais"], resultado["sinais_novos"] = len(sinais), len(novos)
         if novos and dias_sem_visita <= DIAS_SEM_VISITA_PARA_IA:
             with ctx.em_operacao("rotina:mercado"):
-                textos = _redigir(novos)
-            for x in novos:
-                t = textos.get(x["chave"])
-                if not t:
-                    continue
-                insights.registrar(x["tipo"], x["chave"], t.titulo, t.detectamos,
-                                   {"categoria": x["categoria"], "direcao": x["direcao"], "rotulo": x["rotulo"], "assunto": x["assunto"],
-                                    "por_que_importa": t.por_que_importa, "acao_texto": t.acao, "evidencias": x["evidencias"],
-                                    "estatistica": x["dados"],
-                                    "acao": {"tipo": "gerar_ideia", "tema": t.tema_para_ideia, "rotulo": "Gerar ideia"}},
-                                   magnitude=x["magnitude"], confianca=x["confianca"], pesos=pesos)
+                if em_lote:
+                    if not lote.pendente("redacao"):
+                        lote.pedir("redacao", "criacao", INSTRUCOES_REDACAO, _entrada_redacao(novos), {"sinais": novos})
+                        resultado["em_lote"] = resultado.get("em_lote", 0) + 1
+                else:
+                    r = cliente.estruturado("criacao", INSTRUCOES_REDACAO, _entrada_redacao(novos), Redacao, esforco="low")
+                    _aplicar_redacao(r, {"sinais": novos})
     except Exception as e:
         falhas.append(f"mercado: {e}")
         traceback.print_exc()
@@ -338,11 +354,23 @@ def rotina(progresso=lambda e, f, t: None):
             sinais_vigentes = [{"titulo": i["titulo"], "detectamos": i["texto"], "por_que_importa": i["dados"].get("por_que_importa")}
                                for i in insights.vigentes(["mercado", "conta"], limite=6)]
             with ctx.em_operacao("rotina:ideias"):
-                resultado["ideias"] = ideias_do_dia(perfil, sinais_vigentes, pesos)
+                if em_lote:
+                    if not lote.pendente("ideias"):
+                        lote.pedir("ideias", "criacao", INSTRUCOES_IDEIAS, _entrada_ideias(perfil, sinais_vigentes))
+                        resultado["em_lote"] = resultado.get("em_lote", 0) + 1
+                else:
+                    r = cliente.estruturado("criacao", INSTRUCOES_IDEIAS, _entrada_ideias(perfil, sinais_vigentes), IdeiasDoDia, esforco="low")
+                    resultado["ideias"] = _aplicar_ideias(r)
     except Exception as e:
         falhas.append(f"ideias: {e}")
         traceback.print_exc()
 
+    if em_lote and resultado.get("em_lote"):
+        try:
+            resultado["lote"] = lote.enviar(ctx.usuario())
+        except Exception as e:
+            falhas.append(f"lote: {e}")
+            traceback.print_exc()
     progresso("Concluído", 5, 5)
     _gravar_estado(ultima=time.time(), rodando_desde=None, resultado=resultado, falhas=falhas)
     if falhas and not resultado:

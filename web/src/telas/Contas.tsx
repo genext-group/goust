@@ -5,6 +5,7 @@ import { api, type Conta, type Opcoes, type Plataforma } from '../api'
 import { AnimProcesso } from '../components/AnimProcessos'
 import { useAtividade } from '../components/Atividade'
 import { BuscaPerfis } from '../components/BuscaPerfis'
+import { ContextoPerfil } from '../components/ContextoPerfil'
 import { AvatarConta } from '../components/Avatar'
 import { Menu } from '../components/Menu'
 import { tocar } from '../sons'
@@ -27,6 +28,22 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
   const [papel, setPapel] = useState<'todos' | 'concorrente' | 'referencia'>('todos')
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [modalAberto, setModalAberto] = useState(false)
+  const [editando, setEditando] = useState<Conta | null>(null)
+  const [salvandoCtx, setSalvandoCtx] = useState(false)
+  const { recarregar } = useAtividade()
+  const salvarContexto = async (d: { papel: 'concorrente' | 'referencia'; aspectos: string[]; nota: string; reanalisar: boolean }) => {
+    if (!editando) return
+    setSalvandoCtx(true)
+    try {
+      const r = await api.contextoConta(editando, d)
+      setContas(r.contas)
+      if (r.tarefa) { tocar('analise'); recarregar() } else tocar('sucesso')
+      toast.success('Contexto salvo', { description: r.tarefa ? 'A IA está refazendo a análise com esse olhar.' : 'Vale para as próximas análises.' })
+      setEditando(null)
+    } catch (e) {
+      toast.danger('Não deu para salvar', { description: (e as Error).message })
+    } finally { setSalvandoCtx(false) }
+  }
 
   const visiveis = useMemo(() => contas.filter((c) => (filtro === 'todas' || c.plataforma === filtro)
     && (papel === 'todos' || (c.papel ?? 'concorrente') === papel)), [contas, filtro, papel])
@@ -180,6 +197,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
                           { id: 'concorrente', rotulo: 'Concorrente direto', marcado: (c.papel ?? 'concorrente') === 'concorrente', aoEscolher: () => mudarPapel(c, 'concorrente') },
                           { id: 'referencia', rotulo: 'Referência (inspiração)', marcado: c.papel === 'referencia', aoEscolher: () => mudarPapel(c, 'referencia') },
                           { id: 'proprio', rotulo: 'Meu perfil', marcado: c.papel === 'proprio', aoEscolher: () => mudarPapel(c, 'proprio') },
+                          ...(c.papel !== 'proprio' ? [{ id: 'contexto', rotulo: 'Contexto para a IA…', aoEscolher: () => setEditando(c) }] : []),
                         ]} />
                       </div>
                     </div>
@@ -194,6 +212,12 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
                       </Checkbox.Control>
                     </Checkbox>
                   </div>
+                  {c.papel !== 'proprio' && (
+                    <button onClick={(e) => { e.stopPropagation(); setEditando(c) }}
+                      className="mt-3 line-clamp-2 w-full rounded-xl bg-surface-secondary/50 px-3 py-2 text-left text-xs text-muted transition-colors hover:text-foreground">
+                      {c.nota ? `“${c.nota}”` : c.aspectos?.length ? `Foco: ${c.aspectos.length} ${c.aspectos.length === 1 ? 'aspecto' : 'aspectos'} escolhidos` : '+ Diga à IA o que você vê neste perfil'}
+                    </button>
+                  )}
                   <StatusConta c={c} aoColetar={() => coletarDeNovo(c)} />
                   <div className="mt-4 grid grid-cols-3 gap-2 border-t pt-3 linha-fina">
                     <Metrica rotulo="Seguidores" valor={fmtNum(c.perfil?.seguidores)} />
@@ -245,6 +269,12 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
       </div>
 
       <ModalDownload contas={escolhidas} isOpen={modalAberto} onOpenChange={setModalAberto} onConfirmar={baixar} />
+      {editando && (
+        <ContextoPerfil aberto editando salvando={salvandoCtx}
+          perfil={{ plataforma: editando.plataforma, conta: editando.conta, nome: editando.perfil?.nome || editando.nome, foto: editando.perfil?.foto }}
+          inicial={{ papel: editando.papel === 'referencia' ? 'referencia' : 'concorrente', aspectos: editando.aspectos ?? [], nota: editando.nota ?? '' }}
+          aoConfirmar={salvarContexto} aoFechar={() => setEditando(null)} />
+      )}
     </div>
   )
 }

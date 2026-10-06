@@ -81,3 +81,8 @@
 @media (prefers-reduced-motion: reduce) {
   .voar-direita, .voar-esquerda, .voar-cima, .entrar-carta { animation-duration: .01s !important; }
 }
+
+/* janela de contexto do perfil: alvo pulsando (concorrente) e faísca girando (referência) */
+.pulsar { animation: respirar 1.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.girar-lento { animation: florescer 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pulsar, .girar-lento { animation: none; } }

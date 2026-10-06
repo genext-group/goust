@@ -7,6 +7,7 @@ A interface (React + HeroUI) fica em web/ e é compilada para public/.
 import os
 import subprocess
 import threading
+import traceback
 import webbrowser
 from functools import wraps
 
@@ -14,7 +15,7 @@ from curl_cffi import requests as http
 from flask import (Flask, Response, abort, jsonify, request, send_file, send_from_directory,
                    stream_with_context)
 
-from baixador import auth, biblioteca, contexto, db, instagram, midia, pastas, tarefas
+from baixador import admin, auth, biblioteca, contexto, db, eventos, instagram, midia, pastas, tarefas
 from baixador.armazenamento import NUVEM, RAIZ
 from baixador.filtros import PASTA_DOWNLOADS, normalizar_conta
 from baixador.ia import chat as ia_chat
@@ -58,7 +59,13 @@ def protegido(f):
             usuario = auth.usuario_local()
         contexto.definir(usuario)
         contexto.definir_operacao(f"api:{request.endpoint}")
-        return f(*a, **kw)
+        if eventos.controles(usuario).get("bloqueado") and not admin.eh_admin(usuario):
+            return jsonify(erro="Conta suspensa. Fale com o suporte.", codigo="suspensa"), 403
+        eventos.atividade(usuario)
+        try:
+            return f(*a, **kw)
+        except eventos.LimiteAtingido as e:
+            return jsonify(erro=str(e), codigo="limite"), 402
     return envolto
 
 
@@ -81,14 +88,15 @@ def api_ambiente():
 def api_eu():
     u = db.um("select id, email, nome, config from usuarios where id = %s", contexto.usuario())
     config = u.pop("config") or {}
-    return jsonify({**u, "onboarding": bool(config.get("onboarding")), "piloto": config.get("piloto") or {}})
+    return jsonify({**u, "onboarding": bool(config.get("onboarding")), "piloto": config.get("piloto") or {},
+                    "admin": admin.eh_admin(u["id"]), "plano": (config.get("admin") or {}).get("plano") or "gratis"})
 
 
 # ---------------------------------------------------------------- contas
 
 def ler_contas():
     """Contas que o usuário atual acompanha (as dele e as dos concorrentes)."""
-    return db.todos("""select c.plataforma, c.conta, coalesce(a.nome, c.nome, c.conta) as nome, a.papel
+    return db.todos("""select c.plataforma, c.conta, coalesce(a.nome, c.nome, c.conta) as nome, a.papel, a.aspectos, a.nota
                        from acompanhamentos a join contas c on c.id = a.conta_id
                        where a.usuario_id = %s order by a.criado_em""", contexto.usuario())
 
@@ -159,7 +167,9 @@ def api_acompanhar():
         return jsonify(erro=str(e) or "Perfil inválido."), 400
     papel = d.get("papel") if d.get("papel") in ("concorrente", "referencia", "proprio") else "concorrente"
     try:
-        tarefas.acompanhar(plataforma, conta, papel, d.get("nome"))
+        tarefas.acompanhar(plataforma, conta, papel, d.get("nome"), aspectos=d.get("aspectos"), nota=d.get("nota"))
+        eventos.registrar("acompanhar", {"plataforma": plataforma, "conta": conta, "papel": papel,
+                                         "com_contexto": bool(d.get("aspectos") or d.get("nota"))})
     except tarefas.PerfilProprio as e:
         return jsonify(erro=str(e), codigo="perfil_proprio"), 409
     biblioteca.atualizar_perfil(plataforma, conta, forcar=True)
@@ -172,6 +182,23 @@ def api_acompanhar():
     t = tarefas.enfileirar(plataforma, conta, opcoes)
     return jsonify(contas=contas_completas(), aviso=aviso, tarefa=t.get("id") if isinstance(t, dict) else t,
                    conta={"plataforma": plataforma, "conta": conta})
+
+
+@app.put("/api/contas/<plataforma>/<conta>/contexto")
+@protegido
+def api_contexto_conta(plataforma, conta):
+    """Como o usuário vê o perfil: concorrente ou referência, o que interessa nele e uma anotação livre.
+    Com reanalisar=true, a análise da IA é refeita já com esse contexto."""
+    d = request.json or {}
+    papel = d.get("papel") if d.get("papel") in ("concorrente", "referencia") else "concorrente"
+    try:
+        tarefas.definir_contexto(plataforma, conta, papel, d.get("aspectos") or [], d.get("nota"))
+    except tarefas.PerfilProprio as e:
+        return jsonify(erro=str(e), codigo="perfil_proprio"), 409
+    tarefa = None
+    if d.get("reanalisar") and ia_cliente.configurada():
+        tarefa = ia_tarefas.enfileirar("perfil", plataforma, conta)
+    return jsonify(contas=contas_completas(), tarefa=tarefa)
 
 
 @app.put("/api/contas/<plataforma>/<conta>/papel")
@@ -748,6 +775,8 @@ def _visita():
     agora = _t.time()
     if not v.get("atual") or agora - v["atual"] > 1800:
         v = {"anterior": v.get("atual"), "atual": agora}
+        eventos.registrar("sessao")
+        eventos.atividade(contexto.usuario(), sessao_nova=True)
     else:
         v["atual"] = agora
     db.executar("update usuarios set config = jsonb_set(config, '{visita}', %s) where id = %s", v, contexto.usuario())
@@ -762,6 +791,14 @@ def api_inicio():
     from baixador.inteligencia import analise, insights, rotina
     anterior = _visita()
     desde_ts = datetime.fromtimestamp(anterior, timezone.utc) if anterior else None
+    from baixador.ia import lote
+    preparando = False
+    if lote.esperando(contexto.usuario()):  # rotina da madrugada foi em lote: aplica o que já ficou pronto
+        try:
+            lote.coletar(contexto.usuario())
+        except Exception:
+            traceback.print_exc()
+        preparando = lote.esperando(contexto.usuario())
     leituras = {
         "perfil": analise.perfil_semana,
         "todos": lambda: insights.vigentes(limite=40),
@@ -793,7 +830,7 @@ def api_inicio():
     insights.marcar_vistos([i["id"] for i in atencao + ideias + mercado[:4] + r["desde"]])
     return jsonify(perfil=perfil, atencao=atencao, mercado=mercado, ideias=ideias, desde=r["desde"],
                    descobertas=r["descobertas"], jornada=r["jornada"],
-                   atualizado=estado.get("ultima"), rodando=rodando, primeira_vez=not estado.get("ultima"))
+                   atualizado=estado.get("ultima"), rodando=rodando, preparando=preparando, primeira_vez=not estado.get("ultima"))
 
 
 @app.post("/api/inicio/atualizar")
@@ -835,7 +872,8 @@ def api_descoberta(did):
     if acao == "adicionar":
         papel = (request.json or {}).get("papel") or d["tipo"]
         try:
-            tarefas.acompanhar(d["plataforma"], d["conta"], papel if papel in ("concorrente", "referencia") else "referencia", d["nome"])
+            tarefas.acompanhar(d["plataforma"], d["conta"], papel if papel in ("concorrente", "referencia") else "referencia", d["nome"],
+                               aspectos=(request.json or {}).get("aspectos"), nota=(request.json or {}).get("nota") or d["motivo"])
         except tarefas.PerfilProprio as e:
             db.executar("update descobertas set estado = 'oculta' where id = %s", did)
             return jsonify(erro=str(e)), 409
@@ -869,16 +907,94 @@ def api_cron_inteligencia():
     return jsonify(ok=True)
 
 
+@app.get("/api/cron/lote")
+def api_cron_lote():
+    """Aplica os resultados da rotina que foi pela Batch API (crons ao longo do dia)."""
+    if request.headers.get("Authorization") != f"Bearer {os.getenv('CRON_SECRET', '')}" or not os.getenv("CRON_SECRET"):
+        return jsonify(erro="não autorizado"), 401
+    from baixador.ia import lote
+    return jsonify(aplicados=lote.coletar())
+
+
+def so_admin(f):
+    """Só para os e-mails em DONO_EMAIL (super-admin)."""
+    @wraps(f)
+    def envolto(*a, **kw):
+        if not admin.eh_admin(contexto.usuario()):
+            return jsonify(erro="Só para administradores da plataforma."), 403
+        return f(*a, **kw)
+    return envolto
+
+
 @app.get("/api/admin/custos")
 @protegido
+@so_admin
 def api_admin_custos():
-    """Só o dono: custo real por usuário e por operação (base de precificação e margem)."""
     from baixador import custos
-    eu = db.um("select email from usuarios where id = %s", contexto.usuario())
-    dono = (os.getenv("DONO_EMAIL") or "").strip().lower()
-    if not eu or not dono or (eu["email"] or "").lower() != dono:
-        return jsonify(erro="Só o dono da plataforma."), 403
     return jsonify(custos.resumo_geral(int(request.args.get("dias", 30))))
+
+
+@app.get("/api/admin/visao")
+@protegido
+@so_admin
+def api_admin_visao():
+    return jsonify(admin.visao(min(int(request.args.get("dias", 30)), 90)))
+
+
+@app.get("/api/admin/usuarios")
+@protegido
+@so_admin
+def api_admin_usuarios():
+    return jsonify(admin.usuarios())
+
+
+@app.get("/api/admin/usuarios/<uid>")
+@protegido
+@so_admin
+def api_admin_usuario(uid):
+    u = admin.usuario(uid)
+    return jsonify(u) if u else (jsonify(erro="Usuário não encontrado."), 404)
+
+
+@app.put("/api/admin/usuarios/<uid>")
+@protegido
+@so_admin
+def api_admin_atualizar(uid):
+    try:
+        eu = db.um("select email from usuarios where id = %s", contexto.usuario())["email"]
+        return jsonify(controles=admin.atualizar(uid, request.json or {}, eu))
+    except (ValueError, TypeError) as e:
+        return jsonify(erro=str(e)), 400
+
+
+@app.post("/api/admin/usuarios/<uid>/rotina")
+@protegido
+@so_admin
+def api_admin_rodar_rotina(uid):
+    """Roda a rotina da central para o usuário agora (direto, sem lote)."""
+    eu = contexto.usuario()
+    contexto.definir(uid)
+    try:
+        t = ia_tarefas.enfileirar("inteligencia", params={"silencioso": True})
+        eventos.registrar("admin:rotina", {"tarefa": t["id"]}, uid)
+    finally:
+        contexto.definir(eu)
+    return jsonify(tarefa=t["id"])
+
+
+@app.get("/api/admin/operacao")
+@protegido
+@so_admin
+def api_admin_operacao():
+    return jsonify(admin.operacao())
+
+
+@app.post("/api/admin/lote/coletar")
+@protegido
+@so_admin
+def api_admin_coletar_lote():
+    from baixador.ia import lote
+    return jsonify(aplicados=lote.coletar())
 
 
 @app.get("/api/eu/custos")

@@ -27,12 +27,15 @@ CREDITO_DADOS = float(os.getenv("CUSTO_CREDITO_DADOS_USD", str(32.90 / 25000)))
 
 
 def calcular(modelo, entrada=0, saida=0, segundos_audio=0, buscas=0, creditos=0):
+    entrada, saida, segundos_audio = float(entrada or 0), float(saida or 0), float(segundos_audio or 0)
     usd = 0.0
     if modelo in TRANSCRICAO_POR_MIN:
         usd += segundos_audio / 60 * TRANSCRICAO_POR_MIN[modelo]
-    elif modelo in PRECOS:
-        pe, ps = PRECOS[modelo]
-        usd += entrada / 1e6 * pe + saida / 1e6 * ps
+    else:
+        base, lote = (modelo[:-5], 0.5) if modelo.endswith(":lote") else (modelo, 1.0)  # Batch API: metade do preço
+        if base in PRECOS:
+            pe, ps = PRECOS[base]
+            usd += (entrada / 1e6 * pe + saida / 1e6 * ps) * lote
     return usd + buscas * BUSCA_WEB + creditos * CREDITO_DADOS
 
 

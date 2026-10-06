@@ -72,13 +72,18 @@ def obter(versao=None):
 
 def gerar(progresso=lambda etapa, feito, total: None):
     blocos, perfis = [], []
+    vinculos = {f"{v['plataforma']}/{v['conta']}": v for v in db.todos(
+        """select c.plataforma, c.conta, a.papel, a.aspectos, a.nota from acompanhamentos a
+           join contas c on c.id = a.conta_id where a.usuario_id = %s""", ctx.usuario())}
     for chave in perfil.resumo_todos():
         plataforma, conta = chave.split("/", 1)
         r = perfil.obter(plataforma, conta)
         rel = r["relatorio"]
         perfis.append(chave)
         blocos.append(json.dumps({
-            "perfil": chave, "metricas": r["metricas"], "gerado": r["gerado"][:10],
+            "perfil": chave, "papel": (vinculos.get(chave) or {}).get("papel", "concorrente"),
+            "contexto_do_usuario": {k: (vinculos.get(chave) or {}).get(k) for k in ("aspectos", "nota")},
+            "metricas": r["metricas"], "gerado": r["gerado"][:10],
             **{k: rel[k] for k in ("resumo_executivo", "posicionamento", "mensagens_centrais", "dores_e_desejos",
                                    "pilares", "formatos", "ganchos", "o_que_performa", "pontos_fortes", "pontos_fracos", "notas")},
         }, ensure_ascii=False))
@@ -86,7 +91,11 @@ def gerar(progresso=lambda etapa, feito, total: None):
         raise ValueError("Analise pelo menos 2 perfis antes de gerar o panorama do mercado.")
 
     progresso("Comparando os concorrentes", 0, 1)
-    entrada = memoria.contexto() + "\n\n## Relatórios dos concorrentes\n" + "\n\n".join(blocos)
+    entrada = (memoria.contexto() + "\n\n## Relatórios dos perfis acompanhados\n"
+               + "Cada um traz 'papel': 'concorrente' disputa o mesmo cliente (mapa competitivo, temas saturados e "
+               "espaços em branco vêm SÓ dos concorrentes); 'referencia' é inspiração, talvez de outro mercado "
+               "(use para recomendar o que adaptar, nunca como rival); 'proprio' é o usuário. "
+               "'contexto_do_usuario' diz o que o usuário vê em cada perfil.\n" + "\n\n".join(blocos))
     panorama = cliente.estruturado("relatorio", INSTRUCOES, entrada, Panorama, esforco="medium")
     agora = datetime.now()
     resultado = {
