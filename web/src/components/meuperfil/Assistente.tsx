@@ -1,8 +1,9 @@
-import { Button, Input, Label, TextArea, TextField, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
-import { ArrowLeft, ArrowRight, Check, Plus, Sparkles } from '@gravity-ui/icons'
+import { Button, Input, Label, TextArea, TextField, toast } from '@heroui/react'
+import { ArrowLeft, ArrowRight, Check, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useState, type ReactNode } from 'react'
-import { api, ia, type Conta, type Marca, type Plataforma, type Tarefa, type TarefaIA } from '../../api'
+import { ia, type Conta, type Marca, type Tarefa, type TarefaIA } from '../../api'
 import { AvatarConta } from '../Avatar'
+import { BuscaPerfis } from '../BuscaPerfis'
 import { Pipeline } from './Pipeline'
 
 type Campo = { k: string; rotulo: string; dica: string; longo?: boolean; atalhos?: string[]; multiplo?: boolean }
@@ -186,29 +187,6 @@ function EtapaPerfil({ proprias, setContas, downloads, tarefasIA, relatoriosProp
   proprias: Conta[]; setContas: (c: Conta[]) => void; downloads: Tarefa[]; tarefasIA: TarefaIA[]
   relatoriosProprios: Set<string>; aoColetar: () => void
 }) {
-  const [novo, setNovo] = useState('')
-  const [plat, setPlat] = useState<Plataforma>('instagram')
-  const [ocupado, setOcupado] = useState(false)
-
-  const conectar = async () => {
-    if (!novo.trim()) return
-    setOcupado(true)
-    try {
-      const lista = await api.adicionarConta(novo.trim(), plat, 'proprio')
-      setContas(lista)
-      const c = lista.find((x) => x.papel === 'proprio' && (novo.includes(x.conta) || x.conta === novo.trim().replace(/^@/, '')))
-        ?? lista.filter((x) => x.papel === 'proprio').at(-1)
-      if (c) {
-        await api.baixar([c], { modo: 'todos', somente_reels: false, analisar_ao_fim: true })
-        aoColetar()
-      }
-      setNovo('')
-      toast.success('Perfil conectado', { description: 'A coleta e a análise começaram. Você pode seguir para as próximas etapas.' })
-    } catch (e) {
-      toast.danger('Não deu para conectar', { description: (e as Error).message })
-    } finally { setOcupado(false) }
-  }
-
   return (
     <div className="space-y-5">
       <p className="max-w-2xl text-muted">
@@ -227,18 +205,8 @@ function EtapaPerfil({ proprias, setContas, downloads, tarefasIA, relatoriosProp
           <Pipeline conta={c} downloads={downloads} tarefasIA={tarefasIA} temRelatorio={relatoriosProprios.has(`${c.plataforma}/${c.conta}`)} />
         </Bloco>
       ))}
-      <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); conectar() }}>
-        <Input aria-label="Seu @" value={novo} onChange={(e) => setNovo(e.target.value)} placeholder="@seuperfil ou link do perfil" className="min-w-60 flex-1" />
-        <ToggleButtonGroup selectionMode="single" disallowEmptySelection selectedKeys={[plat]}
-          onSelectionChange={(k) => setPlat([...k][0] as Plataforma)} aria-label="Plataforma">
-          <ToggleButton id="instagram">Instagram</ToggleButton>
-          <ToggleButton id="tiktok"><ToggleButtonGroup.Separator />TikTok</ToggleButton>
-        </ToggleButtonGroup>
-        <Button type="submit" className={proprias.length ? '' : 'botao-sinal'} variant={proprias.length ? 'tertiary' : undefined}
-          isPending={ocupado} isDisabled={!novo.trim()}>
-          <Plus /> {proprias.length ? 'Conectar outro' : 'Conectar e analisar'}
-        </Button>
-      </form>
+      <BuscaPerfis proprio aoAdicionar={(lista) => { setContas(lista); aoColetar() }}
+        placeholder={proprias.length ? 'Conectar outro perfil: busque pelo nome ou @' : 'Busque seu perfil pelo nome ou @, ou cole o link'} />
     </div>
   )
 }

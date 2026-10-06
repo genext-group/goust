@@ -121,6 +121,52 @@ def api_adicionar_conta():
     return jsonify(contas_completas())
 
 
+@app.get("/api/buscar-perfis")
+@protegido
+def api_buscar_perfis():
+    from baixador import busca_perfis
+    from baixador.fontes import scrapecreators
+    r = busca_perfis.buscar(request.args.get("q", ""), request.args.get("plataforma") or None)
+    ja = {(c["plataforma"], c["conta"].lower()): c.get("papel") for c in contas_completas()}
+    resultados = [{**x, "acompanha": ja.get((x["plataforma"], x["conta"]))} for x in r["resultados"]]
+    sem_credito = scrapecreators.ativo() and scrapecreators.saldo() == 0
+    return jsonify(resultados=resultados, limitada=r["limitada"], sem_credito=sem_credito)
+
+
+@app.get("/api/foto-externa")
+def api_foto_externa():
+    from baixador import busca_perfis
+    try:
+        dados, tipo = busca_perfis.baixar_foto(request.args.get("u", ""))
+    except ValueError:
+        abort(404)
+    return Response(dados, mimetype=tipo, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.post("/api/contas/acompanhar")
+@protegido
+def api_acompanhar():
+    """Seguir um perfil e já começar a coleta (30 posts recentes) e a análise. Devolve aviso se a fonte não puder coletar."""
+    from baixador.fontes import scrapecreators
+    d = request.json or {}
+    try:
+        plataforma, conta = normalizar_conta(d["conta"], d.get("plataforma"))
+    except (ValueError, KeyError) as e:
+        return jsonify(erro=str(e) or "Perfil inválido."), 400
+    papel = d.get("papel") if d.get("papel") in ("concorrente", "referencia", "proprio") else "concorrente"
+    tarefas.acompanhar(plataforma, conta, papel, d.get("nome"))
+    biblioteca.atualizar_perfil(plataforma, conta, forcar=True)
+    aviso = None
+    if plataforma == "instagram" and scrapecreators.ativo() and scrapecreators.saldo() == 0:
+        aviso = ("A API de dados está sem créditos: a coleta do Instagram fica limitada "
+                 + ("(na versão online, o Instagram bloqueia a coleta sem ela)." if NUVEM else "aos posts públicos mais recentes."))
+    opcoes = {"modo": "todos", "somente_reels": False, "analisar_ao_fim": True} if papel == "proprio" else \
+             {"modo": "recentes", "quantidade": 30, "somente_reels": False, "analisar_ao_fim": True}
+    t = tarefas.enfileirar(plataforma, conta, opcoes)
+    return jsonify(contas=contas_completas(), aviso=aviso, tarefa=t.get("id") if isinstance(t, dict) else t,
+                   conta={"plataforma": plataforma, "conta": conta})
+
+
 @app.put("/api/contas/<plataforma>/<conta>/papel")
 @protegido
 def api_papel_conta(plataforma, conta):

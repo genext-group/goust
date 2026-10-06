@@ -27,12 +27,79 @@ def _get(caminho, **params):
                          headers={"x-api-key": os.getenv("SCRAPECREATORS_API_KEY", "")}, timeout=90)
         if r.status_code == 200:
             return r.json()
-        if r.status_code in (401, 402, 403):
-            raise ErroFonte(f"ScrapeCreators recusou a chamada ({r.status_code}): verifique a chave e os créditos.")
+        if r.status_code == 402:
+            marcar_sem_credito()
+            raise ErroFonte("A API de dados (ScrapeCreators) está sem créditos. Recarregue em app.scrapecreators.com.")
+        if r.status_code in (401, 403):
+            raise ErroFonte(f"ScrapeCreators recusou a chamada ({r.status_code}): verifique a chave.")
         if r.status_code == 404:
             raise ValueError("Perfil ou post não encontrado.")
         time.sleep(3 * (tentativa + 1))
     raise ErroFonte(f"ScrapeCreators indisponível agora ({r.status_code}).")
+
+
+# ---------------------------------------------------------------- saldo (para avisar na interface em vez de falhar calado)
+
+_saldo_cache = {"ts": 0.0, "valor": None}
+
+
+def marcar_sem_credito():
+    _saldo_cache.update(ts=time.time(), valor=0)
+
+
+def saldo(max_idade=600):
+    """Créditos restantes (cache de 10 min). None = não deu para saber."""
+    if not ativo():
+        return None
+    if time.time() - _saldo_cache["ts"] < max_idade:
+        return _saldo_cache["valor"]
+    try:
+        r = requests.get(BASE + "/v1/credit-balance", headers={"x-api-key": os.getenv("SCRAPECREATORS_API_KEY", "")}, timeout=15)
+        valor = r.json().get("creditCount") if r.status_code == 200 else None
+    except Exception:
+        valor = None
+    _saldo_cache.update(ts=time.time(), valor=valor)
+    return valor
+
+
+def com_credito():
+    s = saldo()
+    return ativo() and (s is None or s > 0)
+
+
+# ---------------------------------------------------------------- busca de perfis
+
+def _usuarios(no, plataforma, saida):
+    """Acha objetos de usuário em qualquer formato de resposta (a API muda a forma às vezes)."""
+    if isinstance(no, dict):
+        handle = no.get("username") if plataforma == "instagram" else (no.get("unique_id") or no.get("uniqueId"))
+        if handle and isinstance(handle, str):
+            foto = no.get("profile_pic_url_hd") or no.get("profile_pic_url")
+            if not foto:
+                av = no.get("avatar_thumb") or no.get("avatar_medium") or no.get("avatarThumb") or {}
+                foto = (av.get("url_list") or [None])[0] if isinstance(av, dict) else av
+            seg = no.get("follower_count") or no.get("followerCount") or (no.get("edge_followed_by") or {}).get("count")
+            saida.append({"plataforma": plataforma, "conta": handle.lower(), "nome": no.get("full_name") or no.get("nickname"),
+                          "foto": foto, "seguidores": seg,
+                          "verificado": bool(no.get("is_verified") or no.get("verified") or no.get("custom_verify"))})
+            return
+        for v in no.values():
+            _usuarios(v, plataforma, saida)
+    elif isinstance(no, list):
+        for v in no:
+            _usuarios(v, plataforma, saida)
+
+
+def buscar_perfis(plataforma, termo):
+    caminho = "/v1/instagram/search" if plataforma == "instagram" else "/v1/tiktok/search/users"
+    saida = []
+    _usuarios(_get(caminho, query=termo), plataforma, saida)
+    vistos, unicos = set(), []
+    for u in saida:
+        if u["conta"] not in vistos:
+            vistos.add(u["conta"])
+            unicos.append(u)
+    return unicos[:8]
 
 
 # ---------------------------------------------------------------- Instagram

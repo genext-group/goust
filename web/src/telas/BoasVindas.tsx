@@ -1,10 +1,11 @@
-import { Button, Input, Label, TextArea, TextField, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
+import { Button, Input, Label, TextArea, TextField, toast } from '@heroui/react'
 import { ArrowLeft, ArrowRight, Check, Plus, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useState } from 'react'
 import { api, ia, inicio, type Conta, type Plataforma, type Sugestao } from '../api'
 import { aura, auraMarca } from '../aura'
 import { CheckDesenhado, LogoAnimado, Radar } from '../components/Animacoes'
 import { AnimProcesso } from '../components/AnimProcessos'
+import { BuscaPerfis } from '../components/BuscaPerfis'
 import { useAtividade } from '../components/Atividade'
 import { tocar } from '../sons'
 
@@ -106,24 +107,6 @@ function Rodape({ aoVoltar, children }: { aoVoltar: () => void; children: React.
 function PassoPerfil({ proprio, setContas, aoSeguir, aoVoltar }: {
   proprio?: Conta; setContas: (c: Conta[]) => void; aoSeguir: () => void; aoVoltar: () => void
 }) {
-  const [texto, setTexto] = useState('')
-  const [plat, setPlat] = useState<Plataforma>('instagram')
-  const [ocupado, setOcupado] = useState(false)
-
-  const conectar = async () => {
-    if (!texto.trim()) return
-    setOcupado(true)
-    try {
-      const lista = await api.adicionarConta(texto.trim(), plat, 'proprio')
-      setContas(lista)
-      const c = acharConta(lista, texto, 'proprio')
-      if (c) await api.baixar([c], { modo: 'todos', somente_reels: false, analisar_ao_fim: true })
-      aoSeguir()
-    } catch (e) {
-      toast.danger('Não deu para conectar', { description: (e as Error).message })
-    } finally { setOcupado(false) }
-  }
-
   return (
     <div>
       <p className="num text-sm text-muted">Passo 1 de 3</p>
@@ -138,21 +121,13 @@ function PassoPerfil({ proprio, setContas, aoSeguir, aoVoltar }: {
           <p className="flex-1">@{proprio.conta} conectado. A coleta já começou.</p>
         </div>
       ) : (
-        <form className="mt-8 space-y-3" onSubmit={(e) => { e.preventDefault(); conectar() }}>
-          <ToggleButtonGroup selectionMode="single" disallowEmptySelection selectedKeys={[plat]}
-            onSelectionChange={(k) => setPlat([...k][0] as Plataforma)} aria-label="Plataforma">
-            <ToggleButton id="instagram">Instagram</ToggleButton>
-            <ToggleButton id="tiktok"><ToggleButtonGroup.Separator />TikTok</ToggleButton>
-          </ToggleButtonGroup>
-          <Input autoFocus aria-label="Seu @" value={texto} onChange={(e) => setTexto(e.target.value)}
-            placeholder="@seuperfil ou o link do perfil" className="h-14 w-full text-lg" />
-        </form>
+        <div className="mt-8">
+          <BuscaPerfis proprio aoAdicionar={(lista) => { setContas(lista); aoSeguir() }} placeholder="Busque seu perfil pelo nome ou @, ou cole o link" />
+        </div>
       )}
       <Rodape aoVoltar={aoVoltar}>
         {!proprio && <Button variant="ghost" onPress={aoSeguir}>Ainda não tenho perfil</Button>}
-        {proprio
-          ? <Button className="botao-sinal" onPress={aoSeguir}>Continuar <ArrowRight /></Button>
-          : <Button className="botao-sinal" isPending={ocupado} isDisabled={!texto.trim()} onPress={conectar}>Conectar e continuar <ArrowRight /></Button>}
+        {proprio && <Button className="botao-sinal" onPress={aoSeguir}>Continuar <ArrowRight /></Button>}
       </Rodape>
     </div>
   )

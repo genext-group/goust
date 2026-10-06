@@ -443,3 +443,17 @@ export const central = {
     req<{ ok: boolean; contas: Conta[] | null }>(`/api/descobertas/${id}`, { body: { acao, papel } }),
   ideia: (tema: string, contexto = '') => req<IdeiaGerada[]>('/api/inicio/ideia', { body: { tema, contexto } }),
 }
+
+// ---------------------------------------------------------------- busca de perfis (adicionar concorrente/referência)
+
+export interface PerfilEncontrado {
+  plataforma: Plataforma; conta: string; nome: string | null; foto: string | null; seguidores: number | null
+  verificado: boolean; exato?: boolean; web?: boolean; acompanha?: string | null
+}
+export const perfis = {
+  buscar: (q: string, plataforma?: Plataforma) =>
+    req<{ resultados: PerfilEncontrado[]; limitada: boolean; sem_credito: boolean }>(
+      `/api/buscar-perfis?q=${encodeURIComponent(q)}${plataforma ? `&plataforma=${plataforma}` : ''}`),
+  acompanhar: (p: { conta: string; plataforma: Plataforma; papel: 'concorrente' | 'referencia' | 'proprio'; nome?: string | null }) =>
+    req<{ contas: Conta[]; aviso: string | null; tarefa: number; conta: { plataforma: Plataforma; conta: string } }>('/api/contas/acompanhar', { body: p }),
+}
