@@ -190,6 +190,21 @@ def rotulo_confianca(conf, direcao):
     return "Sinal emergente" if conf < 0.5 else ("Tendência observada" if conf < 0.75 else "Crescendo no seu nicho")
 
 
+NOME_FORMATO = {
+    "esquete_humor": "esquete de humor", "carrossel_storytelling": "carrossel contando uma história",
+    "ugc_influenciador": "vídeo estilo influenciador (UGC)", "demonstracao_produto": "demonstração do produto",
+    "trend_meme": "trend/meme", "bastidores": "bastidores", "slides_texto": "slides com texto",
+    "carrossel_educativo": "carrossel educativo", "anuncio_produzido": "anúncio produzido", "outro": "outros formatos",
+    "entrevista_podcast": "entrevista/podcast", "storytelling": "storytelling", "foto_unica": "foto única",
+    "tutorial_tela": "tutorial de tela", "talking_head": "pessoa falando para a câmera", "depoimento": "depoimento",
+}
+
+
+def nome_formato(f):
+    """Rótulo técnico da análise (talking_head) → nome que o usuário entende."""
+    return NOME_FORMATO.get(f or "", (f or "").replace("_", " "))
+
+
 GRUPO_TIPO = {"video": "Vídeos curtos", "reel": "Vídeos curtos", "carrossel": "Carrosséis", "foto": "Posts de imagem"}
 
 
@@ -258,7 +273,7 @@ def sinais_mercado():
         comparar(f"tipo:{chave}", GRUPO_TIPO[chave], lambda p, g=grupo: p["tipo"] in g, "formato")
     formatos_ia = {p["formato_ia"] for p in posts if p["formato_ia"]}
     for f in formatos_ia:
-        comparar(f"estilo:{f}", f.replace("_", " "), lambda p, f=f: p["formato_ia"] == f, "estilo")
+        comparar(f"estilo:{f}", nome_formato(f), lambda p, f=f: p["formato_ia"] == f, "estilo")
 
     # posts fora da curva nos últimos 10 dias
     for p in recentes:
@@ -269,7 +284,7 @@ def sinais_mercado():
                            "rotulo": "Post fora da curva",
                            "evidencias": [{"plataforma": p["plataforma"], "conta": p["conta"], "id": p["codigo"], "lift": round(l, 1)}],
                            "dados": {"vezes_a_media_da_conta": round(l, 1), "legenda": (p["legenda"] or "")[:300],
-                                     "gancho": _gancho(p["gancho_ia"]), "formato": p["formato_ia"] or p["tipo"]}})
+                                     "gancho": _gancho(p["gancho_ia"]), "formato": nome_formato(p["formato_ia"]) if p["formato_ia"] else p["tipo"]}})
 
     # contas acelerando o ritmo de publicação
     for cid, ps in por_conta.items():

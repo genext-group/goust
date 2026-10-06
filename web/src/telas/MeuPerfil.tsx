@@ -172,7 +172,7 @@ export function TelaMeuPerfil({ contas, setContas, versaoBiblioteca, tarefasDown
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="titulo-display text-2xl font-semibold">Diagnóstico e estratégia</h2>
-              <p className="text-sm text-muted">Você contra os {est?.concorrentes ?? '…'} concorrentes que acompanha, a partir do seu brief.</p>
+              <p className="text-sm text-muted">Seu perfil comparado aos {est?.concorrentes ?? '…'} concorrentes que você acompanha, a partir do seu brief.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {est && est.versoes.length > 1 && (
@@ -193,6 +193,22 @@ export function TelaMeuPerfil({ contas, setContas, versaoBiblioteca, tarefasDown
               </Button>
             </div>
           </div>
+
+          {(() => {
+            // a estratégia foi feita com outro perfil próprio (trocou/conectou): avisa em vez de fingir que vale
+            const usados = est?.estrategia?.perfis_proprios ?? []
+            const atuais = proprias.map((c) => `${c.plataforma}/${c.conta}`)
+            const mudou = !tarefaEst && est?.estrategia && usados.length > 0 && (usados.some((u) => !atuais.includes(u)) || atuais.some((a) => !usados.includes(a)))
+            if (!mudou) return null
+            const nomes = (l: string[]) => l.map((k) => '@' + k.split('/')[1]).join(', ') || 'nenhum perfil'
+            return (
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[var(--ambar)]/10 p-4 text-sm">
+                <p className="min-w-0 flex-1"><span className="font-medium text-[var(--ambar)]">Esta estratégia foi feita com {nomes(usados)}.</span>{' '}
+                  <span className="text-muted">Seu perfil agora é {nomes(atuais)}. Atualize para a IA considerar o perfil atual.</span></p>
+                <Button size="sm" variant="tertiary" onPress={gerarEstrategia}><ArrowsRotateRight /> Atualizar agora</Button>
+              </div>
+            )
+          })()}
 
           {tarefaEst && (
             <div className="aura overflow-hidden rounded-[1.5rem] p-6 text-white" style={auraMarca}>

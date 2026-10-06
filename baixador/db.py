@@ -307,6 +307,22 @@ create table if not exists lote_pedidos (
 create index if not exists lote_pedidos_estado on lote_pedidos (estado, lote_id);
 create index if not exists lote_pedidos_usuario on lote_pedidos (usuario_id, estado);
 
+-- caderno de ideias: anotações do dia a dia que a IA ajuda a virar conteúdo
+create table if not exists notas (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  texto text not null default '',
+  tipo text not null default 'ideia',
+  tags jsonb not null default '[]',
+  ref jsonb,
+  fixada boolean not null default false,
+  estado text not null default 'solta',
+  conteudo_id bigint references conteudos(id) on delete set null,
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+create index if not exists notas_usuario on notas (usuario_id, estado, criado_em desc);
+
 -- linha do tempo e atividade (painel de super-admin)
 create table if not exists eventos (
   id bigserial primary key,

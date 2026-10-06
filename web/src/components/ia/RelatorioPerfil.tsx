@@ -1,6 +1,6 @@
 import { Bulb, ChartLine, CircleExclamation, Comments, Compass, Flag, Megaphone, Rocket, Sparkles, Star, Target } from '@gravity-ui/icons'
 import type { RegistroRelatorio } from '../../api'
-import { fmtDuracao, fmtNum } from '../../formato'
+import { fmtDec, fmtDuracao, fmtNum } from '../../formato'
 import { ListaIdeias, ListaOportunidades } from './Blocos'
 import { Feedback, Insight, ListaItens, Secao, SeloDesempenho, semAspas, TextoComVideos } from './Compartilhado'
 
@@ -36,7 +36,7 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
           <div className="space-y-3 rounded-2xl bg-surface-secondary p-4">
             <div className="flex items-baseline justify-between">
               <span className="text-sm text-muted">Nota geral</span>
-              <span className="num titulo-display text-3xl font-semibold">{media.toFixed(1)}</span>
+              <span className="num titulo-display text-3xl font-semibold">{fmtDec(media, 1)}</span>
             </div>
             {notas.map(([k, n]) => (
               <div key={k} className="space-y-1">
@@ -51,10 +51,10 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
         </div>
         <div className="num grid grid-cols-2 border-t linha-fina sm:grid-cols-5">
           {[
-            ['Vídeos baixados', fmtNum(m.videos)],
+            ['Posts no catálogo', fmtNum(m.videos)],
             ['Posts/semana', m.posts_por_semana?.toLocaleString('pt-BR') ?? '—'],
             ['Views (mediana)', fmtNum(m.mediana_views)],
-            ['Engajamento (mediana)', m.mediana_engajamento != null ? `${m.mediana_engajamento.toFixed(2)}%` : '—'],
+            ['Engajamento (mediana)', m.mediana_engajamento != null ? `${fmtDec(m.mediana_engajamento, 2)}%` : '—'],
             ['Duração (mediana)', m.duracao_mediana_s ? fmtDuracao(Math.round(m.duracao_mediana_s)) : '—'],
           ].map(([k, v]) => (
             <div key={k} className="border-r p-4 linha-fina last:border-r-0">

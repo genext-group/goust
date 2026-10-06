@@ -144,3 +144,12 @@ def resumo_feedback():
     ruins = [f"- {l['titulo']}" for l in linhas if l["estado"] in ("irrelevante", "oculto")]
     return ("## Retorno do usuário sobre recomendações anteriores\nAchou útil:\n" + ("\n".join(bons) or "(nada)")
             + "\nDescartou (evite parecidos):\n" + ("\n".join(ruins) or "(nada)"))
+
+
+def perfil_mudou():
+    """O perfil próprio mudou (conectou, desconectou ou trocou): tudo o que foi calculado sobre o anterior
+    (leitura da semana, alertas do perfil, ideias do dia) deixa de valer, e a rotina recalcula na próxima visita."""
+    db.executar("""update insights set expira_em = now() where usuario_id = %s and (expira_em is null or expira_em > now())
+                   and (tipo in ('perfil', 'ideia') or dados->>'categoria' = 'perfil')""", ctx.usuario())
+    db.executar("""update usuarios set config = jsonb_set(config, '{inteligencia,ultima}', '0')
+                   where id = %s and config ? 'inteligencia'""", ctx.usuario())

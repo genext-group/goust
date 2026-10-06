@@ -542,3 +542,28 @@ export const admin = {
   operacao: () => req<OperacaoAdmin>('/api/admin/operacao'),
   coletarLote: () => req<{ aplicados: number }>('/api/admin/lote/coletar', { body: {} }),
 }
+
+// ---------------------------------------------------------------- caderno de ideias
+
+export type TipoNota = 'ideia' | 'observacao' | 'frase' | 'bastidor' | 'pergunta' | 'referencia'
+export interface RefNota { plataforma: Plataforma; conta: string; id: string; legenda?: string }
+export interface Nota {
+  id: number; texto: string; tipo: TipoNota; tags: string[]; ref: RefNota | null; fixada: boolean
+  estado: 'solta' | 'usada' | 'arquivada'; conteudo_id: number | null; criado: string; atualizado: string
+}
+export interface TemaNotas { nome: string; resumo: string; notas: number[]; potencial: 'alto' | 'medio' | 'baixo'; proximo_passo: string }
+export interface OrganizacaoNotas { temas: TemaNotas[]; observacao: string }
+export interface Provocacao { leitura: string; perguntas: string[]; angulos: string[] }
+export type IdeiaDasNotas = IdeiaGerada & { origem: number[] }
+
+export const notas = {
+  listar: () => req<{ notas: Nota[]; temas: OrganizacaoNotas | null }>('/api/notas'),
+  criar: (n: { texto: string; tipo?: TipoNota; tags?: string[]; ref?: RefNota | null }) => req<Nota>('/api/notas', { body: n }),
+  atualizar: (id: number, n: Partial<Pick<Nota, 'texto' | 'tipo' | 'tags' | 'fixada' | 'estado'>>) => req<Nota>(`/api/notas/${id}`, { method: 'PUT', body: n }),
+  apagar: (id: number) => req<{ ok: boolean }>(`/api/notas/${id}`, { method: 'DELETE' }),
+  provocar: (id: number) => req<Provocacao>(`/api/notas/${id}/provocar`, { body: {} }),
+  desenvolver: (ids: number[], pedido = '', qtd = 3) => req<{ ideias: IdeiaDasNotas[] }>('/api/notas/desenvolver', { body: { ids, pedido, qtd } }),
+  organizar: (forcar = false) => req<OrganizacaoNotas>('/api/notas/organizar', { body: { forcar } }),
+  virarConteudo: (ideia: IdeiaDasNotas, roteiro: boolean, data?: string | null) =>
+    req<{ conteudo: Conteudo; tarefa: TarefaIA | null }>('/api/notas/virar-conteudo', { body: { ideia, roteiro, data } }),
+}

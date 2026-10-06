@@ -90,6 +90,7 @@ perfis que ele acompanha (números reais) e o brief dele. Para cada sinal escrev
 - 'tema_para_ideia': um tema curto para gerar uma ideia de conteúdo a partir do sinal.
 Seja cauteloso quando a confiança for baixa ("pode indicar", "vale testar").
 Se os perfis acompanhados forem de outro nicho, diga o que dá para ADAPTAR, sem fingir que é o mercado dele.
+Nunca escreva rótulos técnicos (com _ ou em inglês, como talking_head): use palavras comuns.
 Mantenha a 'chave' exatamente como recebida. Português do Brasil."""
 
 
@@ -212,6 +213,10 @@ def descoberta_e_auditoria(pesos):
                     (info or {}).get("seguidores"), round(min(1.0, 0.6 * peso), 3))
         novas += 1
     if novas:
+        # um aviso só: o novo substitui o anterior (que fica desatualizado)
+        db.executar("""update insights set expira_em = now() where usuario_id = %s and chave like 'descoberta:lote:%%'
+                       and (expira_em is null or expira_em > now())""", ctx.usuario())
+        novas = db.um("select count(*) as n from descobertas where usuario_id = %s and estado = 'nova'", ctx.usuario())["n"]
         insights.registrar("sistema", f"descoberta:lote:{datetime.now().strftime('%Y%m%d')}",
                            f"Encontramos {novas} {'nova referência' if novas == 1 else 'novas referências'} para você",
                            "Perfis do seu nicho e referências que valem a pena acompanhar.",

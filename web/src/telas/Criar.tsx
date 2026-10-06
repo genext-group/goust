@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import type { Conta } from '../api'
+import { Caderno } from '../components/criar/Caderno'
 import { Calendario } from '../components/criar/Calendario'
 import { Estilos } from '../components/criar/Estilos'
 import { Imagens } from '../components/criar/Imagens'
 
-type Visao = 'calendario' | 'imagens' | 'estilos'
+type Visao = 'calendario' | 'caderno' | 'imagens' | 'estilos'
 export interface PedidoImagem { pedido: string; conteudo_id?: number | null; estilo_id?: number | null; formato?: string }
 
 const VISOES: { id: Visao; nome: string; texto: string }[] = [
   { id: 'calendario', nome: 'Calendário', texto: 'O que publicar e quando, com roteiro pronto para gravar.' },
+  { id: 'caderno', nome: 'Caderno de ideias', texto: 'Anote o que aparecer no dia a dia. A IA organiza e transforma em conteúdo.' },
   { id: 'imagens', nome: 'Imagens', texto: 'Capas, posts e carrosséis gerados com GPT Image no seu estilo.' },
   { id: 'estilos', nome: 'Estilos visuais', texto: 'As referências que ensinam a IA a desenhar do seu jeito.' },
 ]
@@ -38,6 +40,7 @@ export function TelaCriar({ contas, versaoBiblioteca }: { contas: Conta[]; versa
       </div>
       <div key={visao} className="troca-pagina">
         {visao === 'calendario' && <Calendario aoGerarImagem={gerarImagem} />}
+        {visao === 'caderno' && <Caderno aoIrCalendario={() => setVisao('calendario')} />}
         {visao === 'imagens' && <Imagens pedidoInicial={pedido} aoConsumirPedido={() => setPedido(null)} irParaEstilos={() => setVisao('estilos')} />}
         {visao === 'estilos' && <Estilos contas={contas} versaoBiblioteca={versaoBiblioteca} aoGerar={(estilo_id) => gerarImagem({ pedido: '', estilo_id })} />}
       </div>

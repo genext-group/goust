@@ -11,7 +11,7 @@ import { CheckDesenhado, Radar } from '../components/Animacoes'
 import { AnimProcesso, Explosao } from '../components/AnimProcessos'
 import { useAoConcluir } from '../components/Atividade'
 import { FORMATOS } from '../components/criar/comum'
-import { fmtNum } from '../formato'
+import { fmtDec, fmtNum } from '../formato'
 import { tocar } from '../sons'
 import { ModalVideo } from './Biblioteca'
 import { pedacoDoDegrade } from '../degrade'
@@ -47,7 +47,7 @@ function quando(ts: number | null) {
 
 function valorMetrica(m: Metrica) {
   if (m.valor === null || m.valor === undefined) return '—'
-  if (m.chave === 'engajamento') return `${m.valor.toFixed(m.valor < 1 ? 2 : 1)}%`
+  if (m.chave === 'engajamento') return `${fmtDec(m.valor, m.valor < 1 ? 2 : 1)}%`
   return fmtNum(m.valor)
 }
 
@@ -254,7 +254,7 @@ function Situacao({ c, nome, saudacao, atualizadoTexto, aoAtualizar, irPara }: {
               </div>
               <p className="mt-0.5 truncate text-[11px] text-white/55">{m.delta !== null ? m.comparacao : m.nota ?? m.comparacao ?? ''}</p>
               {m.chave === 'engajamento' && m.referencia?.concorrentes != null && (
-                <p className="truncate text-[11px] text-white/45">concorrentes: {m.referencia.concorrentes.toFixed(2)}%</p>
+                <p className="truncate text-[11px] text-white/45">concorrentes: {fmtDec(m.referencia.concorrentes, 2)}%</p>
               )}
             </div>
           ))}
@@ -267,7 +267,7 @@ function Situacao({ c, nome, saudacao, atualizadoTexto, aoAtualizar, irPara }: {
 function Variacao({ delta, direcao }: { delta: number; direcao: Metrica['direcao'] }) {
   const cor = direcao === 'alta' ? 'var(--menta)' : direcao === 'queda' ? '#ff7a7a' : 'rgb(255 255 255 / .6)'
   const seta = direcao === 'alta' ? '▲' : direcao === 'queda' ? '▼' : '→'
-  return <span className="num text-xs font-semibold" style={{ color: cor }}>{seta} {delta > 0 ? '+' : ''}{delta.toFixed(Math.abs(delta) < 10 ? 1 : 0)}%</span>
+  return <span className="num text-xs font-semibold" style={{ color: cor }}>{seta} {delta > 0 ? '+' : ''}{fmtDec(delta, Math.abs(delta) < 10 ? 1 : 0)}%</span>
 }
 
 const NOMES_JORNADA: [keyof Central['jornada'], string, Aba][] = [

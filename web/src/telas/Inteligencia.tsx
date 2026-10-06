@@ -1,6 +1,6 @@
 import { Button, Label, ListBox, Select, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
 import { ArrowsRotateRight, CircleExclamation, Comments, Sparkles } from '@gravity-ui/icons'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   api, ia, type Conta, type Plataforma, type RegistroPanorama, type RegistroRelatorio, type ResumoRelatorio,
   type StatusIA, type TarefaIA, type Video,
@@ -11,7 +11,7 @@ import { ContextoIA } from '../components/ia/Compartilhado'
 import { PanoramaMercado } from '../components/ia/PanoramaMercado'
 import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
 import { SeloPlataforma } from '../components/Plataforma'
-import { fmtRelativo } from '../formato'
+import { fmtDec, fmtRelativo } from '../formato'
 import { aura } from '../aura'
 import { Orbita, Radar } from '../components/Animacoes'
 import { ModalVideo } from './Biblioteca'
@@ -53,8 +53,10 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
     videos.forEach((v) => m.set(`${v.plataforma}/${v.conta}`, (m.get(`${v.plataforma}/${v.conta}`) ?? 0) + 1))
     return m
   }, [videos])
-  const ordenadas = useMemo(() => [...contas].sort((a, b) =>
-    Number(!!resumos[chave(b)]) - Number(!!resumos[chave(a)]) || (qtdPorConta.get(chave(b)) ?? 0) - (qtdPorConta.get(chave(a)) ?? 0)),
+  // o seu perfil é analisado em Meu perfil; aqui ficam concorrentes primeiro, depois referências
+  const ordenadas = useMemo(() => contas.filter((c) => c.papel !== 'proprio').sort((a, b) =>
+    Number(a.papel === 'referencia') - Number(b.papel === 'referencia')
+    || Number(!!resumos[chave(b)]) - Number(!!resumos[chave(a)]) || (qtdPorConta.get(chave(b)) ?? 0) - (qtdPorConta.get(chave(a)) ?? 0)),
   [contas, resumos, qtdPorConta])
   // só escolhe/mostra depois de ordenar com tudo carregado (senão a lista reordena e pisca)
   useEffect(() => { if (listaPronta && !selecionada && ordenadas.length) setSelecionada(chave(ordenadas[0])) }, [listaPronta, ordenadas, selecionada])
@@ -160,23 +162,31 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
                   <span className="flex-1 space-y-1.5"><span className="carregando block h-3 w-2/3" /><span className="carregando block h-2.5 w-1/3" /></span>
                 </div>
               ))}
+              {listaPronta && !ordenadas.length && (
+                <p className="rounded-2xl bg-surface-secondary/50 p-4 text-sm text-muted">Acompanhe concorrentes ou referências em Concorrentes para ver a análise de cada um aqui.</p>
+              )}
               {listaPronta && ordenadas.map((c, i) => {
                 const r = resumos[chave(c)]
+                const titulo = i === 0 || (ordenadas[i - 1].papel === 'referencia') !== (c.papel === 'referencia')
+                  ? (c.papel === 'referencia' ? 'Referências' : 'Concorrentes') : null
                 const t = tarefaDe(c)
                 const qtd = qtdPorConta.get(chave(c)) ?? 0
                 const ativa = chave(c) === selecionada
                 return (
-                  <button key={chave(c)} style={{ '--i': i } as React.CSSProperties} onClick={() => { setSelecionada(chave(c)); setVersao(undefined) }}
+                  <Fragment key={chave(c)}>
+                  {titulo && <p className={`px-2.5 pb-1 text-[11px] font-medium tracking-wide text-muted uppercase ${i ? 'pt-4' : ''}`}>{titulo}</p>}
+                  <button style={{ '--i': i } as React.CSSProperties} onClick={() => { setSelecionada(chave(c)); setVersao(undefined) }}
                     className={`flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition-colors ${ativa ? 'bg-surface shadow-sm' : 'hover:bg-surface/60'}`}>
                     <AvatarConta conta={c} tamanho="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{c.perfil?.nome || c.nome}</p>
                       <p className="truncate text-xs text-muted">
-                        {t ? <span className="text-accent">{t.status === 'rodando' ? 'analisando…' : 'na fila'}</span> : r ? `analisado ${fmtRelativo(r.gerado)}` : qtd ? `${qtd} vídeos · não analisado` : 'sem vídeos baixados'}
+                        {t ? <span className="text-accent">{t.status === 'rodando' ? 'analisando…' : 'na fila'}</span> : r ? `analisado ${fmtRelativo(r.gerado)}` : qtd ? `${qtd} posts · ainda sem análise` : 'sem posts ainda'}
                       </p>
                     </div>
-                    {r && <span className="num text-sm font-semibold">{notaMedia(r.notas).toFixed(1)}</span>}
+                    {r && <span className="num text-sm font-semibold">{fmtDec(notaMedia(r.notas), 1)}</span>}
                   </button>
+                  </Fragment>
                 )
               })}
             </aside>

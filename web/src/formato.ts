@@ -24,3 +24,5 @@ export const fmtDuracao = (s: number | null) => (s == null ? '' : `${Math.floor(
 
 export const iniciais = (nome: string) =>
   nome.split(/[\s.]+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('')
+/** Decimal no padrão brasileiro (vírgula): fmtDec(2.5, 1) → "2,5". */
+export const fmtDec = (n: number, casas = 1) => n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })

@@ -190,7 +190,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
                   <StatusConta c={c} aoColetar={() => coletarDeNovo(c)} />
                   <div className="mt-4 grid grid-cols-3 gap-2 border-t pt-3 linha-fina">
                     <Metrica rotulo="Seguidores" valor={fmtNum(c.perfil?.seguidores)} />
-                    <Metrica rotulo={nuvem ? "Catalogados" : "Baixados"} valor={fmtNum(c.videos)} />
+                    <Metrica rotulo="Posts" valor={fmtNum(c.videos)} />
                     <Metrica rotulo="Mais recente" valor={c.ultimo ? fmtRelativo(c.ultimo) : '—'} />
                   </div>
                   <div className="absolute top-3 right-12 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">

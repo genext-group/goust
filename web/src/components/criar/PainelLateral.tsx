@@ -1,6 +1,11 @@
+import { Button, toast } from '@heroui/react'
 import { Layers } from '@gravity-ui/icons'
+import { useState } from 'react'
 import type { Conteudo, Estrategia, StatusConteudo } from '../../api'
-import { AreaSoltar, CartaoConteudo, FORMATOS, ORDEM_STATUS, STATUS, hojeIso, iso, segunda, somarDias, type Previa } from './comum'
+import { AreaSoltar, CartaoConteudo, FORMATOS, ORDEM_STATUS, STATUS, deIso, hojeIso, iso, segunda, somarDias, type Previa } from './comum'
+import { tocar } from '../../sons'
+import { useConfirmar } from '../ui/Confirmar'
+import { fmtDec } from '../../formato'
 
 /** Converte o formato escrito pela estratégia ("Reels educativos", "Carrossel"...) nas 4 chaves do calendário. */
 export function chaveFormato(t: string) {
@@ -34,7 +39,7 @@ function Barra({ rotulo, cor, atual, alvo, sufixo = '' }: { rotulo: string; cor:
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
         <span className="truncate">{rotulo}</span>
-        <span className="num shrink-0 text-muted">{atual.toFixed(atual % 1 ? 1 : 0)}{sufixo}{alvo !== undefined && <> / <span className="text-foreground">{alvo.toFixed(alvo % 1 ? 1 : 0)}{sufixo}</span></>}</span>
+        <span className="num shrink-0 text-muted">{fmtDec(atual, atual % 1 ? 1 : 0)}{sufixo}{alvo !== undefined && <> / <span className="text-foreground">{fmtDec(alvo, alvo % 1 ? 1 : 0)}{sufixo}</span></>}</span>
       </div>
       <div className="relative h-1.5 rounded-full bg-surface-tertiary">
         <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700" style={{ width: `${(atual / max) * 100}%`, background: cor }} />
@@ -42,6 +47,44 @@ function Barra({ rotulo, cor, atual, alvo, sufixo = '' }: { rotulo: string; cor:
       </div>
     </div>
   )
+}
+
+/** Dias da semana (0 = segunda) para N posts por semana, bem espaçados. */
+function diasDoRitmo(n: number) {
+  const k = Math.max(1, Math.min(7, Math.round(n)))
+  return [...new Set(Array.from({ length: k }, (_, i) => Math.round((i * 7) / k)))]
+}
+
+/**
+ * Espalha o que ainda é ideia/roteiro no ritmo da estratégia: a partir de hoje, no máximo `meta` por semana
+ * (contando o que já está em produção, que não sai do lugar), um por dia, em dias bem espaçados.
+ * Mantém a ordem original. Devolve só o que muda de data.
+ */
+export function planoRedistribuicao(itens: Conteudo[], meta: number) {
+  const hoje = hojeIso()
+  const futuros = itens.filter((c) => c.data && c.data >= hoje).sort((a, b) => a.data!.localeCompare(b.data!) || a.id - b.id)
+  const moviveis = futuros.filter((c) => c.status === 'ideia' || c.status === 'roteiro')
+  const fixos = futuros.filter((c) => !moviveis.includes(c))
+  const porSemana = new Map<string, number>()
+  const ocupado = new Set<string>()
+  const chaveSemana = (d: string) => iso(segunda(deIso(d)))
+  fixos.forEach((c) => { porSemana.set(chaveSemana(c.data!), (porSemana.get(chaveSemana(c.data!)) ?? 0) + 1); ocupado.add(c.data!) })
+  const dias = diasDoRitmo(meta)
+  const mudancas: { c: Conteudo; data: string }[] = []
+  let semana = segunda(deIso(hoje))
+  let i = 0
+  for (let guarda = 0; i < moviveis.length && guarda < 104; guarda++, semana = somarDias(semana, 7)) {
+    const k = iso(semana)
+    for (const d of dias) {
+      if (i >= moviveis.length || (porSemana.get(k) ?? 0) >= meta) break
+      const dia = iso(somarDias(semana, d))
+      if (dia < hoje || ocupado.has(dia)) continue
+      const c = moviveis[i++]
+      ocupado.add(dia); porSemana.set(k, (porSemana.get(k) ?? 0) + 1)
+      if (c.data !== dia) mudancas.push({ c, data: dia })
+    }
+  }
+  return mudancas
 }
 
 export function PainelLateral({ itens, estrategia, filtroStatus, setFiltroStatus, capas, arrastando, setArrastando, sobre, setSobre,
@@ -73,6 +116,26 @@ export function PainelLateral({ itens, estrategia, filtroStatus, setFiltroStatus
   const totalProx = proximos.length || 1
   const pctPilar = (nome: string) => Math.round((proximos.filter((c) => (c.pilar ?? '').toLowerCase().startsWith(nome.toLowerCase().slice(0, 12))).length / totalProx) * 100)
   const semData = itens.filter((c) => !c.data)
+  const { confirmacao, confirmar } = useConfirmar()
+  const [redistribuindo, setRedistribuindo] = useState(false)
+  // acima do ritmo: mais que 1,5× a meta nesta semana ou 2 itens no mesmo dia
+  const diasCheios = new Set(semana.filter((c, i, a) => a.findIndex((x) => x.data === c.data) !== i).map((c) => c.data)).size
+  const sobrecarga = meta > 0 && (semana.length > Math.ceil(meta * 1.5) || diasCheios > 0)
+  const redistribuir = async () => {
+    const plano = planoRedistribuicao(itens, meta)
+    if (!plano.length) { toast('Nada para mover', { description: 'O que está acima da meta já está em produção.' }); return }
+    const ultimo = plano.reduce((m, x) => (x.data > m ? x.data : m), plano[0].data)
+    const ok = await confirmar({
+      titulo: `Redistribuir no ritmo de ${meta} por semana?`, perigo: false, confirmar: 'Redistribuir',
+      texto: `${plano.length} ${plano.length === 1 ? 'conteúdo muda' : 'conteúdos mudam'} de data, um por dia, até ${deIso(ultimo).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}. O que já está em produção, pronto ou publicado não sai do lugar.`,
+    })
+    if (!ok) return
+    setRedistribuindo(true)
+    for (const m of plano) await mover(m.c.id, m.data)
+    setRedistribuindo(false)
+    tocar('sucesso')
+    toast.success('Calendário no ritmo da estratégia', { description: `${plano.length} conteúdos redistribuídos.` })
+  }
 
   return (
     <aside className="space-y-4">
@@ -88,6 +151,17 @@ export function PainelLateral({ itens, estrategia, filtroStatus, setFiltroStatus
             <p className="text-xs text-muted">{meta ? `Meta da estratégia: ${meta} por semana` : 'Gere a estratégia para ter uma meta semanal'}</p>
           </div>
         </div>
+        {sobrecarga && (
+          <div className="mt-4 rounded-2xl bg-[var(--ambar)]/10 p-3 text-xs leading-relaxed">
+            <p className="font-medium text-[var(--ambar)]">Semana acima do ritmo</p>
+            <p className="mt-0.5 text-muted">
+              {semana.length} planejados para uma meta de {meta}{diasCheios ? ` e ${diasCheios} ${diasCheios === 1 ? 'dia' : 'dias'} com mais de um post` : ''}.
+              Consistência rende mais que picos.
+            </p>
+            <Button size="sm" variant="tertiary" className="mt-2 w-full" isPending={redistribuindo} onPress={redistribuir}>Redistribuir nas próximas semanas</Button>
+          </div>
+        )}
+        {confirmacao}
       </section>
 
       <section className="cartao p-5">

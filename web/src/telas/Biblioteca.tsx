@@ -3,14 +3,14 @@ import { toast } from '@heroui/react'
 import { ArrowDownToLine, ArrowUpRightFromSquare, Check, CircleCheck, Comment, Eye, Folder, FolderOpen, FolderPlus, Heart, HeartFill, Palette, Pencil, Play, Plus, Sparkles, TrashBin, Xmark } from '@gravity-ui/icons'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api, baixarArquivo, baixarVarios, criacao, ia, pastas as apiPastas, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Estilo, type Pasta, type Plataforma, type Video } from '../api'
+import { api, baixarArquivo, baixarVarios, criacao, ia, notas as apiNotas, pastas as apiPastas, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Estilo, type Pasta, type Plataforma, type Video } from '../api'
 import { Explosao } from '../components/AnimProcessos'
 import { Menu } from '../components/Menu'
 import { tocar } from '../sons'
 import { useDialogoTexto } from '../components/ui/DialogoTexto'
 import { useNuvem } from '../ambiente'
 import { IconePlataforma, NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
-import { fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
+import { fmtDec, fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
 import { useConfirmar } from '../components/ui/Confirmar'
 
 type Ordem = 'recentes' | 'vistos' | 'curtidos' | 'engajamento' | 'antigos'
@@ -165,12 +165,12 @@ export function TelaBiblioteca({ contas, versao, filtroConta }: { contas: Conta[
       <div className="flex flex-wrap items-end justify-between gap-4 pt-2">
         <div>
           <h1 className="titulo-display text-4xl font-semibold">Biblioteca</h1>
-          <p className="mt-1 text-muted">Tudo o que você já baixou, pronto para estudar.</p>
+          <p className="mt-1 text-muted">Os posts dos perfis que você acompanha, prontos para estudar, guardar e baixar.</p>
         </div>
         <div className="flex gap-6">
           <Resumo rotulo="Vídeos" valor={fmtInteiro(filtrados.length)} />
           <Resumo rotulo="Views somadas" valor={fmtNum(totalViews)} />
-          <Resumo rotulo="Engajamento médio" valor={mediaEng == null ? '—' : `${mediaEng.toFixed(1)}%`} />
+          <Resumo rotulo="Engajamento médio" valor={mediaEng == null ? '—' : `${fmtDec(mediaEng, 1)}%`} />
         </div>
       </div>
 
@@ -287,7 +287,7 @@ export function TelaBiblioteca({ contas, versao, filtroConta }: { contas: Conta[
           {pastaSel !== null && pastas.find((p) => p.id === pastaSel)?.sistema
             ? 'Toque no coração de um post para guardá-lo aqui.'
             : pastaSel !== null ? 'Pasta vazia. Use o ícone de pasta nos posts para adicionar.'
-              : videos.length ? 'Nada encontrado com esses filtros.' : 'Nenhum vídeo baixado ainda.'}
+              : videos.length ? 'Nada encontrado com esses filtros.' : 'Nenhum post ainda. Acompanhe perfis em Concorrentes e os posts aparecem aqui.'}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
@@ -401,7 +401,7 @@ function CartaoVideo({ v, nome, onAbrir, pastas, dentro, favoritos, aoColocar, a
         </div>
         <div className="mt-2 px-0.5">
           <p className="truncate text-sm font-medium">{nome ?? `@${v.conta}`}</p>
-          <p className="num truncate text-xs text-muted">{fmtData(v.data)}{v.engajamento != null && ` · ${v.engajamento.toFixed(1)}% eng.`}</p>
+          <p className="num truncate text-xs text-muted">{fmtData(v.data)}{v.engajamento != null && ` · ${fmtDec(v.engajamento, 1)}% eng.`}</p>
         </div>
       </button>
       <div className={`absolute top-2 right-2 flex flex-col gap-1.5 ${selecionando ? 'hidden' : ''}`}>
@@ -464,7 +464,7 @@ export function ModalVideo({ video, nome, onFechar, aoMudarPastas }: { video: Vi
                 </div>
                 {video.engajamento != null && (
                   <p className="text-sm text-muted">
-                    Engajamento de <span className="font-medium text-foreground">{video.engajamento.toFixed(2)}%</span>{' '}
+                    Engajamento de <span className="font-medium text-foreground">{fmtDec(video.engajamento, 2)}%</span>{' '}
                     (curtidas + comentários ÷ views).
                   </p>
                 )}
@@ -476,6 +476,7 @@ export function ModalVideo({ video, nome, onFechar, aoMudarPastas }: { video: Vi
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{video.legenda || 'Sem legenda.'}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <AnotarPost video={video} />
                   {video.url && (
                     <Button size="sm" variant="tertiary" onPress={() => window.open(video.url, '_blank')}>
                       <ArrowUpRightFromSquare />
@@ -663,5 +664,39 @@ function AcoesPost({ video, aoMudarPastas }: { video: Video; aoMudarPastas?: () 
         itens={[...estilos.map((e) => ({ id: e.id, rotulo: e.nome, icone: <Palette />, aoEscolher: () => referencia(e) })),
           { id: 'novo', rotulo: 'Novo estilo com este post', icone: <Plus />, aoEscolher: () => referencia(null) }]} />
     </div>
+  )
+}
+
+/** Guarda no Caderno de ideias o que esse post te fez pensar (com o post como referência). */
+function AnotarPost({ video }: { video: Video }) {
+  const [aberto, setAberto] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [salvo, setSalvo] = useState(false)
+  useEffect(() => { setAberto(false); setTexto(''); setSalvo(false) }, [video.id])
+  const salvar = async () => {
+    try {
+      await apiNotas.criar({ texto: texto.trim(), tipo: 'referencia', ref: { plataforma: video.plataforma, conta: video.conta, id: video.id, legenda: video.legenda.slice(0, 300) } })
+      tocar('bolha'); setSalvo(true); setAberto(false); setTexto('')
+      toast.success('Anotado no Caderno de ideias', { description: 'Está em Criar → Caderno de ideias, com este post como referência.' })
+    } catch (e) { toast.danger('Não deu para anotar', { description: (e as Error).message }) }
+  }
+  if (!aberto) {
+    return (
+      <Button size="sm" variant="tertiary" onPress={() => setAberto(true)}>
+        <Pencil /> {salvo ? 'Anotar outra coisa' : 'Anotar no caderno'}
+      </Button>
+    )
+  }
+  return (
+    <form className="w-full space-y-2" onSubmit={(e) => { e.preventDefault(); salvar() }}>
+      <textarea autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} rows={3} aria-label="Anotação sobre o post"
+        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); salvar() } if (e.key === 'Escape') setAberto(false) }}
+        placeholder="O que esse post te fez pensar? Ex.: dá para fazer isso com o cardápio dos meus clientes"
+        className="w-full resize-none rounded-xl bg-surface-secondary/70 p-3 text-sm outline-none placeholder:text-muted focus:ring-2 focus:ring-accent/40" />
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onPress={() => setAberto(false)}>Cancelar</Button>
+        <Button size="sm" type="submit" className="botao-sinal">Guardar nota</Button>
+      </div>
+    </form>
   )
 }

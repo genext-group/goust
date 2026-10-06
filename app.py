@@ -168,6 +168,9 @@ def api_acompanhar():
     papel = d.get("papel") if d.get("papel") in ("concorrente", "referencia", "proprio") else "concorrente"
     try:
         tarefas.acompanhar(plataforma, conta, papel, d.get("nome"), aspectos=d.get("aspectos"), nota=d.get("nota"))
+        if papel == "proprio":
+            from baixador.inteligencia import insights
+            insights.perfil_mudou()
         eventos.registrar("acompanhar", {"plataforma": plataforma, "conta": conta, "papel": papel,
                                          "com_contexto": bool(d.get("aspectos") or d.get("nota"))})
     except tarefas.PerfilProprio as e:
@@ -220,12 +223,20 @@ def api_papel_conta(plataforma, conta):
         return jsonify(erro=str(e), codigo="perfil_proprio"), 409
     db.executar("""update acompanhamentos set papel = %s where usuario_id = %s and conta_id =
                    (select id from contas where plataforma = %s and conta = %s)""", papel, contexto.usuario(), plataforma, conta)
+    if (atual and atual["papel"] == "proprio") != (papel == "proprio"):
+        from baixador.inteligencia import insights
+        insights.perfil_mudou()
     return jsonify(contas_completas())
 
 
 @app.delete("/api/contas/<plataforma>/<conta>")
 @protegido
 def api_remover_conta(plataforma, conta):
+    era_proprio = db.um("""select 1 from acompanhamentos a join contas c on c.id = a.conta_id where a.usuario_id = %s
+                          and c.plataforma = %s and c.conta = %s and a.papel = 'proprio'""", contexto.usuario(), plataforma, conta)
+    if era_proprio:
+        from baixador.inteligencia import insights
+        insights.perfil_mudou()
     db.executar("""delete from acompanhamentos where usuario_id = %s and conta_id =
                    (select id from contas where plataforma = %s and conta = %s)""", contexto.usuario(), plataforma, conta)
     return jsonify(contas_completas())
@@ -749,6 +760,74 @@ def api_escolha_ideia():
 @protegido
 def api_gerar_roteiro(cid):
     return jsonify(ia_tarefas.enfileirar("roteiro", params={"alvo": cid, "pedido": (request.json or {}).get("pedido", "")}))
+
+
+# ---------------------------------------------------------------- caderno de ideias
+
+@app.get("/api/notas")
+@protegido
+def api_notas():
+    from baixador.ia import notas
+    return jsonify(notas=notas.listar(), temas=notas.temas_guardados())
+
+
+@app.post("/api/notas")
+@protegido
+def api_criar_nota():
+    from baixador.ia import notas
+    r = _erro(notas.criar, request.json or {})
+    eventos.registrar("nota", {})
+    return r
+
+
+@app.put("/api/notas/<int:nid>")
+@protegido
+def api_atualizar_nota(nid):
+    from baixador.ia import notas
+    return _erro(notas.atualizar, nid, request.json or {})
+
+
+@app.delete("/api/notas/<int:nid>")
+@protegido
+def api_apagar_nota(nid):
+    from baixador.ia import notas
+    notas.apagar(nid)
+    return jsonify(ok=True)
+
+
+@app.post("/api/notas/<int:nid>/provocar")
+@protegido
+def api_provocar_nota(nid):
+    from baixador.ia import notas
+    return _erro(notas.provocar, nid)
+
+
+@app.post("/api/notas/desenvolver")
+@protegido
+def api_desenvolver_notas():
+    from baixador.ia import notas
+    d = request.json or {}
+    eventos.registrar("ia:notas", {"qtd": len(d.get("ids") or [])})
+    return _erro(lambda: {"ideias": notas.desenvolver(d.get("ids") or [], d.get("pedido") or "", d.get("qtd") or 3)})
+
+
+@app.post("/api/notas/organizar")
+@protegido
+def api_organizar_notas():
+    from baixador.ia import notas
+    return _erro(lambda: notas.organizar(bool((request.json or {}).get("forcar"))))
+
+
+@app.post("/api/notas/virar-conteudo")
+@protegido
+def api_nota_virar_conteudo():
+    from baixador.ia import notas
+    d = request.json or {}
+    def fazer():
+        c = notas.virar_conteudo(d.get("ideia") or {}, d.get("data"))
+        tarefa = ia_tarefas.enfileirar("roteiro", params={"alvo": c["id"], "pedido": ""}) if d.get("roteiro") else None
+        return {"conteudo": c, "tarefa": tarefa}
+    return _erro(fazer)
 
 
 # ---------------------------------------------------------------- primeira configuração

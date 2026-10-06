@@ -126,7 +126,7 @@ export function EstrategiaView({ r }: { r: RegistroEstrategia }) {
         <ListaOportunidades secao="estrategia.prioridades" itens={e.prioridades_90_dias} />
       </Secao>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Secao titulo="O que adaptar dos concorrentes" icone={<Bulb />}>
+        <Secao titulo="O que adaptar de concorrentes e referências" icone={<Bulb />}>
           <ListaOportunidades secao="estrategia.adaptar" itens={e.o_que_adaptar_dos_concorrentes} />
         </Secao>
         <Secao titulo="Espaços livres" icone={<Compass />}>

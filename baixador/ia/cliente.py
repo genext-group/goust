@@ -1,5 +1,6 @@
 """Cliente OpenAI, modelos configuráveis no .env e contabilidade de tokens."""
 import os
+import re
 import threading
 import time
 
@@ -74,7 +75,35 @@ def com_busca_na_web(tipo, instrucoes, conteudo, formato, esforco="low"):
     r = cliente().responses.parse(**args)
     buscas = sum(1 for o in (r.output or []) if getattr(o, "type", "") == "web_search_call")
     registrar_uso(modelo, r.usage.input_tokens, r.usage.output_tokens, buscas=buscas)
-    return r.output_parsed
+    return _sem_citacoes(r.output_parsed)
+
+
+_LINK_MD = re.compile(r"\s*\(\s*\[([^\]]*)\]\([^)]*\)\s*\)|\[([^\]]*)\]\(https?://[^)]*\)")
+_URL = re.compile(r"\s*\(?https?://\S+\)?")
+
+
+def limpar_citacoes(texto):
+    """Tira as citações que a busca na web cola no texto: "([site.com](https://...utm_source=openai))", links crus."""
+    if not isinstance(texto, str):
+        return texto
+    t = _LINK_MD.sub(lambda m: "" if m.group(1) is not None else m.group(2), texto)
+    t = _URL.sub("", t)
+    return re.sub(r"\s+([.,;:])", r"", re.sub(r"\s{2,}", " ", t)).strip()
+
+
+def _sem_citacoes(obj):
+    """Aplica limpar_citacoes em todos os textos de um modelo pydantic (recursivo)."""
+    if obj is None:
+        return obj
+    for nome in type(obj).model_fields:
+        v = getattr(obj, nome)
+        if isinstance(v, str):
+            setattr(obj, nome, limpar_citacoes(v))
+        elif isinstance(v, list):
+            setattr(obj, nome, [_sem_citacoes(x) if hasattr(x, "model_fields") else limpar_citacoes(x) for x in v])
+        elif hasattr(v, "model_fields"):
+            _sem_citacoes(v)
+    return obj
 
 
 def estruturado(tipo, instrucoes, conteudo, formato, esforco="medium"):
