@@ -448,7 +448,7 @@ export const central = {
 
 export interface PerfilEncontrado {
   plataforma: Plataforma; conta: string; nome: string | null; foto: string | null; seguidores: number | null
-  verificado: boolean; exato?: boolean; web?: boolean; acompanha?: string | null
+  verificado: boolean; exato?: boolean; web?: boolean; acompanha?: string | null; proprio?: boolean
 }
 export const perfis = {
   buscar: (q: string, plataforma?: Plataforma) =>

@@ -6,6 +6,7 @@ import { api, baixarArquivo, criacao, ia, pastas as apiPastas, urlEmbed, urlThum
 import { Explosao } from '../components/AnimProcessos'
 import { Menu } from '../components/Menu'
 import { tocar } from '../sons'
+import { useDialogoTexto } from '../components/ui/DialogoTexto'
 import { useNuvem } from '../ambiente'
 import { NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
 import { fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
@@ -33,6 +34,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
   const [mapa, setMapa] = useState<Record<string, number[]>>({})
   const [pastaSel, setPastaSel] = useState<number | null>(null)
   const [novaPasta, setNovaPasta] = useState<string | null>(null)
+  const { dialogo: dialogoTexto, pedir: pedirTexto } = useDialogoTexto()
 
   useEffect(() => {
     api.biblioteca().then(setVideos).catch(() => setVideos([]))
@@ -60,7 +62,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
     if (comPost && nova) colocar(comPost, nova, true)
   }
   const renomearPasta = async (p: Pasta) => {
-    const nome = window.prompt('Novo nome da pasta', p.nome)
+    const nome = await pedirTexto({ titulo: 'Renomear pasta', rotulo: 'Nome da pasta', valor: p.nome })
     if (nome?.trim()) setPastas(await apiPastas.renomear(p.id, nome))
   }
   const apagarPasta = async (p: Pasta) => {
@@ -245,7 +247,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
           {filtrados.slice(0, limite).map((v) => (
             <CartaoVideo key={`${v.plataforma}/${v.id}`} v={v} nome={nomes[`${v.plataforma}/${v.conta}`]} onAbrir={() => setAberto(v)}
               pastas={pastas} dentro={mapa[`${v.plataforma}/${v.id}`] ?? []} favoritos={favoritos}
-              aoColocar={(p, d) => colocar(v, p, d)} aoNovaPasta={() => { const n = window.prompt('Nome da nova pasta'); if (n) criarPasta(n, v) }} />
+              aoColocar={(p, d) => colocar(v, p, d)} aoNovaPasta={async () => { const n = await pedirTexto({ titulo: 'Nova pasta', rotulo: 'Nome da pasta', placeholder: 'Ex.: Ganchos bons', confirmar: 'Criar e guardar' }); if (n) criarPasta(n, v) }} />
           ))}
         </div>
       )}
@@ -253,6 +255,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
 
       <ModalVideo video={aberto} nome={aberto ? nomes[`${aberto.plataforma}/${aberto.conta}`] : undefined} onFechar={() => setAberto(null)}
         aoMudarPastas={carregarPastas} />
+      {dialogoTexto}
     </div>
   )
 }
@@ -348,7 +351,7 @@ export function ModalVideo({ video, nome, onFechar, aoMudarPastas }: { video: Vi
                     className="mx-auto aspect-[9/16] max-h-[78vh] w-full border-0" />
                 )}
               </div>
-              <div className="flex max-h-[78vh] flex-col gap-5 overflow-y-auto p-6">
+              <div data-rolavel="y" className="flex max-h-[78vh] flex-col gap-5 overflow-y-auto p-6">
                 <div className="space-y-1">
                   <SeloPlataforma plataforma={video.plataforma} />
                   <h3 className="titulo-display text-xl font-semibold">{nome ?? `@${video.conta}`}</h3>
@@ -486,7 +489,7 @@ function Comentarios({ video }: { video: Video }) {
       <summary className="cursor-pointer text-xs font-medium tracking-wide text-muted uppercase">
         Comentários ({lista.length})
       </summary>
-      <ul className="mt-3 max-h-72 space-y-2.5 overflow-y-auto pr-1">
+      <ul data-rolavel="y" className="mt-3 max-h-72 space-y-2.5 overflow-y-auto pr-1">
         {lista.map((c, i) => (
           <li key={i} className="text-sm leading-relaxed">
             {c.texto}

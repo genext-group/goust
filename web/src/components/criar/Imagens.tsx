@@ -120,7 +120,7 @@ export function Imagens({ pedidoInicial, aoConsumirPedido, irParaEstilos }: {
             <p className="text-sm font-medium">Estilo visual</p>
             <button onClick={irParaEstilos} className="text-xs text-accent hover:underline">Gerenciar estilos</button>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div data-rolavel="x" className="flex gap-2 overflow-x-auto pb-1">
             <button onClick={() => setEstilo(null)}
               className={`grid h-16 w-14 shrink-0 place-items-center rounded-xl border text-[11px] text-muted ${estilo === null ? 'border-accent ring-2 ring-accent/30' : 'linha-fina'}`}>Livre</button>
             {estilos.map((e) => (

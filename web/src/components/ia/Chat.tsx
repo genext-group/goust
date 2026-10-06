@@ -50,7 +50,7 @@ export function Chat({ escopo, titulo, isOpen, onOpenChange }: { escopo: Escopo;
             </Drawer.Heading>
             <p className="text-sm text-muted">{titulo}</p>
           </Drawer.Header>
-          <Drawer.Body className="flex-1 space-y-4 overflow-y-auto">
+          <Drawer.Body data-rolavel="y" className="flex-1 space-y-4 overflow-y-auto">
             {!msgs.length && (
               <div className="space-y-2 pt-4">
                 <p className="text-sm text-muted">Sugestões:</p>

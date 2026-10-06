@@ -165,7 +165,7 @@ function LinhaTarefa({ t, aoMudar }: { t: Tarefa; aoMudar: () => void }) {
           </Disclosure.Heading>
           <Disclosure.Content>
             <Disclosure.Body>
-              <pre className="max-h-56 overflow-auto rounded-xl bg-surface-secondary p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted">
+              <pre data-rolavel="y" className="max-h-56 overflow-auto rounded-xl bg-surface-secondary p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted">
                 {t.logs.join('\n')}
               </pre>
             </Disclosure.Body>

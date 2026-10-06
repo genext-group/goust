@@ -150,7 +150,7 @@ def _item_do_link(t):
     with YoutubeDL(opts) as ydl:
         info = ydl.extract_info(t["opcoes"]["link"], download=False)
     t["conta"] = info.get("uploader") or info.get("channel") or t["conta"]
-    acompanhar(t["plataforma"], t["conta"])  # para o vídeo aparecer na biblioteca do usuário
+    acompanhar(t["plataforma"], t["conta"], so_se_novo=True)  # para o vídeo aparecer na biblioteca (sem mudar papel)
     return {
         "id": info.get("display_id") if t["plataforma"] == "instagram" else info["id"],
         "url": info.get("webpage_url") or t["opcoes"]["link"],
@@ -252,13 +252,43 @@ def _depois(t):
             tarefas_ia.enfileirar("perfil", t["plataforma"], t["conta"])
 
 
-def acompanhar(plataforma, conta, papel="concorrente", nome=None, usuario_id=None):
-    """Marca que o usuário acompanha a conta (cria a conta no catálogo compartilhado se preciso)."""
+class PerfilProprio(ValueError):
+    """Tentativa de usar o perfil principal da conta como concorrente/referência."""
+
+
+def perfil_proprio_igual(usuario_id, plataforma, conta):
+    """O perfil principal com esse @ (em qualquer plataforma: é a mesma marca), se houver."""
+    return db.um("""select c.plataforma, c.conta from acompanhamentos a join contas c on c.id = a.conta_id
+                    where a.usuario_id = %s and a.papel = 'proprio' and lower(c.conta) = lower(%s)
+                    order by (c.plataforma = %s) desc limit 1""", usuario_id, conta, plataforma)
+
+
+def validar_papel(usuario_id, plataforma, conta, papel):
+    """Regra de negócio: o perfil principal da conta nunca vira concorrente/referência de si mesmo."""
+    if papel == "proprio":
+        return
+    p = perfil_proprio_igual(usuario_id, plataforma, conta)
+    if p:
+        raise PerfilProprio(f"@{p['conta']} é o perfil principal da sua conta e não pode ser "
+                            f"adicionado como {'referência' if papel == 'referencia' else 'concorrente'}.")
+
+
+def acompanhar(plataforma, conta, papel="concorrente", nome=None, usuario_id=None, so_se_novo=False):
+    """Marca que o usuário acompanha a conta (cria a conta no catálogo compartilhado se preciso).
+    `so_se_novo`: só cria o vínculo, sem mudar o papel de quem já existe (ex.: baixar um vídeo avulso)."""
+    usuario_id = usuario_id or contexto.usuario()
+    if so_se_novo:
+        cid = catalogo.conta_id(plataforma, conta)
+        db.executar("""insert into acompanhamentos (usuario_id, conta_id, papel, nome) values (%s, %s, %s, %s)
+                       on conflict (usuario_id, conta_id) do nothing""",
+                    usuario_id, cid, "proprio" if perfil_proprio_igual(usuario_id, plataforma, conta) else papel, nome)
+        return cid
+    validar_papel(usuario_id, plataforma, conta, papel)
     cid = catalogo.conta_id(plataforma, conta)
     db.executar("""insert into acompanhamentos (usuario_id, conta_id, papel, nome) values (%s, %s, %s, %s)
                    on conflict (usuario_id, conta_id) do update set papel = excluded.papel,
                    nome = coalesce(excluded.nome, acompanhamentos.nome)""",
-                usuario_id or contexto.usuario(), cid, papel, nome)
+                usuario_id, cid, papel, nome)
     return cid
 
 

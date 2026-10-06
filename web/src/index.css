@@ -194,3 +194,18 @@ button:not([disabled]):active { transform: scale(0.97); transition: transform 0.
   .troca-pagina, .entrar-cima, .cascata > *, .carregando { animation: none !important; }
   .anim-desenhar { stroke-dasharray: none; }
 }
+
+/* ---------------------------------------------------------------- rolagem (regra global)
+   Nenhuma scrollbar nativa visível. A rolagem continua: roda, trackpad, toque e teclado.
+   Containers com [data-rolavel="y" | "x"] ganham um fade na borda quando ainda há conteúdo
+   naquela direção (o atributo data-fade é mantido por src/rolagem.ts). */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+[data-rolavel] { --fade: 44px; }
+[data-rolavel="y"][data-fade="fim"] { mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); }
+[data-rolavel="y"][data-fade="inicio"] { mask-image: linear-gradient(to bottom, transparent, #000 28px); }
+[data-rolavel="y"][data-fade="ambos"] { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - var(--fade)), transparent); }
+[data-rolavel="x"][data-fade="fim"] { mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent); }
+[data-rolavel="x"][data-fade="inicio"] { mask-image: linear-gradient(to right, transparent, #000 var(--fade)); }
+[data-rolavel="x"][data-fade="ambos"] { mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); }

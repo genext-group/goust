@@ -5,6 +5,7 @@ import { criacao, type Conteudo, type Estrategia, type IdeiaGerada } from '../..
 import { tocar } from '../../sons'
 import { AnimProcesso, Explosao } from '../AnimProcessos'
 import { FORMATOS, OBJETIVOS, diasLivres, rotuloDia } from './comum'
+import { SeletorData } from '../ui/SeletorData'
 
 const PASSOS = ['Assunto', 'Formato', 'Ideia', 'Quando'] as const
 
@@ -169,10 +170,10 @@ export function Criador({ aberto, aoFechar, estrategia, itens, dataInicial, aoCr
                   {opcoesData.map((d) => <Chip key={d} ativo={data === d} onPress={() => setData(d)}>{rotuloDia(d)}</Chip>)}
                   <Chip ativo={data === null} onPress={() => setData(null)}>Sem data (banco de ideias)</Chip>
                 </div>
-                <label className="flex items-center gap-2 text-sm text-muted">
+                <div className="flex items-center gap-3 text-sm text-muted">
                   Outra data:
-                  <input type="date" value={data ?? ''} onChange={(e) => setData(e.target.value || null)} className="rounded-xl bg-surface-secondary px-3 py-1.5 text-foreground outline-none" />
-                </label>
+                  <SeletorData valor={data} aoMudar={setData} placeholder="Escolher no calendário" tamanho="sm" className="w-64" />
+                </div>
                 <Switch isSelected={roteirizar} onChange={setRoteirizar}>
                   <Switch.Control><Switch.Thumb /></Switch.Control>
                   <Switch.Content><Label>Já escrever o roteiro com a IA</Label></Switch.Content>

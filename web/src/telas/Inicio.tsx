@@ -190,7 +190,7 @@ export function TelaInicio({ contas, setContas, irPara }: Props) {
           <Drawer.Dialog className="flex h-full w-screen max-w-full flex-col sm:w-[520px]">
             <Drawer.CloseTrigger />
             <Drawer.Header><Drawer.Heading className="titulo-display text-lg font-semibold">Sinais do seu mercado</Drawer.Heading></Drawer.Header>
-            <Drawer.Body className="flex-1 overflow-y-auto">
+            <Drawer.Body data-rolavel="y" className="flex-1 overflow-y-auto">
               <div className="divide-y linha-fina [&>*]:linha-fina">
                 {c.mercado.map((i) => <LinhaSinal key={i.id} i={i} avaliar={avaliar} abrirPost={abrirPost} aberto />)}
               </div>
@@ -550,7 +550,7 @@ function Descobertas({ lista, setLista, setContas }: { lista: DescobertaRef[]; s
     }
   }
   return (
-    <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
+    <div data-rolavel="x" className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
       {lista.map((d, n) => {
         const estado = feitos[d.id]
         const papel = d.tipo

@@ -94,6 +94,10 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
   }, [])
 
   const escolher = (p: PerfilEncontrado) => {
+    if (p.proprio && !proprio) {
+      toast.warning('Esse é o seu perfil principal', { description: `@${p.conta} é o perfil da sua conta e não pode ser adicionado como concorrente ou referência.` })
+      return
+    }
     if (p.acompanha) { toast(`Você já acompanha @${p.conta}`); return }
     tocar('clique')
     setEscolhido(p)
@@ -175,7 +179,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
                 <span>{buscando ? 'Procurando no Instagram e no TikTok…' : resultados?.length ? 'Perfis encontrados' : ''}</span>
                 {limitada && !buscando && <span className="text-[var(--ambar)]">Busca limitada · API de dados sem créditos</span>}
               </div>
-              <ul role="listbox" className="max-h-[420px] overflow-y-auto px-2 pb-2">
+              <ul role="listbox" data-rolavel="y" className="max-h-[420px] overflow-y-auto px-2 pb-2">
                 {buscando && !resultados?.length && [0, 1, 2].map((i) => (
                   <li key={i} className="flex items-center gap-3 px-3 py-2.5">
                     <span className="carregando size-10 rounded-full" />
@@ -185,7 +189,8 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
                 {resultados?.map((p, i) => (
                   <li key={`${p.plataforma}/${p.conta}`} role="option" aria-selected={i === ativo}>
                     <button onMouseEnter={() => setAtivo(i)} onClick={() => escolher(p)}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${i === ativo ? 'bg-surface-secondary' : ''}`}>
+                      aria-disabled={!!(p.proprio && !proprio)}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${i === ativo ? 'bg-surface-secondary' : ''} ${p.proprio && !proprio ? 'opacity-60' : ''}`}>
                       <Avatar p={p} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{p.nome || `@${p.conta}`}{p.verificado && <Check className="ml-1 inline size-3.5 text-accent" />}</span>
@@ -194,7 +199,8 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
                           {p.seguidores != null ? ` · ${fmtNum(p.seguidores)} seguidores` : p.web ? ' · encontrado na web' : ''}
                         </span>
                       </span>
-                      {p.acompanha ? <span className="shrink-0 rounded-full bg-surface-tertiary px-2 py-0.5 text-[11px] text-muted">Já acompanha</span>
+                      {p.proprio && !proprio ? <span className="shrink-0 rounded-full bg-[var(--menta)]/15 px-2 py-0.5 text-[11px] text-[var(--menta)]">Seu perfil</span>
+                        : p.acompanha ? <span className="shrink-0 rounded-full bg-surface-tertiary px-2 py-0.5 text-[11px] text-muted">Já acompanha</span>
                         : p.exato ? <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] text-accent">@ exato</span> : null}
                     </button>
                   </li>

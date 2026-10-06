@@ -185,7 +185,7 @@ export function Sessao({ aberto, aoFechar, estrategia, itens, aoConcluir }: {
                     <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs backdrop-blur-md">{OBJETIVOS[atual.objetivo]}</span>
                     <span className="ml-auto truncate text-xs text-white/80">{atual.pilar}</span>
                   </div>
-                  <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-6">
+                  <div data-rolavel="y" className="flex flex-1 flex-col gap-3 overflow-y-auto p-6">
                     <h3 className="titulo-display text-2xl leading-tight font-semibold">{atual.titulo}</h3>
                     <p className="text-lg leading-snug italic">“{atual.gancho}”</p>
                     <p className="text-sm leading-relaxed text-muted">{atual.ideia}</p>
@@ -224,7 +224,7 @@ export function Sessao({ aberto, aoFechar, estrategia, itens, aoConcluir }: {
                 <p className="mt-1 text-sm text-muted">{escolhas.length ? 'Ajuste as datas e mande tudo para o calendário.' : 'A IA anotou o que você recusou. A próxima rodada vem diferente.'}</p>
               </div>
               {escolhas.length > 0 && (
-                <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+                <div data-rolavel="y" className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
                   {escolhas.map((e, i) => (
                     <div key={e.ideia.titulo} className="rounded-2xl bg-surface-secondary/60 p-3">
                       <div className="flex items-center gap-2">

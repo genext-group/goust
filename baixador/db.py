@@ -267,6 +267,13 @@ create table if not exists descobertas (
   atualizado_em timestamptz not null default now(),
   unique (usuario_id, plataforma, conta)
 );
+
+-- regra de negócio: o perfil principal nunca aparece como concorrente/referência de si mesmo
+-- (mesmo @ em outra plataforma é a mesma marca → vira perfil principal também)
+update acompanhamentos a2 set papel = 'proprio'
+from acompanhamentos a1, contas c1, contas c2
+where a1.conta_id = c1.id and a2.conta_id = c2.id and a1.usuario_id = a2.usuario_id
+  and a1.papel = 'proprio' and a2.papel <> 'proprio' and lower(c1.conta) = lower(c2.conta);
 """
 
 

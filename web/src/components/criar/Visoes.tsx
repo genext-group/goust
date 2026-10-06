@@ -97,7 +97,7 @@ export function VisaoSemana({ x, inicio }: { x: Comum; inicio: Date }) {
   const mapa = porDia(x.itens)
   const hoje = hojeIso()
   return (
-    <div className="grid gap-2 overflow-x-auto pb-1 [grid-template-columns:repeat(7,minmax(150px,1fr))]">
+    <div data-rolavel="x" className="grid gap-2 overflow-x-auto pb-1 [grid-template-columns:repeat(7,minmax(150px,1fr))]">
       {dias.map((d, i) => {
         const k = iso(d)
         const lista = mapa.get(k) ?? []
@@ -193,7 +193,7 @@ function LinhaLista({ x, c }: { x: Comum; c: Conteudo }) {
 export function VisaoQuadro({ x }: { x: Comum }) {
   const ordenar = (a: Conteudo, b: Conteudo) => (a.data ?? '9999').localeCompare(b.data ?? '9999')
   return (
-    <div className="grid gap-3 overflow-x-auto pb-1 [grid-template-columns:repeat(5,minmax(170px,1fr))]">
+    <div data-rolavel="x" className="grid gap-3 overflow-x-auto pb-1 [grid-template-columns:repeat(5,minmax(170px,1fr))]">
       {ORDEM_STATUS.map((s) => {
         const lista = x.itens.filter((c) => c.status === s).sort(ordenar)
         return (
@@ -237,7 +237,7 @@ export function FilaProducao({ x }: { x: Comum }) {
         <h3 className="titulo-display text-lg font-semibold">Para produzir nos próximos 7 dias</h3>
         <span className="num text-sm text-muted">{lista.length}</span>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-1">
+      <div data-rolavel="x" className="flex gap-3 overflow-x-auto pb-1">
         {lista.map((c) => {
           const f = formatoDe(c.formato)
           const prox = proximo(c.status)

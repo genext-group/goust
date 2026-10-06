@@ -32,7 +32,7 @@ export function EstrategiaView({ r }: { r: RegistroEstrategia }) {
       </section>
 
       <Secao titulo="Você contra os concorrentes" icone={<ChartLine />} descricao="Números reais dos perfis catalogados.">
-        <div className="-mx-2 overflow-x-auto">
+        <div data-rolavel="x" className="-mx-2 overflow-x-auto">
           <table className="num w-full min-w-[640px] text-sm">
             <thead>
               <tr className="text-left text-xs tracking-wide text-muted uppercase">

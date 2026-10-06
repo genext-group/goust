@@ -7,6 +7,7 @@ import { tocar } from '../../sons'
 import { AnimProcesso } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { FORMATOS, STATUS } from './comum'
+import { SeletorData } from '../ui/SeletorData'
 
 const copiar = (texto: string, o_que = 'Copiado') => {
   navigator.clipboard.writeText(texto).then(() => { tocar('pasta'); toast(o_que) }).catch(() => {})
@@ -73,7 +74,7 @@ export function DetalheConteudo({ conteudo, novo, dataNovo, aoFechar, aoMudar, a
           <Drawer.Header>
             <Drawer.Heading className="titulo-display text-lg font-semibold">{novo ? 'Nova ideia' : 'Conteúdo'}</Drawer.Heading>
           </Drawer.Header>
-          <Drawer.Body className="flex-1 space-y-6 overflow-y-auto">
+          <Drawer.Body data-rolavel="y" className="flex-1 space-y-6 overflow-y-auto">
             <TextField value={f.titulo} onChange={(v) => setF({ ...f, titulo: v })}>
               <Label className="sr-only">Título</Label>
               <Input placeholder="Título do conteúdo" className="titulo-display h-12 text-xl font-semibold" />
@@ -89,9 +90,7 @@ export function DetalheConteudo({ conteudo, novo, dataNovo, aoFechar, aoMudar, a
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
-              <TextField value={f.data} onChange={(v) => setF({ ...f, data: v })}>
-                <Label>Data</Label><Input type="date" />
-              </TextField>
+              <SeletorData rotulo="Data" valor={f.data || null} aoMudar={(v) => setF({ ...f, data: v ?? '' })} placeholder="Sem data" />
               <div>
                 <p className="mb-1.5 text-sm font-medium">Formato</p>
                 <div className="flex flex-wrap gap-1">

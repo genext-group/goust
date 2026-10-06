@@ -9,6 +9,7 @@ import { BoasVindas } from './telas/BoasVindas'
 import { TelaCriar } from './telas/Criar'
 import { AmbienteContexto } from './ambiente'
 import { LogoAnimado, TelaCarregando } from './components/Animacoes'
+import { instalarFadeDeRolagem } from './rolagem'
 import { aoMudarSons, definirSons, instalarSonsDeClique, sonsLigados, tocar } from './sons'
 import { TelaBiblioteca } from './telas/Biblioteca'
 import { TelaContas } from './telas/Contas'
@@ -85,6 +86,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
 
   useEffect(() => aoMudarSons(setSom), [])
   useEffect(() => instalarSonsDeClique(), [])
+  useEffect(() => instalarFadeDeRolagem(), [])
 
   const carregarContas = useCallback(() => api.contas().then(setContas).catch(() => {}), [])
   const carregarTarefas = useCallback(() => api.tarefas().then(setTarefas).catch(() => {}), [])
@@ -196,7 +198,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
             {clerk && <UserButton />}
           </div>
         </div>
-        <div className="overflow-x-auto px-2 pb-2 md:hidden">
+        <div data-rolavel="x" className="overflow-x-auto px-2 pb-2 md:hidden">
           <NavDeslizante itens={itens} aba={aba} irPara={irPara} className="flex" />
         </div>
       </header>

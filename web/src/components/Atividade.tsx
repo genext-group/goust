@@ -157,7 +157,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
               <p className="titulo-display font-semibold">Atividade</p>
               <Button isIconOnly size="sm" variant="ghost" aria-label="Fechar" onPress={() => setAberta(false)}><ChevronDown /></Button>
             </div>
-            <div className="max-h-[60vh] space-y-1 overflow-y-auto px-2 pb-2">
+            <div data-rolavel="y" className="max-h-[60vh] space-y-1 overflow-y-auto px-2 pb-2">
               {ativos.length === 0 && recentes.length === 0 && (
                 <p className="px-3 py-6 text-center text-sm text-muted">Nada rodando agora. Coletas, análises e criações aparecem aqui.</p>
               )}

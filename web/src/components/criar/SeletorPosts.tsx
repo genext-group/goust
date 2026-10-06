@@ -1,6 +1,7 @@
 import { Button, Modal } from '@heroui/react'
 import { Check } from '@gravity-ui/icons'
 import { useEffect, useMemo, useState } from 'react'
+import { Selecao } from '../ui/Selecao'
 import { api, pastas as apiPastas, type Conta, type Pasta, type Video } from '../../api'
 
 /** Escolher posts da biblioteca (filtra por pasta e por perfil). Usado para montar estilos visuais. */
@@ -34,15 +35,13 @@ export function SeletorPosts({ aberto, contas, versao, limite, aoFechar, aoEscol
         <Modal.Dialog className="flex max-h-[88vh] w-full max-w-[920px] flex-col sm:max-w-[920px]">
           <Modal.CloseTrigger />
           <Modal.Header><Modal.Heading className="titulo-display text-lg font-semibold">Escolher da biblioteca</Modal.Heading></Modal.Header>
-          <Modal.Body className="flex-1 space-y-3 overflow-y-auto">
+          <Modal.Body data-rolavel="y" className="flex-1 space-y-3 overflow-y-auto">
             <div className="flex flex-wrap gap-1.5">
               <Chip ativo={pasta === null} onPress={() => setPasta(null)}>Tudo</Chip>
               {pastas.map((p) => <Chip key={p.id} ativo={pasta === p.id} onPress={() => setPasta(p.id)}>{p.sistema ? '♥ ' : ''}{p.nome} <span className="num text-muted">{p.posts}</span></Chip>)}
-              <select value={conta} onChange={(e) => setConta(e.target.value)} aria-label="Perfil"
-                className="ml-auto rounded-full bg-surface-secondary px-3 py-1 text-sm outline-none">
-                <option value="">Todos os perfis</option>
-                {contas.map((c) => <option key={`${c.plataforma}/${c.conta}`} value={`${c.plataforma}/${c.conta}`}>@{c.conta}</option>)}
-              </select>
+              <Selecao className="ml-auto w-56" tamanho="sm" variante="pilula" rotuloAcessivel="Perfil" valor={conta}
+                aoMudar={setConta} opcoes={[{ valor: '', rotulo: 'Todos os perfis' },
+                  ...contas.map((c) => ({ valor: `${c.plataforma}/${c.conta}`, rotulo: `@${c.conta}`, texto: c.conta }))]} />
             </div>
             {videos === null ? <div className="carregando h-64" /> : lista.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted">Nenhum post aqui.</p>

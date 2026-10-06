@@ -31,8 +31,12 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
   const visiveis = useMemo(() => contas.filter((c) => (filtro === 'todas' || c.plataforma === filtro)
     && (papel === 'todos' || (c.papel ?? 'concorrente') === papel)), [contas, filtro, papel])
   const mudarPapel = async (c: Conta, p: 'proprio' | 'concorrente' | 'referencia') => {
-    tocar('pasta')
-    setContas(await api.papelConta(c, p))
+    try {
+      setContas(await api.papelConta(c, p))
+      tocar('pasta')
+    } catch (e) {
+      toast.warning('Não dá para mudar o papel', { description: (e as Error).message })
+    }
   }
   const escolhidas = contas.filter((c) => selecionadas.has(chave(c)))
   const todasVisiveisMarcadas = visiveis.length > 0 && visiveis.every((c) => selecionadas.has(chave(c)))

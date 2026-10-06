@@ -1,7 +1,8 @@
-import { Button, Input, Label, Modal, NumberField, Radio, RadioGroup, Switch, TextField } from '@heroui/react'
+import { Button, Label, Modal, NumberField, Radio, RadioGroup, Switch } from '@heroui/react'
 import { ArrowDownToLine } from '@gravity-ui/icons'
 import { useState } from 'react'
 import type { Conta, Modo, Opcoes } from '../api'
+import { SeletorData } from './ui/SeletorData'
 
 const MODOS: { id: Modo; titulo: string; desc: string }[] = [
   { id: 'recentes', titulo: 'Mais recentes', desc: 'Os últimos N vídeos' },
@@ -89,14 +90,8 @@ export function ModalDownload({ contas, isOpen, onOpenChange, onConfirmar }: Pro
 
             {modo === 'periodo' && (
               <div className="grid grid-cols-2 gap-3">
-                <TextField value={dataInicio} onChange={setDataInicio} isRequired>
-                  <Label>De</Label>
-                  <Input type="date" />
-                </TextField>
-                <TextField value={dataFim} onChange={setDataFim}>
-                  <Label>Até</Label>
-                  <Input type="date" />
-                </TextField>
+                <SeletorData rotulo="De" valor={dataInicio || null} aoMudar={(v) => setDataInicio(v ?? '')} max={dataFim || undefined} limpavel={false} />
+                <SeletorData rotulo="Até" valor={dataFim || null} aoMudar={(v) => setDataFim(v ?? '')} min={dataInicio || undefined} placeholder="Hoje" />
               </div>
             )}
 

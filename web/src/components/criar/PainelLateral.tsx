@@ -138,7 +138,7 @@ export function PainelLateral({ itens, estrategia, filtroStatus, setFiltroStatus
             <button onClick={aoAbrirSessao} className="mt-2 block w-full font-medium text-accent hover:underline">Encher o banco com a IA</button>
           </div>
         ) : (
-          <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+          <div data-rolavel="y" className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
             {semData.map((c) => (
               <CartaoConteudo key={c.id} c={c} capa={capas[c.id]} arrastando={arrastando === c.id} aoArrastar={setArrastando}
                 aoAbrir={() => abrir(c)} aoStatus={(s) => mudarStatus(c, s)} aoEntrar={(el) => previa.entrar(c, el)} aoSair={previa.sair} />

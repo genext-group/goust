@@ -114,9 +114,9 @@ def api_adicionar_conta():
     d = request.json
     try:
         plataforma, conta = normalizar_conta(d["conta"], d.get("plataforma"))
+        tarefas.acompanhar(plataforma, conta, d.get("papel") or "concorrente", d.get("nome"))
     except ValueError as e:
         return jsonify(erro=str(e)), 400
-    tarefas.acompanhar(plataforma, conta, d.get("papel") or "concorrente", d.get("nome"))
     biblioteca.atualizar_perfil(plataforma, conta)
     return jsonify(contas_completas())
 
@@ -127,8 +127,11 @@ def api_buscar_perfis():
     from baixador import busca_perfis
     from baixador.fontes import scrapecreators
     r = busca_perfis.buscar(request.args.get("q", ""), request.args.get("plataforma") or None)
-    ja = {(c["plataforma"], c["conta"].lower()): c.get("papel") for c in contas_completas()}
-    resultados = [{**x, "acompanha": ja.get((x["plataforma"], x["conta"]))} for x in r["resultados"]]
+    contas = contas_completas()
+    ja = {(c["plataforma"], c["conta"].lower()): c.get("papel") for c in contas}
+    proprios = {c["conta"].lower() for c in contas if c.get("papel") == "proprio"}
+    resultados = [{**x, "acompanha": ja.get((x["plataforma"], x["conta"])), "proprio": x["conta"].lower() in proprios}
+                  for x in r["resultados"]]
     sem_credito = scrapecreators.ativo() and scrapecreators.saldo() == 0
     return jsonify(resultados=resultados, limitada=r["limitada"], sem_credito=sem_credito)
 
@@ -154,7 +157,10 @@ def api_acompanhar():
     except (ValueError, KeyError) as e:
         return jsonify(erro=str(e) or "Perfil inválido."), 400
     papel = d.get("papel") if d.get("papel") in ("concorrente", "referencia", "proprio") else "concorrente"
-    tarefas.acompanhar(plataforma, conta, papel, d.get("nome"))
+    try:
+        tarefas.acompanhar(plataforma, conta, papel, d.get("nome"))
+    except tarefas.PerfilProprio as e:
+        return jsonify(erro=str(e), codigo="perfil_proprio"), 409
     biblioteca.atualizar_perfil(plataforma, conta, forcar=True)
     aviso = None
     if plataforma == "instagram" and scrapecreators.ativo() and scrapecreators.saldo() == 0:
@@ -172,6 +178,18 @@ def api_acompanhar():
 def api_papel_conta(plataforma, conta):
     pedido = (request.json or {}).get("papel")
     papel = pedido if pedido in ("proprio", "concorrente", "referencia") else "concorrente"
+    atual = db.um("""select a.papel from acompanhamentos a join contas c on c.id = a.conta_id
+                     where a.usuario_id = %s and c.plataforma = %s and c.conta = %s""", contexto.usuario(), plataforma, conta)
+    if atual and atual["papel"] == "proprio" and papel != "proprio":
+        outros = db.um("""select count(*) as n from acompanhamentos a join contas c on c.id = a.conta_id
+                          where a.usuario_id = %s and a.papel = 'proprio' and lower(c.conta) <> lower(%s)""", contexto.usuario(), conta)["n"]
+        if not outros:
+            return jsonify(erro="Este é o perfil principal da sua conta. Conecte outro perfil em Meu perfil antes de mudar o papel dele.",
+                           codigo="perfil_proprio"), 409
+    try:
+        tarefas.validar_papel(contexto.usuario(), plataforma, conta, papel)
+    except tarefas.PerfilProprio as e:
+        return jsonify(erro=str(e), codigo="perfil_proprio"), 409
     db.executar("""update acompanhamentos set papel = %s where usuario_id = %s and conta_id =
                    (select id from contas where plataforma = %s and conta = %s)""", papel, contexto.usuario(), plataforma, conta)
     return jsonify(contas_completas())
@@ -815,7 +833,11 @@ def api_descoberta(did):
         return jsonify(erro="Sugestão não encontrada."), 404
     if acao == "adicionar":
         papel = (request.json or {}).get("papel") or d["tipo"]
-        tarefas.acompanhar(d["plataforma"], d["conta"], papel if papel in ("concorrente", "referencia") else "referencia", d["nome"])
+        try:
+            tarefas.acompanhar(d["plataforma"], d["conta"], papel if papel in ("concorrente", "referencia") else "referencia", d["nome"])
+        except tarefas.PerfilProprio as e:
+            db.executar("update descobertas set estado = 'oculta' where id = %s", did)
+            return jsonify(erro=str(e)), 409
         biblioteca.atualizar_perfil(d["plataforma"], d["conta"])
         tarefas.enfileirar(d["plataforma"], d["conta"], {"modo": "recentes", "quantidade": 30, "somente_reels": False, "analisar_ao_fim": True})
         estado = "adicionada"
