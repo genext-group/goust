@@ -8,6 +8,7 @@ import { AnimProcesso } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { FORMATOS, STATUS } from './comum'
 import { SeletorData } from '../ui/SeletorData'
+import { useConfirmar } from '../ui/Confirmar'
 
 const copiar = (texto: string, o_que = 'Copiado') => {
   navigator.clipboard.writeText(texto).then(() => { tocar('pasta'); toast(o_que) }).catch(() => {})
@@ -17,6 +18,7 @@ export function DetalheConteudo({ conteudo, novo, dataNovo, aoFechar, aoMudar, a
   conteudo: Conteudo | null; novo: boolean; dataNovo: string | null
   aoFechar: () => void; aoMudar: (c: Conteudo | null) => void; aoGerarImagem: (p: PedidoImagem) => void
 }) {
+  const { confirmacao, confirmar } = useConfirmar()
   const aberto = novo || !!conteudo
   const [f, setF] = useState({ titulo: '', data: '', formato: 'reel', pilar: '', status: 'ideia' as StatusConteudo, gancho: '', ideia: '' })
   const [pedido, setPedido] = useState('')
@@ -61,6 +63,7 @@ export function DetalheConteudo({ conteudo, novo, dataNovo, aoFechar, aoMudar, a
   }
   const apagar = async () => {
     if (!conteudo) return
+    if (!await confirmar({ titulo: 'Apagar este conteúdo?', texto: `“${conteudo.titulo}” sai do calendário, com roteiro e anotações. Não dá para desfazer.`, confirmar: 'Apagar' })) return
     await criacao.apagarConteudo(conteudo.id)
     aoMudar(null); aoFechar()
   }
@@ -70,6 +73,7 @@ export function DetalheConteudo({ conteudo, novo, dataNovo, aoFechar, aoMudar, a
     <Drawer.Backdrop isOpen={aberto} onOpenChange={(v) => !v && aoFechar()}>
       <Drawer.Content placement="right">
         <Drawer.Dialog className="flex h-full w-screen max-w-full flex-col sm:w-[640px]">
+      {confirmacao}
           <Drawer.CloseTrigger />
           <Drawer.Header>
             <Drawer.Heading className="titulo-display text-lg font-semibold">{novo ? 'Nova ideia' : 'Conteúdo'}</Drawer.Heading>

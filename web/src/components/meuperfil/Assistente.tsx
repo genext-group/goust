@@ -205,7 +205,7 @@ function EtapaPerfil({ proprias, setContas, downloads, tarefasIA, relatoriosProp
               <p className="truncate text-sm text-muted">@{c.conta}</p>
             </div>
           </div>
-          <Pipeline conta={c} downloads={downloads} tarefasIA={tarefasIA} temRelatorio={relatoriosProprios.has(`${c.plataforma}/${c.conta}`)} />
+          <Pipeline conta={c} downloads={downloads} tarefasIA={tarefasIA} temRelatorio={relatoriosProprios.has(`${c.plataforma}/${c.conta}`)} aoVerificar={aoColetar} />
         </Bloco>
       ))}
       <BuscaPerfis proprio emLinha aoAdicionar={(lista) => { setContas(lista); aoColetar() }}

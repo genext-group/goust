@@ -19,6 +19,10 @@ export interface Processo {
   estado: 'rodando' | 'fila' | 'ok' | 'erro' | 'cancelado'
   fim: number | null
   destino: Destino
+  /** 'plataforma/conta': abre o destino já filtrado nessa conta (ex.: Biblioteca) */
+  filtro?: string
+  /** terminou sem nada para mostrar (ex.: perfil sem posts públicos): sem comemoração */
+  vazio?: boolean
   cancelar?: () => void
 }
 
@@ -54,16 +58,22 @@ export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => vo
     const ativo = ATIVOS_DL.includes(t.status)
     const feitos = t.baixados + t.pulados
     const coment = t.status === 'comentários'
+    const fim = t.status === 'concluído'
+    const semNada = fim && t.baixados === 0 && t.pulados === 0
+    const emDia = fim && t.baixados === 0 && t.pulados > 0
     return {
       chave: `d${t.id}`, tipo: coment ? 'comentarios' : 'coleta',
-      titulo: !ativo ? (t.status === 'concluído' ? `@${t.conta}: ${t.baixados} posts novos` : `Coleta de @${t.conta}`)
+      titulo: !ativo ? (semNada ? `@${t.conta} não tem posts públicos` : emDia ? `@${t.conta} já estava em dia`
+        : fim ? `@${t.conta}: ${t.baixados} ${t.baixados === 1 ? 'post novo' : 'posts novos'}` : `Coleta de @${t.conta}`)
         : coment ? `Lendo comentários de @${t.conta}` : `Coletando @${t.conta}`,
       detalhe: t.status === 'na fila' ? 'Na fila' : t.status === 'listando' ? 'Listando o perfil…'
         : coment ? `${t.comentarios ?? 0} comentários lidos` : t.status === 'baixando' ? `${feitos} de ${t.total} posts`
-          : t.status === 'erro' ? (t.logs.at(-1) ?? 'Erro') : t.status === 'cancelado' ? 'Cancelada' : `${t.pulados} já existiam`,
+          : t.status === 'erro' ? (t.logs.at(-1) ?? 'Erro') : t.status === 'cancelado' ? 'Cancelada'
+            : semNada ? 'Perfil vazio, privado ou ainda sem publicações' : emDia ? 'Nenhum post novo desde a última coleta'
+              : t.pulados ? `${t.pulados} já estavam na Biblioteca` : 'Já na sua Biblioteca',
       progresso: t.status === 'baixando' && t.total ? feitos / t.total : null,
       ativo, estado: t.status === 'na fila' ? 'fila' : ativo ? 'rodando' : t.status === 'concluído' ? 'ok' : t.status === 'erro' ? 'erro' : 'cancelado',
-      fim: t.fim, destino: 'biblioteca',
+      fim: t.fim, destino: semNada ? 'contas' : 'biblioteca', filtro: semNada ? undefined : `${t.plataforma}/${t.conta}`, vazio: semNada,
       cancelar: ativo ? () => { api.cancelar(t.id).then(aoMudar) } : undefined,
     }
   })
@@ -93,9 +103,9 @@ export const useAtividade = () => useContext(AtividadeContexto)
 export function useSonsDosProcessos(downloads: Tarefa[], ia: TarefaIA[]) {
   const antes = useRef<Map<string, { status: string; n: number; c: number }> | null>(null)
   useEffect(() => {
-    const atual = new Map<string, { status: string; n: number; c: number; tipo: string; total: number }>()
+    const atual = new Map<string, { status: string; n: number; c: number; tipo: string; total: number; novos?: number }>()
     downloads.filter((t) => t.opcoes.modo !== 'link').forEach((t) =>
-      atual.set(`d${t.id}`, { status: t.status, n: t.baixados + t.pulados, c: t.comentarios ?? 0, tipo: 'download', total: t.total }))
+      atual.set(`d${t.id}`, { status: t.status, n: t.baixados + t.pulados, c: t.comentarios ?? 0, tipo: 'download', total: t.total, novos: t.baixados }))
     ia.filter((t) => t.tipo !== 'inteligencia').forEach((t) => atual.set(`i${t.id}`, { status: t.status, n: t.feito, c: 0, tipo: t.tipo, total: t.total }))
     const ant = antes.current
     antes.current = atual
@@ -113,9 +123,11 @@ export function useSonsDosProcessos(downloads: Tarefa[], ia: TarefaIA[]) {
       else if (a && !dl && x.n > a.n && x.status === 'rodando') tocar('neuronio')
       const terminouAgora = a && a.status !== x.status && ['concluído', 'erro'].includes(x.status)
       if (terminouAgora) {
+        const semNovos = dl && x.status === 'concluído' && !x.novos
         if (x.status === 'erro') tocar('erro')
+        else if (semNovos) tocar(x.n ? 'clique' : 'aviso')
         else tocar(dl ? 'coletaFim' : geracao ? 'geracaoFim' : 'analiseFim')
-        window.dispatchEvent(new CustomEvent('processo-fim', { detail: { chave: k, ok: x.status === 'concluído' } }))
+        window.dispatchEvent(new CustomEvent('processo-fim', { detail: { chave: k, ok: x.status === 'concluído' && !semNovos } }))
       }
     }
   }, [downloads, ia])
@@ -123,7 +135,7 @@ export function useSonsDosProcessos(downloads: Tarefa[], ia: TarefaIA[]) {
 
 // ---------------------------------------------------------------- central flutuante
 
-export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara: (d: Destino) => void }) {
+export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara: (d: Destino, filtro?: string) => void }) {
   const [aberta, setAberta] = useState(false)
   const [festa, setFesta] = useState<{ chave: string; n: number } | null>(null)
   const ativos = lista.filter((p) => p.ativo)
@@ -146,7 +158,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
   }, [festa])
 
   const principal = ativos.find((p) => p.estado === 'rodando') ?? ativos[0]
-  const ir = (d: Destino) => { setAberta(false); irPara(d) }
+  const ir = (d: Destino, filtro?: string) => { setAberta(false); irPara(d, filtro) }
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 sm:justify-end sm:px-6" data-sem-som>
@@ -172,7 +184,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
         )}
 
         {pronto ? (
-          <button onClick={() => ir(pronto.destino)} key={festa!.n}
+          <button onClick={() => ir(pronto.destino, pronto.filtro)} key={festa!.n}
             className="vidro subir-dock relative flex items-center gap-3 rounded-full border py-2 pr-5 pl-2 shadow-xl linha-fina">
             <span className="relative grid size-10 place-items-center rounded-full bg-[var(--menta)] text-black">
               <CheckDesenhado tamanho={18} />
@@ -180,7 +192,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
             </span>
             <span className="text-left">
               <span className="block text-sm font-medium">{pronto.titulo}</span>
-              <span className="block text-xs text-accent">Ver agora <ArrowRight className="inline size-3" /></span>
+              <span className="block text-xs text-accent">{pronto.filtro ? `Ver posts de @${pronto.filtro.split('/')[1]}` : 'Ver agora'} <ArrowRight className="inline size-3" /></span>
             </span>
           </button>
         ) : principal ? (
@@ -211,15 +223,16 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
   )
 }
 
-function Linha({ p, ir }: { p: Processo; ir: (d: Destino) => void }) {
+function Linha({ p, ir }: { p: Processo; ir: (d: Destino, filtro?: string) => void }) {
   return (
     <div className={`flex items-center gap-3 rounded-2xl p-2.5 ${p.ativo ? 'bg-surface-secondary/70' : ''}`}>
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-secondary text-foreground">
         {p.ativo ? <AnimProcesso tipo={p.tipo} tamanho={30} />
+          : p.vazio ? <span className="text-sm text-[var(--ambar)]">∅</span>
           : p.estado === 'ok' ? <span className="text-[var(--menta)]"><CheckDesenhado tamanho={16} /></span>
             : <Xmark className="size-4 text-danger" />}
       </span>
-      <button onClick={() => ir(p.destino)} className="min-w-0 flex-1 text-left">
+      <button onClick={() => ir(p.destino, p.filtro)} className="min-w-0 flex-1 text-left">
         <span className="block truncate text-sm font-medium">{p.titulo}</span>
         <span className={`num block truncate text-xs ${p.estado === 'erro' ? 'text-danger' : 'text-muted'}`}>{p.detalhe}</span>
         {p.ativo && p.progresso !== null && (

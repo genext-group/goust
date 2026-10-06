@@ -55,6 +55,8 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
   const [aberto, setAberto] = useState(false)
   const [ativo, setAtivo] = useState(0)
   const [escolhido, setEscolhido] = useState<PerfilEncontrado | null>(null)
+  const escolhidoAtual = escolhido
+  const [conectando, setConectando] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
   const caixa = useRef<HTMLDivElement>(null)
   const pedido = useRef(0)
@@ -102,10 +104,14 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
     }
     if (p.acompanha) { toast(`Você já acompanha @${p.conta}`); return }
     tocar('clique')
+    // seu perfil dentro do assistente: um clique no resultado já conecta (o rodapé só tem "Continuar")
+    if (proprio && emLinha) { acompanhar(undefined, p); return }
     setEscolhido(p)
   }
-  const acompanhar = async (ctx?: ContextoEscolhido) => {
-    if (!escolhido) return
+  const acompanhar = async (ctx?: ContextoEscolhido, direto?: PerfilEncontrado) => {
+    const escolhido = direto ?? escolhidoAtual
+    if (!escolhido || salvando) return
+    setConectando(direto ? `${direto.plataforma}/${direto.conta}` : null)
     const papel = ctx?.papel ?? papelPadrao
     setSalvando(true)
     try {
@@ -119,7 +125,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
       setTexto(''); setResultados(null); setEscolhido(null); setAberto(false)
     } catch (e) {
       toast.danger('Não deu para adicionar', { description: (e as Error).message })
-    } finally { setSalvando(false) }
+    } finally { setSalvando(false); setConectando(null) }
   }
   const teclado = (e: React.KeyboardEvent) => {
     if (escolhido) {
@@ -182,9 +188,9 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
                 ))}
                 {resultados?.map((p, i) => (
                   <li key={`${p.plataforma}/${p.conta}`} role="option" aria-selected={i === ativo}>
-                    <button onMouseEnter={() => setAtivo(i)} onClick={() => escolher(p)}
+                    <button onMouseEnter={() => setAtivo(i)} onClick={() => escolher(p)} disabled={!!conectando}
                       aria-disabled={!!(p.proprio && !proprio)}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${i === ativo ? 'bg-surface-secondary' : ''} ${p.proprio && !proprio ? 'opacity-60' : ''}`}>
+                      className={`group/linha flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${i === ativo ? 'bg-surface-secondary' : ''} ${p.proprio && !proprio ? 'opacity-60' : ''}`}>
                       <Avatar p={p} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{p.nome || `@${p.conta}`}{p.verificado && <Check className="ml-1 inline size-3.5 text-accent" />}</span>
@@ -193,7 +199,9 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
                           {p.seguidores != null ? ` · ${fmtNum(p.seguidores)} seguidores` : p.web ? ' · encontrado na web' : ''}
                         </span>
                       </span>
-                      {p.proprio && !proprio ? <span className="shrink-0 rounded-full bg-[var(--menta)]/15 px-2 py-0.5 text-[11px] text-[var(--menta)]">Seu perfil</span>
+                      {conectando === `${p.plataforma}/${p.conta}` ? <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-accent"><span className="size-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />Conectando…</span>
+                        : proprio && emLinha ? <span className="shrink-0 rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-medium text-accent opacity-0 transition-opacity group-hover/linha:opacity-100">É este · conectar</span>
+                        : p.proprio && !proprio ? <span className="shrink-0 rounded-full bg-[var(--menta)]/15 px-2 py-0.5 text-[11px] text-[var(--menta)]">Seu perfil</span>
                         : p.acompanha ? <span className="shrink-0 rounded-full bg-surface-tertiary px-2 py-0.5 text-[11px] text-muted">Já acompanha</span>
                         : p.exato ? <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] text-accent">@ exato</span> : null}
                     </button>

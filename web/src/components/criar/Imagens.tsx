@@ -9,6 +9,7 @@ import { AnimProcesso, Explosao } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { Menu } from '../Menu'
 import { Carrossel } from '../ui/Carrossel'
+import { useConfirmar } from '../ui/Confirmar'
 
 const PROPORCAO: Record<string, string> = { post: 'aspect-[4/5]', quadrado: 'aspect-square', story: 'aspect-[9/16]', paisagem: 'aspect-video' }
 const ROTULO: Record<string, string> = { post: 'Post 4:5', quadrado: '1:1', story: 'Story 9:16', paisagem: '16:9' }
@@ -27,6 +28,7 @@ const EXEMPLOS = [
 export function Imagens({ pedidoInicial, aoConsumirPedido, irParaEstilos }: {
   pedidoInicial: PedidoImagem | null; aoConsumirPedido: () => void; irParaEstilos: () => void
 }) {
+  const { confirmacao, confirmar } = useConfirmar()
   const [imagens, setImagens] = useState<Imagem[] | null>(null)
   const [estilos, setEstilos] = useState<Estilo[]>([])
   const [formatos, setFormatos] = useState<FormatoImagem[]>([])
@@ -81,6 +83,7 @@ export function Imagens({ pedidoInicial, aoConsumirPedido, irParaEstilos }: {
     await criacao.favoritarImagem(i.id, !i.favorita)
   }
   const apagar = async (i: Imagem) => {
+    if (!await confirmar({ titulo: 'Apagar esta imagem?', texto: 'Ela sai da sua galeria. Não dá para desfazer.', confirmar: 'Apagar' })) return
     setImagens((xs) => xs?.filter((x) => x.id !== i.id) ?? xs)
     setAberta(null)
     await criacao.apagarImagem(i.id)
@@ -101,6 +104,7 @@ export function Imagens({ pedidoInicial, aoConsumirPedido, irParaEstilos }: {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
+      {confirmacao}
       {/* compositor */}
       <aside className="cartao h-fit space-y-5 p-5 lg:sticky lg:top-24">
         <TextField value={pedido} onChange={setPedido}>

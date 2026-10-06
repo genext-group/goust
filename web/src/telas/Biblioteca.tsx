@@ -11,6 +11,7 @@ import { useDialogoTexto } from '../components/ui/DialogoTexto'
 import { useNuvem } from '../ambiente'
 import { IconePlataforma, NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
 import { fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
+import { useConfirmar } from '../components/ui/Confirmar'
 
 type Ordem = 'recentes' | 'vistos' | 'curtidos' | 'engajamento' | 'antigos'
 const ORDENS: { id: Ordem; nome: string }[] = [
@@ -22,11 +23,12 @@ const ORDENS: { id: Ordem; nome: string }[] = [
 ]
 const POR_PAGINA = 48
 
-export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: number }) {
+export function TelaBiblioteca({ contas, versao, filtroConta }: { contas: Conta[]; versao: number; filtroConta?: { conta: string; n: number } | null }) {
   const [videos, setVideos] = useState<Video[] | null>(null)
   const [busca, setBusca] = useState('')
   const [plataforma, setPlataforma] = useState<'todas' | Plataforma>('todas')
-  const [conta, setConta] = useState<string>('todas')
+  const [conta, setConta] = useState<string>(filtroConta?.conta ?? 'todas')
+  useEffect(() => { if (filtroConta) { setConta(filtroConta.conta); setPastaSel(null); setPlataforma('todas'); setBusca('') } }, [filtroConta])
   const [ordem, setOrdem] = useState<Ordem>('recentes')
   const [limite, setLimite] = useState(POR_PAGINA)
   const [aberto, setAberto] = useState<Video | null>(null)
@@ -36,6 +38,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
   const [pastaSel, setPastaSel] = useState<number | null>(null)
   const [novaPasta, setNovaPasta] = useState<string | null>(null)
   const { dialogo: dialogoTexto, pedir: pedirTexto } = useDialogoTexto()
+  const { confirmacao, confirmar } = useConfirmar()
   const [selecionando, setSelecionando] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [baixando, setBaixando] = useState<{ feitos: number; total: number } | null>(null)
@@ -73,6 +76,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
     if (nome?.trim()) setPastas(await apiPastas.renomear(p.id, nome))
   }
   const apagarPasta = async (p: Pasta) => {
+    if (!await confirmar({ titulo: `Apagar a pasta “${p.nome}”?`, texto: 'Os posts não são apagados, só saem dessa pasta.', confirmar: 'Apagar pasta' })) return
     setPastas(await apiPastas.apagar(p.id))
     setPastaSel(null)
     carregarPastas()
@@ -157,6 +161,7 @@ export function TelaBiblioteca({ contas, versao }: { contas: Conta[]; versao: nu
 
   return (
     <div className="space-y-6 pb-16">
+      {confirmacao}
       <div className="flex flex-wrap items-end justify-between gap-4 pt-2">
         <div>
           <h1 className="titulo-display text-4xl font-semibold">Biblioteca</h1>

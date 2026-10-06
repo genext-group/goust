@@ -7,6 +7,7 @@ import { Radar } from '../Animacoes'
 import { AnimProcesso } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { SeletorPosts } from './SeletorPosts'
+import { useConfirmar } from '../ui/Confirmar'
 
 /** Reduz no navegador (máx. 1600 px, JPEG) antes de enviar: upload rápido e dentro do limite do servidor. */
 async function reduzir(arquivo: File): Promise<File> {
@@ -25,6 +26,7 @@ async function reduzir(arquivo: File): Promise<File> {
 }
 
 export function Estilos({ contas, versaoBiblioteca, aoGerar }: { contas: Conta[]; versaoBiblioteca: number; aoGerar: (estilo: number) => void }) {
+  const { confirmacao, confirmar } = useConfirmar()
   const [estilos, setEstilos] = useState<Estilo[] | null>(null)
   const [sel, setSel] = useState<number | null>(null)
   const [nome, setNome] = useState('')
@@ -67,6 +69,7 @@ export function Estilos({ contas, versaoBiblioteca, aoGerar }: { contas: Conta[]
   const renomear = async () => { if (e && nome.trim() && nome !== e.nome) setEstilos(await criacao.renomearEstilo(e.id, nome)) }
   const apagar = async () => {
     if (!e) return
+    if (!await confirmar({ titulo: `Apagar o estilo “${e.nome}”?`, texto: 'As referências e o guia desse estilo serão apagados. As imagens já geradas continuam.', confirmar: 'Apagar estilo' })) return
     const r = await criacao.apagarEstilo(e.id)
     setEstilos(r); setSel(r[0]?.id ?? null)
   }
@@ -90,6 +93,7 @@ export function Estilos({ contas, versaoBiblioteca, aoGerar }: { contas: Conta[]
 
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+      {confirmacao}
       <aside className="space-y-2">
         {estilos.map((x) => (
           <button key={x.id} onClick={() => setSel(x.id)}

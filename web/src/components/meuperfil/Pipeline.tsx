@@ -1,11 +1,14 @@
 import { CheckDesenhado } from '../Animacoes'
 import { AnimProcesso, type TipoProcesso } from '../AnimProcessos'
-import type { Conta, Tarefa, TarefaIA } from '../../api'
+import { api, type Conta, type Tarefa, type TarefaIA } from '../../api'
+import { tocar } from '../../sons'
 
 type Estado = 'feito' | 'agora' | 'espera'
 
 /** Linha do tempo ao vivo do perfil: coleta → comentários → análise da IA → relatório. */
-export function Pipeline({ conta, downloads, tarefasIA, temRelatorio }: {
+export function Pipeline({ conta, downloads, tarefasIA, temRelatorio, aoVerificar }: {
+  /** chamado depois de pedir uma nova coleta (para a tela recarregar as tarefas) */
+  aoVerificar?: () => void
   conta: Conta
   downloads: Tarefa[]
   tarefasIA: TarefaIA[]
@@ -17,6 +20,22 @@ export function Pipeline({ conta, downloads, tarefasIA, temRelatorio }: {
   const comentando = dl?.status === 'comentários'
   const analisando = iaT && (iaT.status === 'na fila' || iaT.status === 'rodando')
   const coletou = (conta.videos ?? 0) > 0 && !coletando
+  const semPosts = !coletou && !coletando && !comentando && dl?.status === 'concluído' && dl.baixados + dl.pulados === 0
+
+  if (semPosts) {
+    return (
+      <div className="rounded-2xl bg-[var(--ambar)]/10 p-4 text-sm">
+        <p className="font-medium text-[var(--ambar)]">Não encontramos posts públicos em @{conta.conta}</p>
+        <p className="mt-1 text-muted">
+          O perfil pode ser novo, privado ou ainda não ter publicações. A IA não tem o que analisar por enquanto, mas
+          o resto funciona: preencha as próximas etapas e acompanhe concorrentes e referências.
+          Quando publicar (ou deixar o perfil público), é só verificar de novo.
+        </p>
+        <button onClick={() => { tocar('coleta'); api.baixar([conta], { modo: 'recentes', quantidade: 30, somente_reels: false, analisar_ao_fim: true }).then(() => aoVerificar?.()).catch(() => {}) }}
+          className="mt-2 text-xs font-medium text-accent hover:underline">Verificar de novo</button>
+      </div>
+    )
+  }
 
   const etapas: { nome: string; detalhe: string; estado: Estado; anim: TipoProcesso }[] = [
     {

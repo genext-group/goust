@@ -145,7 +145,7 @@ export function TelaMeuPerfil({ contas, setContas, versaoBiblioteca, tarefasDown
               <AvatarConta conta={c} tamanho="sm" />
               <p className="flex-1 font-medium">@{c.conta} <span className="text-sm font-normal text-muted">· {c.plataforma === 'tiktok' ? 'TikTok' : 'Instagram'}</span></p>
             </div>
-            <Pipeline conta={c} downloads={tarefasDownload} tarefasIA={tarefasIA} temRelatorio={relatoriosProprios.has(`${c.plataforma}/${c.conta}`)} />
+            <Pipeline conta={c} downloads={tarefasDownload} tarefasIA={tarefasIA} temRelatorio={relatoriosProprios.has(`${c.plataforma}/${c.conta}`)} aoVerificar={recarregarTarefas} />
           </section>
         ))}
 

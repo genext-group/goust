@@ -5,6 +5,7 @@ import { ia, type Marca, type Regra, type StatusIA } from '../../api'
 import { fmtNum } from '../../formato'
 import { Secao } from './Compartilhado'
 import { useNuvem } from '../../ambiente'
+import { useConfirmar } from '../ui/Confirmar'
 
 const CAMPOS: { k: keyof Marca; rotulo: string; dica: string; longo?: boolean }[] = [
   { k: 'nome', rotulo: 'Nome da sua marca', dica: 'Ex.: Meu app de finanças' },
@@ -17,6 +18,7 @@ const CAMPOS: { k: keyof Marca; rotulo: string; dica: string; longo?: boolean }[
 ]
 
 export function MarcaAprendizados({ status, aoMudar, semMarca = false }: { status: StatusIA | null; aoMudar: () => void; semMarca?: boolean }) {
+  const { confirmacao, confirmar } = useConfirmar()
   const nuvem = useNuvem()
   const [marca, setMarca] = useState<Marca | null>(null)
   const [regras, setRegras] = useState<Regra[]>([])
@@ -58,6 +60,7 @@ export function MarcaAprendizados({ status, aoMudar, semMarca = false }: { statu
 
   return (
     <div className={semMarca ? 'grid gap-4 lg:grid-cols-2 [&>div]:contents' : 'grid gap-4 lg:grid-cols-[3fr_2fr]'}>
+      {confirmacao}
       {!semMarca && <Secao titulo="Minha marca" descricao="A IA usa isso para transformar a análise dos concorrentes em recomendações para VOCÊ.">
         {marca && (
           <div className="mt-2 space-y-4">
@@ -88,7 +91,7 @@ export function MarcaAprendizados({ status, aoMudar, semMarca = false }: { statu
                   title={r.origem === 'manual' ? 'Escrita por você' : 'Aprendida dos feedbacks'} />
                 <p className="flex-1 text-sm leading-relaxed">{r.texto}</p>
                 <Button isIconOnly size="sm" variant="ghost" aria-label="Apagar regra" className="opacity-0 group-hover:opacity-100"
-                  onPress={() => salvarRegras(regras.filter((_, k) => k !== i))}>
+                  onPress={async () => { if (await confirmar({ titulo: 'Apagar esta regra?', texto: 'A IA deixa de seguir essa orientação nas próximas análises.', confirmar: 'Apagar regra' })) salvarRegras(regras.filter((_, k) => k !== i)) }}>
                   <TrashBin className="size-3.5" />
                 </Button>
               </li>

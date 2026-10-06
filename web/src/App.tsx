@@ -147,7 +147,9 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
     { id: 'biblioteca', nome: 'Biblioteca', icone: <Picture /> },
     { id: 'criar', nome: 'Criar', icone: <MagicWand /> },
   ]
-  const irPara = (a: Aba) => {
+  const [filtroBiblioteca, setFiltroBiblioteca] = useState<{ conta: string; n: number } | null>(null)
+  const irPara = (a: Aba, filtro?: string) => {
+    if (a === 'biblioteca' && filtro) setFiltroBiblioteca({ conta: filtro, n: Date.now() })
     if (a !== aba) tocar('navegar')
     setAba(a)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -160,7 +162,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
       tarefasDownload={tarefas} recarregarTarefas={carregarTarefas} />,
     contas: <TelaContas contas={contas} setContas={setContas} aoBaixar={aoBaixar} />,
     inteligencia: <TelaInteligencia contas={contas} versaoBiblioteca={versaoBiblioteca} />,
-    biblioteca: <TelaBiblioteca contas={contas} versao={versaoBiblioteca} />,
+    biblioteca: <TelaBiblioteca contas={contas} versao={versaoBiblioteca} filtroConta={filtroBiblioteca} />,
     criar: <TelaCriar contas={contas} versaoBiblioteca={versaoBiblioteca} />,
     downloads: <TelaDownloads tarefas={tarefas} aoMudar={carregarTarefas} />,
     admin: <TelaAdmin />,
@@ -180,7 +182,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
     <AtividadeContexto.Provider value={contexto}>
     <div className="ambiente min-h-screen overflow-x-clip">
       <Toast.Provider placement="top end" />
-      <CentralAtividade lista={lista} irPara={(d) => irPara(d)} />
+      <CentralAtividade lista={lista} irPara={(d, f) => irPara(d, f)} />
 
       <header className="vidro sticky top-0 z-40 border-b linha-fina">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-8">

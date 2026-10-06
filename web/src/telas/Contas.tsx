@@ -12,6 +12,7 @@ import { tocar } from '../sons'
 import { ModalDownload } from '../components/ModalDownload'
 import { fmtNum, fmtRelativo } from '../formato'
 import { useNuvem } from '../ambiente'
+import { useConfirmar } from '../components/ui/Confirmar'
 
 type Filtro = 'todas' | Plataforma
 const chave = (c: Pick<Conta, 'plataforma' | 'conta'>) => `${c.plataforma}/${c.conta}`
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function TelaContas({ contas, setContas, aoBaixar }: Props) {
+  const { confirmacao, confirmar } = useConfirmar()
   const nuvem = useNuvem()
   const [filtro, setFiltro] = useState<Filtro>('todas')
   const [papel, setPapel] = useState<'todos' | 'concorrente' | 'referencia'>('todos')
@@ -71,7 +73,15 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
   }
 
   async function remover(c: Conta) {
+    const proprio = c.papel === 'proprio'
+    if (!await confirmar({
+      titulo: proprio ? `Desconectar o seu perfil @${c.conta}?` : `Parar de acompanhar @${c.conta}?`,
+      texto: proprio ? 'A IA deixa de analisar esse perfil e ele sai da sua central. Os posts já coletados continuam na Biblioteca.'
+        : 'A conta sai da sua lista e das próximas análises. Os posts já coletados continuam na Biblioteca.',
+      confirmar: proprio ? 'Desconectar' : 'Remover',
+    })) return
     setContas(await api.removerConta(c))
+    tocar('clique')
   }
 
   async function baixar(opcoes: Opcoes) {
@@ -86,6 +96,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
 
   return (
     <div className="space-y-10 pb-32">
+      {confirmacao}
       {/* Hero */}
       <section className="surgir relative z-30 mx-auto max-w-2xl pt-6 text-center">
         <h1 className="titulo-display text-4xl font-semibold sm:text-5xl">Concorrentes e referências</h1>
@@ -257,7 +268,15 @@ function StatusConta({ c, aoColetar }: { c: Conta; aoColetar: () => void }) {
       </div>
     )
   }
-  if (!c.videos && c.papel !== 'proprio') {
+  if (!c.videos && dl?.status === 'concluído' && dl.baixados + dl.pulados === 0) {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--ambar)]/10 px-2.5 py-1.5 text-xs text-[var(--ambar)]" onClick={parar}>
+        <span className="min-w-0 flex-1">Sem posts públicos: perfil vazio, privado ou ainda sem publicações</span>
+        <button onClick={aoColetar} className="shrink-0 font-medium underline">Verificar de novo</button>
+      </div>
+    )
+  }
+  if (!c.videos) {
     return (
       <div className="mt-3 flex items-center gap-2 rounded-xl bg-surface-secondary/60 px-2.5 py-1.5 text-xs text-muted" onClick={parar}>
         <span className="flex-1">Ainda sem posts coletados</span>
