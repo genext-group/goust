@@ -8,7 +8,6 @@ import {
 import { AvatarConta } from '../components/Avatar'
 import { Chat } from '../components/ia/Chat'
 import { ContextoIA } from '../components/ia/Compartilhado'
-import { MarcaAprendizados } from '../components/ia/MarcaAprendizados'
 import { PanoramaMercado } from '../components/ia/PanoramaMercado'
 import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
 import { SeloPlataforma } from '../components/Plataforma'
@@ -18,7 +17,7 @@ import { Orbita, Radar } from '../components/Animacoes'
 import { ModalVideo } from './Biblioteca'
 import { useNuvem } from '../ambiente'
 
-type Visao = 'perfis' | 'mercado' | 'marca'
+type Visao = 'perfis' | 'mercado'
 const chave = (c: Pick<Conta, 'plataforma' | 'conta'>) => `${c.plataforma}/${c.conta}`
 const fmtVersao = (v: string) => `${v.slice(6, 8)}/${v.slice(4, 6)}/${v.slice(0, 4)} ${v.slice(9, 11)}:${v.slice(11, 13)}`
 const notaMedia = (n: ResumoRelatorio['notas']) =>
@@ -41,10 +40,12 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
   const [chatAberto, setChatAberto] = useState(false)
 
   const carregarStatus = useCallback(() => ia.status().then(setStatus).catch(() => {}), [])
-  const carregarResumos = useCallback(() => ia.relatorios().then(setResumos).catch(() => {}), [])
+  const [pronto, setPronto] = useState({ resumos: false, videos: false })
+  const carregarResumos = useCallback(() => ia.relatorios().then(setResumos).catch(() => {}).finally(() => setPronto((p) => ({ ...p, resumos: true }))), [])
 
   useEffect(() => { carregarStatus(); carregarResumos() }, [carregarStatus, carregarResumos])
-  useEffect(() => { api.biblioteca().then(setVideos).catch(() => {}) }, [versaoBiblioteca])
+  useEffect(() => { api.biblioteca().then(setVideos).catch(() => {}).finally(() => setPronto((p) => ({ ...p, videos: true }))) }, [versaoBiblioteca])
+  const listaPronta = pronto.resumos && pronto.videos
 
   // contas com vídeos primeiro; as analisadas antes das que ainda não foram
   const qtdPorConta = useMemo(() => {
@@ -55,7 +56,8 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
   const ordenadas = useMemo(() => [...contas].sort((a, b) =>
     Number(!!resumos[chave(b)]) - Number(!!resumos[chave(a)]) || (qtdPorConta.get(chave(b)) ?? 0) - (qtdPorConta.get(chave(a)) ?? 0)),
   [contas, resumos, qtdPorConta])
-  useEffect(() => { if (!selecionada && ordenadas.length) setSelecionada(chave(ordenadas[0])) }, [ordenadas, selecionada])
+  // só escolhe/mostra depois de ordenar com tudo carregado (senão a lista reordena e pisca)
+  useEffect(() => { if (listaPronta && !selecionada && ordenadas.length) setSelecionada(chave(ordenadas[0])) }, [listaPronta, ordenadas, selecionada])
 
   const conta = contas.find((c) => chave(c) === selecionada)
 
@@ -130,18 +132,15 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
         <div className="flex flex-wrap items-end justify-between gap-4 pt-2">
           <div>
             <h1 className="titulo-display text-4xl font-semibold">Inteligência</h1>
-            <p className="mt-1 text-muted">Como cada concorrente se posiciona, o que funciona para ele e onde você pode ganhar.</p>
+            <p className="mt-1 text-muted">Como cada perfil se posiciona, o que funciona para ele e o que você pode ganhar ou aprender.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ToggleButtonGroup selectionMode="single" disallowEmptySelection selectedKeys={[visao]}
               onSelectionChange={(k) => setVisao([...k][0] as Visao)} aria-label="Visão">
               <ToggleButton id="perfis">Perfis</ToggleButton>
               <ToggleButton id="mercado"><ToggleButtonGroup.Separator />Mercado</ToggleButton>
-              <ToggleButton id="marca"><ToggleButtonGroup.Separator />Aprendizados</ToggleButton>
             </ToggleButtonGroup>
-            {visao !== 'marca' && (
-              <Button onPress={() => setChatAberto(true)}><Comments /> Pergunte à IA</Button>
-            )}
+            <Button onPress={() => setChatAberto(true)}><Comments /> Pergunte à IA</Button>
           </div>
         </div>
 
@@ -155,7 +154,13 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
         {visao === 'perfis' && (
           <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
             <aside className="cascata space-y-1 lg:sticky lg:top-20 lg:self-start">
-              {ordenadas.map((c, i) => {
+              {!listaPronta && contas.map((c) => (
+                <div key={chave(c)} className="flex items-center gap-3 p-2.5">
+                  <span className="carregando size-8 rounded-full" />
+                  <span className="flex-1 space-y-1.5"><span className="carregando block h-3 w-2/3" /><span className="carregando block h-2.5 w-1/3" /></span>
+                </div>
+              ))}
+              {listaPronta && ordenadas.map((c, i) => {
                 const r = resumos[chave(c)]
                 const t = tarefaDe(c)
                 const qtd = qtdPorConta.get(chave(c)) ?? 0
@@ -265,7 +270,6 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
           </div>
         )}
 
-        {visao === 'marca' && <MarcaAprendizados status={status} aoMudar={carregarStatus} semMarca />}
       </div>
 
       <ModalVideo video={videoAberto} onFechar={() => setVideoAberto(null)} />

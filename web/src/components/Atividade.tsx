@@ -23,6 +23,10 @@ export interface Processo {
   filtro?: string
   /** terminou sem nada para mostrar (ex.: perfil sem posts públicos): sem comemoração */
   vazio?: boolean
+  /** agrupa processos sobre a mesma coisa (ex.: várias coletas da mesma conta): só o mais recente aparece */
+  assunto?: string
+  /** concluído sem novidade para o usuário (coleta "em dia"): não ocupa a lista de recentes */
+  rotineiro?: boolean
   cancelar?: () => void
 }
 
@@ -65,7 +69,7 @@ export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => vo
       chave: `d${t.id}`, tipo: coment ? 'comentarios' : 'coleta',
       titulo: !ativo ? (semNada ? `@${t.conta} não tem posts públicos` : emDia ? `@${t.conta} já estava em dia`
         : fim ? `@${t.conta}: ${t.baixados} ${t.baixados === 1 ? 'post novo' : 'posts novos'}` : `Coleta de @${t.conta}`)
-        : coment ? `Lendo comentários de @${t.conta}` : `Coletando @${t.conta}`,
+        : coment ? `Lendo comentários de @${t.conta}` : `Buscando posts de @${t.conta}`,
       detalhe: t.status === 'na fila' ? 'Na fila' : t.status === 'listando' ? 'Listando o perfil…'
         : coment ? `${t.comentarios ?? 0} comentários lidos` : t.status === 'baixando' ? `${feitos} de ${t.total} posts`
           : t.status === 'erro' ? (t.logs.at(-1) ?? 'Erro') : t.status === 'cancelado' ? 'Cancelada'
@@ -73,6 +77,7 @@ export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => vo
               : t.pulados ? `${t.pulados} já estavam na Biblioteca` : 'Já na sua Biblioteca',
       progresso: t.status === 'baixando' && t.total ? feitos / t.total : null,
       ativo, estado: t.status === 'na fila' ? 'fila' : ativo ? 'rodando' : t.status === 'concluído' ? 'ok' : t.status === 'erro' ? 'erro' : 'cancelado',
+      assunto: `conta:${t.plataforma}/${t.conta}`, rotineiro: emDia,
       fim: t.fim, destino: semNada ? 'contas' : 'biblioteca', filtro: semNada ? undefined : `${t.plataforma}/${t.conta}`, vazio: semNada,
       cancelar: ativo ? () => { api.cancelar(t.id).then(aoMudar) } : undefined,
     }
@@ -81,7 +86,7 @@ export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => vo
   const ias: Processo[] = ia.filter((t) => t.tipo !== 'inteligencia').map((t) => {
     const ativo = ATIVOS_IA.includes(t.status)
     return {
-      chave: `i${t.id}`, tipo: tipoIA(t),
+      chave: `i${t.id}`, tipo: tipoIA(t), assunto: `ia:${t.tipo}:${t.plataforma ?? ''}/${t.conta ?? ''}`,
       titulo: ativo || t.status === 'erro' ? NOME_IA[t.tipo](t) : PRONTO_IA[t.tipo](t),
       detalhe: t.status === 'na fila' ? 'Na fila' : t.status === 'erro' ? (t.erro ?? 'Erro')
         : ativo ? (t.total > 1 ? `${t.etapa} · ${t.feito} de ${t.total}` : t.etapa) : 'Concluído',
@@ -140,7 +145,14 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
   const [festa, setFesta] = useState<{ chave: string; n: number } | null>(null)
   const ativos = lista.filter((p) => p.ativo)
   const agora = Date.now() / 1000
-  const recentes = lista.filter((p) => !p.ativo && p.fim && agora - p.fim < 6 * 3600).sort((a, b) => (b.fim ?? 0) - (a.fim ?? 0)).slice(0, 6)
+  const recentes = (() => {
+    const vistos = new Set<string>()
+    return lista
+      .filter((p) => !p.ativo && p.fim && agora - p.fim < 6 * 3600 && !p.rotineiro)
+      .sort((a, b) => (b.fim ?? 0) - (a.fim ?? 0))
+      .filter((p) => { const k = p.assunto ?? p.chave; if (vistos.has(k)) return false; vistos.add(k); return true })
+      .slice(0, 6)
+  })()
   const pronto = festa ? lista.find((p) => p.chave === festa.chave) : null
 
   useEffect(() => {
@@ -166,20 +178,17 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
         {aberta && (
           <div className="vidro subir-dock absolute right-0 bottom-full mb-3 w-[min(92vw,26rem)] overflow-hidden rounded-3xl border linha-fina shadow-2xl">
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
-              <p className="titulo-display font-semibold">Atividade</p>
+              <p className="titulo-display font-semibold">{ativos.length ? 'Trabalhando para você' : 'Feito recentemente'}</p>
               <Button isIconOnly size="sm" variant="ghost" aria-label="Fechar" onPress={() => setAberta(false)}><ChevronDown /></Button>
             </div>
             <div data-rolavel="y" className="max-h-[60vh] space-y-1 overflow-y-auto px-2 pb-2">
               {ativos.length === 0 && recentes.length === 0 && (
-                <p className="px-3 py-6 text-center text-sm text-muted">Nada rodando agora. Coletas, análises e criações aparecem aqui.</p>
+                <p className="px-3 py-6 text-center text-sm text-muted">Nada rodando agora. Análises e criações da IA aparecem aqui.</p>
               )}
               {ativos.map((p) => <Linha key={p.chave} p={p} ir={ir} />)}
               {recentes.length > 0 && <p className="px-3 pt-3 pb-1 text-xs text-muted">Recentes</p>}
               {recentes.map((p) => <Linha key={p.chave} p={p} ir={ir} />)}
             </div>
-            <button onClick={() => ir('downloads')} className="w-full border-t px-5 py-3 text-left text-sm text-muted linha-fina hover:text-foreground">
-              Histórico de coletas <ArrowRight className="inline size-3.5" />
-            </button>
           </div>
         )}
 
@@ -212,12 +221,12 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
             </span>
             {ativos.length > 1 && <span className="num rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground">+{ativos.length - 1}</span>}
           </button>
-        ) : (
-          <button onClick={() => setAberta((a) => !a)} aria-label="Atividade"
+        ) : recentes.length > 0 ? (
+          <button onClick={() => setAberta((a) => !a)} aria-label="O que a IA fez por você"
             className="vidro grid size-11 place-items-center rounded-full border text-muted shadow-lg linha-fina hover:text-foreground">
             <Thunderbolt className="size-4" />
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   )

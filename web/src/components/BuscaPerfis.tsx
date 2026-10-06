@@ -152,7 +152,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
           placeholder={placeholder ?? 'Busque pelo nome ou @, ou cole o link de um perfil ou vídeo'}
           className="h-11 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted focus-visible:outline-none" />
         {tipo.tipo === 'video' && aoVideo && (
-          <Button className="botao-sinal shrink-0" onPress={() => { aoVideo(texto.trim()); setTexto('') }}><ArrowDownToLine /> Baixar vídeo</Button>
+          <Button className="botao-sinal shrink-0" onPress={() => { aoVideo(texto.trim()); setTexto('') }}><ArrowDownToLine /> Salvar na Biblioteca</Button>
         )}
       </div>
 

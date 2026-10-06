@@ -7,6 +7,7 @@ import { AvatarConta } from '../components/Avatar'
 import { ContextoIA } from '../components/ia/Compartilhado'
 import { Assistente } from '../components/meuperfil/Assistente'
 import { EstrategiaView } from '../components/meuperfil/EstrategiaView'
+import { PreferenciasIA } from '../components/meuperfil/PreferenciasIA'
 import { Pipeline } from '../components/meuperfil/Pipeline'
 import { Orbita, Radar } from '../components/Animacoes'
 import { fmtNum } from '../formato'
@@ -213,6 +214,8 @@ export function TelaMeuPerfil({ contas, setContas, versaoBiblioteca, tarefasDown
             </div>
           )}
         </section>
+
+        <PreferenciasIA />
       </div>
       <ModalVideo video={aberto} onFechar={() => setAberto(null)} />
     </ContextoIA.Provider>

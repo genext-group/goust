@@ -59,7 +59,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
   async function baixarVideo(url: string) {
     try {
       await api.baixarLink(url)
-      toast.success('Vídeo na fila', { description: 'O andamento aparece na central de atividade.' })
+      toast.success('Salvando o vídeo na Biblioteca', { description: 'Ele aparece lá em instantes.' })
       aoBaixar()
     } catch (e) {
       toast.danger('Não deu certo', { description: (e as Error).message })
