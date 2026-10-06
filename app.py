@@ -57,6 +57,7 @@ def protegido(f):
         else:
             usuario = auth.usuario_local()
         contexto.definir(usuario)
+        contexto.definir_operacao(f"api:{request.endpoint}")
         return f(*a, **kw)
     return envolto
 
@@ -866,6 +867,25 @@ def api_cron_inteligencia():
         return jsonify(erro="não autorizado"), 401
     ia_tarefas.inteligencia_todos()
     return jsonify(ok=True)
+
+
+@app.get("/api/admin/custos")
+@protegido
+def api_admin_custos():
+    """Só o dono: custo real por usuário e por operação (base de precificação e margem)."""
+    from baixador import custos
+    eu = db.um("select email from usuarios where id = %s", contexto.usuario())
+    dono = (os.getenv("DONO_EMAIL") or "").strip().lower()
+    if not eu or not dono or (eu["email"] or "").lower() != dono:
+        return jsonify(erro="Só o dono da plataforma."), 403
+    return jsonify(custos.resumo_geral(int(request.args.get("dias", 30))))
+
+
+@app.get("/api/eu/custos")
+@protegido
+def api_meus_custos():
+    from baixador import custos
+    return jsonify(custos.do_mes())
 
 
 @app.post("/api/piloto")

@@ -26,6 +26,8 @@ def _get(caminho, **params):
         r = requests.get(BASE + caminho, params={k: v for k, v in params.items() if v is not None},
                          headers={"x-api-key": os.getenv("SCRAPECREATORS_API_KEY", "")}, timeout=90)
         if r.status_code == 200:
+            from .. import custos
+            custos.registrar("scrapecreators", creditos=1)
             return r.json()
         if r.status_code == 402:
             marcar_sem_credito()

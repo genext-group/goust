@@ -50,7 +50,10 @@ concorrentes já analisados e escreve um panorama do mercado para o usuário.
 - Em 'videos' dos itens use ids de vídeos citados nos relatórios, quando houver; senão lista vazia.
   NUNCA escreva ids no meio do texto; descreva o vídeo pelo conteúdo.
 - 'perfil' de cada concorrente no formato plataforma/conta exatamente como recebido.
-Português do Brasil, específico, com números."""
+Português do Brasil, específico, com números.
+
+CONCISÃO (obrigatório): cada lista com no máximo 5 itens — só os mais fortes e mais acionáveis; cada texto em até
+2 frases; não repita a mesma ideia em seções diferentes. Qualidade acima de quantidade."""
 
 
 def versoes():

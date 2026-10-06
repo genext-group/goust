@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .. import catalogo, db, midia
+from .. import contexto, catalogo, db, midia
 from ..filtros import PASTA_DOWNLOADS
 from . import cliente
 
@@ -89,6 +89,11 @@ def _transcricao(video, duracao, pasta):
 
 
 def analisar(v, metricas_conta=None, forcar=False):
+    with contexto.em_operacao("analise_video"):
+        return _analisar(v, metricas_conta, forcar)
+
+
+def _analisar(v, metricas_conta=None, forcar=False):
     """v: item da biblioteca (dict de biblioteca.videos()). Devolve a análise (com cache)."""
     existente = obter(v["plataforma"], v["id"])
     if existente and not forcar and existente.get("versao") == VERSAO:

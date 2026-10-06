@@ -96,7 +96,7 @@ def rascunhar_brief(site=None):
     partes.append("## O que o usuário já escreveu (mantenha e melhore, não descarte)\n"
                   + json.dumps({k: v for k, v in atual.items() if v}, ensure_ascii=False))
     r = cliente.estruturado(
-        "relatorio",
+        "criacao",
         "Você é um estrategista de marca. Proponha o BRIEF de conteúdo deste criador/marca a partir dos dados. "
         "Português do Brasil, frases curtas e concretas. Onde não houver evidência (ex.: metas em números, recursos "
         "de produção), escreva uma sugestão marcada com '(sugestão — confirme)'. Metas sempre com número e prazo.",
@@ -174,7 +174,10 @@ de métricas reais, escreva o diagnóstico e a estratégia DELE.
 - 'primeiras_ideias': 6 ideias de conteúdo prontas para o calendário (roteiro em 3 a 6 passos).
 - Em 'videos' dos itens use ids de posts que aparecem nos dados; nunca escreva ids no texto.
 - Se não houver perfil próprio analisado, diga isso em 'o_que_falta_para_melhorar' e baixe a confiança.
-Português do Brasil, específico, com números."""
+Português do Brasil, específico, com números.
+
+CONCISÃO (obrigatório): cada lista com no máximo 5 itens — só os mais fortes e mais acionáveis; cada texto em até
+2 frases; não repita a mesma ideia em seções diferentes. Qualidade acima de quantidade."""
 
 
 def versoes():

@@ -22,6 +22,9 @@ from ..ia import cliente, conteudo, estrategia, memoria
 from . import analise, insights
 
 LIMITE_COLETA_DIARIA = 6        # contas acompanhadas por dia (além do seu perfil)
+DIAS_SEM_VISITA_PARA_IA = 3     # quem não abre o app há mais tempo fica só com coleta e cálculos (sem IA)
+DIAS_SEM_VISITA_PARA_IDEIAS = 2 # ideias que ninguém vê são dinheiro jogado fora
+DIAS_ENTRE_DESCOBERTAS = 7      # busca de referências na web: semanal
 LIMITE_DESCOBERTAS_DIA = 6
 INTERVALO_HORAS = 20            # não roda de novo antes disso
 
@@ -36,6 +39,11 @@ def estado():
 def _gravar_estado(**kw):
     atual = {**estado(), **kw}
     db.executar("update usuarios set config = jsonb_set(config, '{inteligencia}', %s) where id = %s", atual, ctx.usuario())
+
+
+def _ultima_visita():
+    r = db.um("select config from usuarios where id = %s", ctx.usuario())
+    return (((r or {}).get("config") or {}).get("visita") or {}).get("atual")
 
 
 def precisa_rodar():
@@ -95,7 +103,7 @@ def _redigir(sinais):
                                      for s in sinais], ensure_ascii=False),
         insights.resumo_feedback(),
     ]))
-    r = cliente.estruturado("relatorio", INSTRUCOES_REDACAO, entrada, Redacao, esforco="low")
+    r = cliente.estruturado("criacao", INSTRUCOES_REDACAO, entrada, Redacao, esforco="low")
     return {s.chave: s for s in r.sinais}
 
 
@@ -151,11 +159,8 @@ def _descobrir():
         "Descartou (não sugerir parecidos): " + ", ".join(f"@{d['conta']} ({d['tipo']}/{d['categoria']})" for d in descartadas) if descartadas else None,
         "Aceitou antes (gosta deste tipo): " + ", ".join(f"@{d['conta']} ({d['tipo']}/{d['categoria']})" for d in aceitas) if aceitas else None,
     ]))
-    r = cliente.cliente().responses.parse(
-        model=cliente.MODELOS["relatorio"], reasoning={"effort": "low"}, tools=[{"type": "web_search"}],
-        instructions=INSTRUCOES_DESCOBERTA, input=texto, text_format=ResultadoDescoberta)
-    cliente.registrar_uso(cliente.MODELOS["relatorio"], r.usage.input_tokens, r.usage.output_tokens)
-    return r.output_parsed
+    # semanal: luna (6× mais barato que o sol aqui; o custo é o conteúdo das páginas lidas, cobrado como entrada)
+    return cliente.com_busca_na_web("criacao", INSTRUCOES_DESCOBERTA, texto, ResultadoDescoberta)
 
 
 def _validar_instagram(conta):
@@ -251,7 +256,7 @@ def ideias_do_dia(perfil, sinais_redigidos, pesos):
         conteudo._bloco_escolhas(),
         insights.resumo_feedback(),
     ]))
-    r = cliente.estruturado("relatorio", INSTRUCOES_IDEIAS, entrada, IdeiasDoDia, esforco="low")
+    r = cliente.estruturado("criacao", INSTRUCOES_IDEIAS, entrada, IdeiasDoDia, esforco="low")
     hoje = datetime.now().strftime("%Y%m%d")
     for n, i in enumerate(r.ideias[:3]):
         posts = db.todos("select plataforma, codigo, (select conta from contas where id = conta_id) as conta from posts where codigo = any(%s)",
@@ -286,38 +291,54 @@ def rotina(progresso=lambda e, f, t: None):
                                     "acao": {"tipo": "ir", "destino": "meuperfil", "rotulo": "Ver análise"}},
                                    magnitude=m["delta"], confianca=0.85, pesos=pesos)
 
+    # quanto a pessoa usa define quanto vale gastar com IA hoje
+    visita = _ultima_visita()
+    dias_sem_visita = (time.time() - visita) / 86400 if visita else 999
+    estado_atual = estado()
+
     progresso("Observando o mercado", 1, 5)
-    redigidos = []
     try:
         sinais = analise.sinais_mercado()[:8]
-        textos = _redigir(sinais)
-        for s in sinais:
-            t = textos.get(s["chave"])
-            if not t:
-                continue
-            redigidos.append({"titulo": t.titulo, "detectamos": t.detectamos, "por_que_importa": t.por_que_importa})
-            insights.registrar(s["tipo"], s["chave"], t.titulo, t.detectamos,
-                               {"categoria": s["categoria"], "direcao": s["direcao"], "rotulo": s["rotulo"], "assunto": s["assunto"],
-                                "por_que_importa": t.por_que_importa, "acao_texto": t.acao, "evidencias": s["evidencias"],
-                                "estatistica": s["dados"],
-                                "acao": {"tipo": "gerar_ideia", "tema": t.tema_para_ideia, "rotulo": "Gerar ideia"}},
-                               magnitude=s["magnitude"], confianca=s["confianca"], pesos=pesos)
-        resultado["sinais"] = len(sinais)
+        # só vai para a IA o que viraria insight novo (a deduplicação roda ANTES de pagar a redação)
+        novos = [x for x in sinais if not insights.repetido(x["tipo"], x["chave"], x["magnitude"])]
+        resultado["sinais"], resultado["sinais_novos"] = len(sinais), len(novos)
+        if novos and dias_sem_visita <= DIAS_SEM_VISITA_PARA_IA:
+            with ctx.em_operacao("rotina:mercado"):
+                textos = _redigir(novos)
+            for x in novos:
+                t = textos.get(x["chave"])
+                if not t:
+                    continue
+                insights.registrar(x["tipo"], x["chave"], t.titulo, t.detectamos,
+                                   {"categoria": x["categoria"], "direcao": x["direcao"], "rotulo": x["rotulo"], "assunto": x["assunto"],
+                                    "por_que_importa": t.por_que_importa, "acao_texto": t.acao, "evidencias": x["evidencias"],
+                                    "estatistica": x["dados"],
+                                    "acao": {"tipo": "gerar_ideia", "tema": t.tema_para_ideia, "rotulo": "Gerar ideia"}},
+                                   magnitude=x["magnitude"], confianca=x["confianca"], pesos=pesos)
     except Exception as e:
         falhas.append(f"mercado: {e}")
         traceback.print_exc()
 
     progresso("Procurando referências", 2, 5)
     try:
-        resultado["descobertas"] = descoberta_e_auditoria(pesos)
+        ultima_busca = estado_atual.get("ultima_descoberta") or 0
+        if dias_sem_visita <= 7 and time.time() - ultima_busca > DIAS_ENTRE_DESCOBERTAS * 86400:
+            with ctx.em_operacao("rotina:descoberta"):
+                resultado["descobertas"] = descoberta_e_auditoria(pesos)
+            _gravar_estado(ultima_descoberta=time.time())
     except Exception as e:
         falhas.append(f"descoberta: {e}")
         traceback.print_exc()
 
     progresso("Pensando nas ideias de hoje", 3, 5)
     try:
-        if perfil.get("tem_perfil") or memoria.marca().get("produto"):
-            resultado["ideias"] = ideias_do_dia(perfil, redigidos, pesos)
+        ideias_vigentes = [i for i in insights.vigentes(["ideia"], limite=3)]
+        if (perfil.get("tem_perfil") or memoria.marca().get("produto")) and not ideias_vigentes \
+                and dias_sem_visita <= DIAS_SEM_VISITA_PARA_IDEIAS:
+            sinais_vigentes = [{"titulo": i["titulo"], "detectamos": i["texto"], "por_que_importa": i["dados"].get("por_que_importa")}
+                               for i in insights.vigentes(["mercado", "conta"], limite=6)]
+            with ctx.em_operacao("rotina:ideias"):
+                resultado["ideias"] = ideias_do_dia(perfil, sinais_vigentes, pesos)
     except Exception as e:
         falhas.append(f"ideias: {e}")
         traceback.print_exc()

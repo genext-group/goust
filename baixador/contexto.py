@@ -19,6 +19,30 @@ def usuario():
     return u
 
 
+_operacao = contextvars.ContextVar("operacao", default="outros")
+
+
+def definir_operacao(nome):
+    """Nome da operação em andamento (para o registro de custos)."""
+    return _operacao.set(nome)
+
+
+def operacao():
+    return _operacao.get()
+
+
+class em_operacao:
+    """with contexto.em_operacao("rotina:ideias"): ...  — marca os custos de um trecho."""
+    def __init__(self, nome):
+        self.nome, self.token = nome, None
+
+    def __enter__(self):
+        self.token = _operacao.set(self.nome)
+
+    def __exit__(self, *a):
+        _operacao.reset(self.token)
+
+
 def em_contexto(funcao):
     """Embrulha a função para rodar com o contexto atual (útil em ThreadPoolExecutor.map)."""
     ctx = contextvars.copy_context()

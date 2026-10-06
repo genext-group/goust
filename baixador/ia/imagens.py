@@ -223,7 +223,7 @@ def analisar_estilo(estilo_id, progresso=lambda e, f, t: None):
         {"type": "input_text", "text": f"Estilo '{e['nome']}': {len(imagens)} referências."}] + [
         {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(i).decode(), "detail": "low"}
         for i in imagens if i]}]
-    guia = cliente.estruturado("relatorio", INSTRUCOES_GUIA, conteudo, GuiaEstilo, esforco="low")
+    guia = cliente.estruturado("criacao", INSTRUCOES_GUIA, conteudo, GuiaEstilo, esforco="low")
     db.executar("update estilos set guia = %s where id = %s", guia.model_dump(), estilo_id)
     progresso("Concluído", 1, 1)
     return guia.model_dump()

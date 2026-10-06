@@ -57,6 +57,7 @@ def executar(tid, prazo=None):
     if not t or t["status"] not in ATIVOS:
         return False
     ctx.definir(t["usuario_id"])
+    ctx.definir_operacao(t["tipo"])
     t["status"] = "rodando"
     _gravar(t)
     ultimo = [0.0]

@@ -268,6 +268,22 @@ create table if not exists descobertas (
   unique (usuario_id, plataforma, conta)
 );
 
+-- custo real por usuário, dia, operação e modelo (base para limites, planos e margem)
+create table if not exists custos (
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  dia date not null default current_date,
+  operacao text not null,
+  modelo text not null,
+  chamadas int not null default 0,
+  entrada bigint not null default 0,
+  saida bigint not null default 0,
+  segundos_audio int not null default 0,
+  buscas int not null default 0,
+  creditos int not null default 0,
+  usd numeric(12, 6) not null default 0,
+  primary key (usuario_id, dia, operacao, modelo)
+);
+
 -- regra de negócio: o perfil principal nunca aparece como concorrente/referência de si mesmo
 -- (mesmo @ em outra plataforma é a mesma marca → vira perfil principal também)
 update acompanhamentos a2 set papel = 'proprio'

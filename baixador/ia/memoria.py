@@ -141,7 +141,7 @@ def destilar():
         )
         try:
             r = cliente.estruturado(
-                "relatorio",
+                "criacao",
                 "Você mantém a memória de preferências de um analista de conteúdo de concorrentes. "
                 "A partir dos feedbacks do usuário sobre insights gerados por IA, escreva no máximo 12 regras "
                 "curtas, gerais e acionáveis (em português) sobre COMO gerar insights que ele valoriza: nível de "

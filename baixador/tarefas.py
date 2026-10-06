@@ -80,6 +80,7 @@ def executar(tid, prazo=None):
     if not t or t["status"] in FINAIS:
         return False
     contexto.definir(t["usuario_id"])
+    contexto.definir_operacao("coleta")
     try:
         if t.get("cancelar"):
             raise Cancelado()

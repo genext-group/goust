@@ -139,7 +139,7 @@ def gerar_calendario(semanas=2, inicio=None, progresso=lambda e, f, t: None):
         "## Já planejado (não repita)\n" + "\n".join(f"- {j['titulo']}" for j in ja) if ja else "",
     ])
     progresso("Montando o calendário", 1, 2)
-    cal = cliente.estruturado("relatorio", INSTRUCOES_CALENDARIO, entrada, Calendario, esforco="low")
+    cal = cliente.estruturado("criacao", INSTRUCOES_CALENDARIO, entrada, Calendario, esforco="low")
     novos = 0
     for it in cal.itens:
         try:
@@ -212,7 +212,7 @@ def gerar_roteiro(cid, pedido_extra="", progresso=lambda e, f, t: None):
         f"## Pedido do criador\n{pedido_extra}" if pedido_extra else None,
         _contexto_mercado(),
     ]))
-    r = cliente.estruturado("relatorio", INSTRUCOES_ROTEIRO, entrada, Roteiro, esforco="low")
+    r = cliente.estruturado("criacao", INSTRUCOES_ROTEIRO, entrada, Roteiro, esforco="low")
     roteiro = {**r.model_dump(), "gerado": datetime.now().isoformat(timespec="seconds")}
     atualizar(cid, {"roteiro": roteiro, **({"status": "roteiro"} if c["status"] == "ideia" else {})})
     progresso("Concluído", 1, 1)
@@ -282,7 +282,7 @@ def ideia_rapida(tema, contexto_sinal=""):
         _bloco_escolhas(),
         "## Pedido\nQuantidade: 1 ideia, adaptada ao negócio do criador (se o sinal vier de outro nicho, adapte o mecanismo, não o tema).",
     ]))
-    r = cliente.estruturado("video", INSTRUCOES_IDEIAS, entrada, Ideias, esforco="low")
+    r = cliente.estruturado("criacao", INSTRUCOES_IDEIAS, entrada, Ideias, esforco="low")
     return [i.model_dump() for i in r.ideias[:1]]
 
 
@@ -304,7 +304,7 @@ def gerar_ideias(qtd=4, pilar=None, formato=None, objetivo=None, tema=None):
         _bloco_escolhas(),
         "## Já planejado (não repita)\n" + "\n".join(f"- {j['titulo']}" for j in ja) if ja else None,
     ]))
-    r = cliente.estruturado("relatorio", INSTRUCOES_IDEIAS, entrada, Ideias, esforco="low")
+    r = cliente.estruturado("criacao", INSTRUCOES_IDEIAS, entrada, Ideias, esforco="low")
     return [i.model_dump() for i in r.ideias[:qtd]]
 
 
@@ -333,18 +333,17 @@ def sugerir_concorrentes(descricao=""):
         "Perfis dele: " + ", ".join(f"@{c['conta']} ({c['plataforma']}) — {(c['perfil'] or {}).get('bio', '')}" for c in proprias) if proprias else None,
         "Já acompanha (não repita): " + ", ".join(f"@{c['conta']}" for c in concorrentes) if concorrentes else None,
     ]))
-    r = cliente.cliente().responses.parse(
-        model=cliente.MODELOS["relatorio"], reasoning={"effort": "low"}, tools=[{"type": "web_search"}],
-        instructions="Pesquise na web e indique de 6 a 8 perfis de Instagram ou TikTok, ATIVOS, do mesmo nicho no "
-                     "Brasil: concorrentes diretos e criadores que são referência de conteúdo para esse público. "
-                     "Só @ que você confirmou na pesquisa (sem inventar). 'conta' sem @. 'por_que' em uma frase.",
-        input=texto, text_format=Sugestoes)
-    cliente.registrar_uso(cliente.MODELOS["relatorio"], r.usage.input_tokens, r.usage.output_tokens)
-    if not r.output_parsed:
+    r = cliente.com_busca_na_web(
+        "relatorio",
+        "Pesquise na web e indique de 6 a 8 perfis de Instagram ou TikTok, ATIVOS, do mesmo nicho no "
+        "Brasil: concorrentes diretos e criadores que são referência de conteúdo para esse público. "
+        "Só @ que você confirmou na pesquisa (sem inventar). 'conta' sem @. 'por_que' em uma frase.",
+        texto, Sugestoes)
+    if not r:
         return []
     ja = {c["conta"].lower() for c in proprias + concorrentes}
     vistos, saida = set(), []
-    for s in r.output_parsed.sugestoes:
+    for s in r.sugestoes:
         conta = s.conta.strip().lstrip("@").split("/")[-1].lower()
         if conta and conta not in ja and conta not in vistos:
             vistos.add(conta)

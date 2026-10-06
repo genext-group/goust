@@ -46,24 +46,34 @@ def relevancia(tipo, magnitude, confianca, acionavel=True, categoria=None, pesos
     return round(max(0.0, min(1.0, valor * peso)), 3)
 
 
+def repetido(tipo, chave, magnitude=0.0, texto_base=None):
+    """True se um insight com essa chave não traria nada novo (mesma regra do registrar).
+    Usado ANTES de chamar a IA, para não pagar redação de algo que seria descartado."""
+    ultimo = db.um("""select magnitude, estado, criado_em, expira_em, dados from insights
+                      where usuario_id = %s and chave = %s order by criado_em desc limit 1""", ctx.usuario(), chave)
+    if not ultimo:
+        return False
+    agora = _agora()
+    dias = (agora - ultimo["criado_em"]).days
+    anterior = ultimo["magnitude"] or 0.0
+    virou = (anterior > 0) != (magnitude > 0) and abs(magnitude) >= 5 and abs(anterior) >= 5
+    mudou = abs(magnitude - anterior) >= max(5.0, abs(anterior) * 0.3) or virou
+    if ultimo["estado"] in DESCARTADOS and dias < 30 and abs(magnitude) < abs(anterior) * 2:
+        return True
+    vigente = ultimo["expira_em"] is None or ultimo["expira_em"] > agora
+    if vigente and not mudou and (ultimo["dados"] or {}).get("texto_base") == texto_base:
+        return True
+    if not vigente and not mudou and dias < 14 and tipo != "ideia":
+        return True
+    return False
+
+
 def registrar(tipo, chave, titulo, texto="", dados=None, magnitude=0.0, confianca=0.5, acionavel=True, pesos=None):
     """Grava um insight novo se ele trouxer algo novo. Devolve o id (ou None quando é repetição)."""
     dados = dados or {}
-    ultimo = db.um("""select id, magnitude, estado, criado_em, expira_em, dados from insights
-                      where usuario_id = %s and chave = %s order by criado_em desc limit 1""", ctx.usuario(), chave)
+    if repetido(tipo, chave, magnitude, dados.get("texto_base")):
+        return None
     agora = _agora()
-    if ultimo:
-        dias = (agora - ultimo["criado_em"]).days
-        anterior = ultimo["magnitude"] or 0.0
-        virou = (anterior > 0) != (magnitude > 0) and abs(magnitude) >= 5 and abs(anterior) >= 5
-        mudou = abs(magnitude - anterior) >= max(5.0, abs(anterior) * 0.3) or virou
-        if ultimo["estado"] in DESCARTADOS and dias < 30 and abs(magnitude) < abs(anterior) * 2:
-            return None
-        vigente = ultimo["expira_em"] is None or ultimo["expira_em"] > agora
-        if vigente and not mudou and ultimo["dados"].get("texto_base") == dados.get("texto_base"):
-            return None
-        if not vigente and not mudou and dias < 14 and tipo != "ideia":
-            return None
     rel = relevancia(tipo, magnitude, confianca, acionavel, dados.get("categoria"), pesos)
     r = db.um("""insert into insights (usuario_id, tipo, chave, titulo, texto, dados, magnitude, confianca, relevancia, expira_em)
                  values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning id""",

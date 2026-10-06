@@ -144,7 +144,10 @@ Como escrever:
 - 'voz_do_publico': leia os comentários reais. Agrupe em dúvidas, objeções, pedidos e elogios, cada item com
   uma frase-resumo + um exemplo literal entre aspas, e em 'videos' os ids dos posts onde apareceram. São a
   matéria-prima de roteiros: deixe claro o que o público quer saber e o que o impede de comprar. Sem comentários,
-  devolva listas vazias e sentimento_geral "sem dados"."""
+  devolva listas vazias e sentimento_geral "sem dados".
+
+CONCISÃO (obrigatório): cada lista com no máximo 5 itens — só os mais fortes e mais acionáveis; cada texto em até
+2 frases; não repita a mesma ideia em seções diferentes. Qualidade acima de quantidade."""
 
 
 # ---------------------------------------------------------------- métricas

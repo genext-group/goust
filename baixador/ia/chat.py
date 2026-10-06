@@ -50,4 +50,4 @@ def responder(escopo, mensagens):
     dados = _contexto_perfil(escopo["plataforma"], escopo["conta"]) if escopo.get("tipo") == "perfil" else _contexto_mercado()
     historico = "\n\n".join(f"{'Usuário' if m['papel'] == 'usuario' else 'Analista'}: {m['texto']}" for m in mensagens[-12:])
     entrada = f"{memoria.contexto()}\n\n# Dados\n{dados}\n\n# Conversa\n{historico}\n\nAnalista:"
-    return cliente.texto("relatorio", INSTRUCOES, entrada, esforco="low")
+    return cliente.texto("criacao", INSTRUCOES, entrada, esforco="low")
