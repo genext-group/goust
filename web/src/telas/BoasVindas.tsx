@@ -5,6 +5,7 @@ import { ia, inicio, type Conta } from '../api'
 import { auraMarca } from '../aura'
 import { CheckDesenhado, LogoAnimado } from '../components/Animacoes'
 import { AnimProcesso } from '../components/AnimProcessos'
+import { AvatarConta } from '../components/Avatar'
 import { BuscaPerfis } from '../components/BuscaPerfis'
 import { PassoConhecidos, PassoDescobrir } from './onboarding/Descobrir'
 import { useAtividade } from '../components/Atividade'
@@ -235,23 +236,66 @@ function OpcaoAlcance({ ativo, onPress, titulo, texto }: { ativo: boolean; onPre
   )
 }
 
+// dicas que se revezam embaixo do título enquanto a IA trabalha
+const DICAS = [
+  'Pode fechar a aba: tudo continua rodando no servidor e o resultado espera você voltar.',
+  'A IA lê cada post e anota o gancho, o formato e por que ele funcionou.',
+  'Quando as análises terminarem, a IA monta sua estratégia e o calendário das próximas 2 semanas.',
+  'Todo dia, às 5h, a Goust busca os posts novos de todos esses perfis.',
+  'Na Biblioteca ficam todos os posts coletados, com filtro por formato e por perfil.',
+  'A Inteligência mostra quem mais cresceu e o que está em alta no seu mercado.',
+  'Quer acompanhar mais alguém? É só adicionar em Concorrentes, a qualquer hora.',
+]
+
+type Etapa = 'coleta' | 'comentarios' | 'analise' | 'pronto' | 'espera'
+const COR_PAPEL: Record<string, string> = { concorrente: 'var(--concorrente)', referencia: 'var(--referencia)', proprio: 'var(--accent)' }
+const NOME_PAPEL: Record<string, string> = { concorrente: 'Concorrente', referencia: 'Referência', proprio: 'Você' }
+
+function tempo(seg: number) {
+  if (seg < 60) return 'menos de 1 min'
+  const m = Math.round(seg / 60)
+  return m >= 60 ? `cerca de ${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ''}` : `cerca de ${m} min`
+}
+
 function PassoMagica({ contas, aoTerminar }: { contas: Conta[]; aoTerminar: () => void }) {
   const { downloads, ia: tarefasIA } = useAtividade()
+  const [dica, setDica] = useState(0)
   useEffect(() => { inicio.piloto({ estrategia: true, calendario: true }).catch(() => {}) }, [])
+  useEffect(() => {
+    const t = setInterval(() => setDica((d) => (d + 1) % DICAS.length), 6000)
+    return () => clearInterval(t)
+  }, [])
 
   const linhas = contas.map((c) => {
     const dl = downloads.find((t) => t.plataforma === c.plataforma && t.conta === c.conta)
     const an = tarefasIA.find((t) => t.tipo === 'perfil' && t.plataforma === c.plataforma && t.conta === c.conta)
-    const etapa: 'coleta' | 'comentarios' | 'analise' | 'pronto' | 'espera' =
+    const etapa: Etapa =
       an && ['na fila', 'rodando'].includes(an.status) ? 'analise'
         : an?.status === 'concluído' ? 'pronto'
           : dl?.status === 'comentários' ? 'comentarios'
             : dl && ['na fila', 'listando', 'baixando'].includes(dl.status) ? 'coleta' : dl ? 'pronto' : 'espera'
-    const texto = { coleta: dl?.total ? `Coletando ${dl.baixados + dl.pulados} de ${dl.total}` : dl?.status === 'listando' ? 'Contando os posts…' : 'Na fila…',
+    const feitos = dl ? dl.baixados + dl.pulados : 0
+    const texto = {
+      coleta: dl?.total ? `Coletando ${feitos} de ${dl.total}` : dl?.status === 'listando' ? 'Contando os posts…' : 'Na fila para coletar',
       comentarios: 'Lendo comentários…', analise: an?.total ? `IA analisando ${an.feito} de ${an.total}` : 'IA analisando…',
-      pronto: 'Pronto', espera: 'Na fila' }[etapa]
-    return { c, etapa, texto }
+      pronto: 'Pronto', espera: 'Na fila',
+    }[etapa]
+    // progresso da linha: coleta vale até 50%, comentários 60%, análise até 100%
+    const progresso = {
+      espera: 0, coleta: dl?.total ? (feitos / dl.total) * 0.5 : 0.05, comentarios: 0.6,
+      analise: 0.6 + (an?.total ? (an.feito / an.total) * 0.4 : 0), pronto: 1,
+    }[etapa]
+    // segundos que faltam (estimativa a partir do ritmo típico de coleta e análise)
+    const falta = {
+      espera: 150, coleta: (dl?.total ? (dl.total - feitos) * 0.8 : 60) + 90, comentarios: 100,
+      analise: Math.max(15, (an?.total ? an.total - an.feito : 20) * 3), pronto: 0,
+    }[etapa]
+    return { c, etapa, texto, progresso, falta }
   })
+  const prontos = linhas.filter((l) => l.etapa === 'pronto').length
+  const geral = linhas.length ? linhas.reduce((s, l) => s + l.progresso, 0) / linhas.length : 1
+  // vários perfis rodam em paralelo; no fim ainda vêm a estratégia e o calendário
+  const restante = prontos === linhas.length ? 0 : Math.max(...linhas.map((l) => l.falta), linhas.reduce((s, l) => s + l.falta, 0) / 4) + 60
 
   return (
     <div className="space-y-6">
@@ -259,25 +303,45 @@ function PassoMagica({ contas, aoTerminar }: { contas: Conta[]; aoTerminar: () =
         <div className="flex flex-wrap items-center gap-6">
           <div className="grid size-20 place-items-center rounded-3xl bg-white/10 backdrop-blur-md"><AnimProcesso tipo="geracao" tamanho={60} /></div>
           <div className="min-w-0 flex-1">
-            <h2 className="titulo-display text-4xl leading-tight font-semibold">A mágica começou.</h2>
-            <p className="mt-2 max-w-lg text-white/80">
-              Quando a coleta e as análises terminarem, a IA gera sozinha sua estratégia e o calendário das próximas 2 semanas.
-              Você pode explorar o painel enquanto isso.
-            </p>
+            <h2 className="titulo-display text-4xl leading-tight font-semibold">{restante ? 'A mágica começou.' : 'Tudo pronto.'}</h2>
+            <p key={dica} className="surgir mt-2 min-h-12 max-w-lg text-white/85">{restante ? DICAS[dica] : 'Coletas e análises concluídas. A estratégia e o calendário estão sendo montados agora.'}</p>
+          </div>
+        </div>
+        <div className="mt-7">
+          <div className="flex items-center justify-between text-sm text-white/85">
+            <span className="num">{prontos} de {linhas.length} perfis prontos</span>
+            <span className="num rounded-full bg-white/15 px-3 py-1 backdrop-blur">{restante ? `Tempo estimado: ${tempo(restante)}` : 'Concluído'}</span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+            <div className="h-full rounded-full bg-white transition-all duration-700" style={{ width: `${Math.max(3, geral * 100)}%` }} />
           </div>
         </div>
       </section>
       <div className="cartao divide-y linha-fina [&>*]:linha-fina">
         {linhas.length === 0 && <p className="p-5 text-sm text-muted">Nenhum perfil adicionado. Você pode fazer isso no painel.</p>}
-        {linhas.map(({ c, etapa, texto }) => (
+        {linhas.map(({ c, etapa, texto, progresso }) => (
           <div key={`${c.plataforma}/${c.conta}`} className="flex items-center gap-3 px-4 py-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-surface-secondary text-foreground">
-              {etapa === 'pronto' ? <span className="text-[var(--menta)]"><CheckDesenhado tamanho={16} /></span>
-                : etapa === 'espera' ? <span className="size-2 rounded-full bg-muted" />
-                  : <AnimProcesso tipo={etapa} tamanho={30} />}
+            <span className="relative">
+              <AvatarConta conta={c} />
+              <span className="absolute -top-1 -left-1 grid size-5 place-items-center rounded-full bg-[var(--surface)]">
+                {etapa === 'pronto' ? <span className="text-[var(--menta)]"><CheckDesenhado tamanho={11} /></span>
+                  : etapa === 'espera' ? <span className="size-1.5 rounded-full bg-muted" />
+                    : <AnimProcesso tipo={etapa} tamanho={18} />}
+              </span>
             </span>
-            <p className="min-w-0 flex-1 truncate font-medium">@{c.conta} {c.papel === 'proprio' && <span className="text-xs font-normal text-accent">· você</span>}</p>
-            <p className={`num text-sm ${etapa === 'pronto' ? 'text-[var(--menta)]' : 'text-muted'}`}>{texto}</p>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-2 truncate font-medium">
+                @{c.conta}
+                {c.papel && (
+                  <span className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                    style={{ color: COR_PAPEL[c.papel], background: `color-mix(in oklab, ${COR_PAPEL[c.papel]} 14%, transparent)` }}>{NOME_PAPEL[c.papel]}</span>
+                )}
+              </p>
+              <div className="mt-1.5 h-1 max-w-56 overflow-hidden rounded-full bg-surface-secondary">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progresso * 100}%`, background: etapa === 'pronto' ? 'var(--menta)' : 'var(--accent)' }} />
+              </div>
+            </div>
+            <p className={`num shrink-0 text-sm ${etapa === 'pronto' ? 'text-[var(--menta)]' : 'text-muted'}`}>{texto}</p>
           </div>
         ))}
       </div>
