@@ -726,7 +726,7 @@ function AnotarPost({ video }: { video: Video }) {
 }
 
 const FORMATO: Record<string, { nome: string; cor: string }> = {
-  reel: { nome: 'Reels', cor: '#a78bfa' }, carrossel: { nome: 'Carrossel', cor: '#fbbf24' },
+  reel: { nome: 'Reels', cor: '#6aa8ff' }, carrossel: { nome: 'Carrossel', cor: '#fbbf24' },
   foto: { nome: 'Foto', cor: '#34d399' }, tiktok: { nome: 'TikTok', cor: '#22d3ee' },
 }
 /** Formato do post: Reels, Carrossel, Foto (Instagram) ou TikTok, cada um com uma cor. */

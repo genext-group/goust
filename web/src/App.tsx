@@ -55,7 +55,7 @@ function TelaEntrar() {
       <div className="surgir flex flex-col items-center gap-6">
         <div className="text-center">
           <div className="mx-auto w-fit"><LogoAnimado tamanho={48} /></div>
-          <h1 className="titulo-display mt-3 text-3xl font-semibold">Referências</h1>
+          <h1 className="titulo-display mt-3 text-3xl font-semibold">Goust</h1>
           <p className="mt-1 text-muted">Monitore concorrentes e crie conteúdo com IA.</p>
         </div>
         <SignIn routing="hash" />
@@ -188,7 +188,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-8">
           <button onClick={() => irPara('inicio')} className="flex shrink-0 items-center gap-2.5 outline-none" aria-label="Início">
             <LogoAnimado />
-            <span className="titulo-display hidden text-lg font-semibold sm:inline">Referências</span>
+            <span className="titulo-display hidden text-lg font-semibold tracking-tight sm:inline">Goust</span>
           </button>
           <NavDeslizante itens={itens} aba={aba} irPara={irPara} className="mx-auto hidden md:flex" />
           <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">

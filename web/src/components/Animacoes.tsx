@@ -1,24 +1,9 @@
 import { useId } from 'react'
+import { CarregandoGoust, Mascote } from './Goust'
 
-/** Marca animada: estrela de 4 pontas com um anel em gradiente girando ao redor. */
+/** Marca: o mascote Goust (com brilho, flutuando e piscando). */
 export function LogoAnimado({ tamanho = 28 }: { tamanho?: number }) {
-  const id = useId()
-  return (
-    <svg width={tamanho} height={tamanho} viewBox="0 0 32 32" aria-hidden className="shrink-0">
-      <defs>
-        <linearGradient id={`${id}g`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--sinal-a)" />
-          <stop offset="1" stopColor="var(--sinal-b)" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill={`url(#${id}g)`} />
-      <g className="anim-girar-lento" style={{ transformOrigin: '16px 16px' }}>
-        <circle cx="16" cy="16" r="11" fill="none" stroke="white" strokeOpacity="0.35" strokeWidth="1.2" strokeDasharray="4 6" />
-      </g>
-      <path className="anim-pulso" style={{ transformOrigin: '16px 16px' }}
-        d="M16 7.5c.6 4.2 2.3 5.9 6.5 6.5-4.2.6-5.9 2.3-6.5 6.5-.6-4.2-2.3-5.9-6.5-6.5 4.2-.6 5.9-2.3 6.5-6.5Z" fill="white" />
-    </svg>
-  )
+  return <Mascote tamanho={tamanho} animado />
 }
 
 /** Carregamento das análises: arco em gradiente girando + pontos orbitando. */
@@ -90,8 +75,7 @@ export function TelaCarregando({ texto = 'Carregando…' }: { texto?: string }) 
   return (
     <div className="grid min-h-screen place-items-center">
       <div className="flex flex-col items-center gap-4 text-muted">
-        <Orbita tamanho={56} className="text-foreground" />
-        <p className="text-sm">{texto}</p>
+        <CarregandoGoust tamanho={64} texto={texto} />
       </div>
     </div>
   )

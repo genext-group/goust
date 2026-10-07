@@ -4,7 +4,7 @@ import { fmtDec, fmtNum } from '../../formato'
 import { IconePlataforma } from '../Plataforma'
 
 export const COR_FORMATO: Record<FormatoPost, { nome: string; cor: string }> = {
-  reel: { nome: 'Reels', cor: '#a78bfa' }, carrossel: { nome: 'Carrossel', cor: '#fbbf24' },
+  reel: { nome: 'Reels', cor: '#6aa8ff' }, carrossel: { nome: 'Carrossel', cor: '#fbbf24' },
   foto: { nome: 'Foto', cor: '#34d399' }, tiktok: { nome: 'TikTok', cor: '#22d3ee' },
 }
 const MOMENTO: Record<Momento, { nome: string; cls: string }> = {

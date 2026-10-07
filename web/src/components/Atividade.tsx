@@ -1,5 +1,6 @@
 import { Button } from '@heroui/react'
-import { ArrowRight, ChevronDown, Thunderbolt, Xmark } from '@gravity-ui/icons'
+import { ArrowRight, ChevronDown, Xmark } from '@gravity-ui/icons'
+import { Mascote } from './Goust'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { api, type Plataforma, type Tarefa, type TarefaIA } from '../api'
 import { tocar } from '../sons'
@@ -249,7 +250,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
         ) : principal || recentes.length > 0 ? (
           <button onClick={() => setAberta((a) => !a)} aria-label={aberta ? 'Fechar atividade' : 'O que a IA fez por você'}
             className="vidro grid size-11 place-items-center rounded-full border text-muted shadow-lg linha-fina hover:text-foreground">
-            <Thunderbolt className="size-4" />
+            <Mascote tamanho={20} variante="mono" estrela={false} />
           </button>
         ) : null}
       </div>

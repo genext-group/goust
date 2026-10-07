@@ -13,8 +13,8 @@ export const STATUS: Record<StatusConteudo, { nome: string; cor: string }> = {
 }
 export const ORDEM_STATUS = Object.keys(STATUS) as StatusConteudo[]
 export const FORMATOS: Record<string, { nome: string; cor: string }> = {
-  reel: { nome: 'Reel', cor: '#8b70ff' },
-  carrossel: { nome: 'Carrossel', cor: '#ff7a4d' },
+  reel: { nome: 'Reel', cor: '#5b9dff' },
+  carrossel: { nome: 'Carrossel', cor: '#fbbf24' },
   foto: { nome: 'Foto', cor: '#2ee6a6' },
   story: { nome: 'Story', cor: '#ffb547' },
 }

@@ -5,7 +5,7 @@
 
 /*
   Sistema visual "Referências"
-  - fundo grafite azulado, superfícies em camadas, destaque em gradiente violeta → coral
+  - fundo grafite azulado, superfícies em camadas, destaque em azul → azul-gelo (identidade Goust)
   - assinatura: a "aura" de cada perfil (gradiente próprio gerado a partir do nome)
 */
 :root,
@@ -16,7 +16,7 @@
   --surface-secondary: #f0f0f5;
   --surface-tertiary: #e8e8f0;
   --muted: #6b6b7b;
-  --accent: #6a4cff;
+  --accent: #1f63ff;
   --accent-foreground: #ffffff;
   --border: rgb(20 20 40 / 0.08);
   --separator: rgb(20 20 40 / 0.08);
@@ -27,8 +27,8 @@
   --sidebar: rgb(255 255 255 / 0.6);
   --tiktok: #111118;
   --instagram: #d62976;
-  --sinal-a: #7c5cff;
-  --sinal-b: #ff6a3d;
+  --sinal-a: #1f63ff;
+  --sinal-b: #5fb4ff;
   --menta: #12b886;
   --ambar: #f59f00;
   --card-shadow: 0 1px 2px rgb(20 20 40 / 0.04), 0 10px 30px -12px rgb(20 20 40 / 0.12);
@@ -42,7 +42,7 @@
   --surface-secondary: #1c1c1f;
   --surface-tertiary: #2a2a2e;
   --muted: #98989f;
-  --accent: #8b70ff;
+  --accent: #4d8dff;
   --accent-foreground: #ffffff;
   --border: rgb(255 255 255 / 0.09);
   --separator: rgb(255 255 255 / 0.08);
@@ -52,8 +52,8 @@
   --sidebar: rgb(10 10 12 / 0.72);
   --tiktok: #f2f2f7;
   --instagram: #ff5fa2;
-  --sinal-a: #8b70ff;
-  --sinal-b: #ff7a4d;
+  --sinal-a: #2f74ff;
+  --sinal-b: #8fd0ff;
   --menta: #2ee6a6;
   --ambar: #ffb547;
   --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.07);

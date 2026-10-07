@@ -8,6 +8,7 @@ import { AnimProcesso } from '../AnimProcessos'
 import { fmtRelativo } from '../../formato'
 import { tocar } from '../../sons'
 import { useConfirmar } from '../ui/Confirmar'
+import { Mascote } from '../Goust'
 import { formatoDe, OBJETIVOS } from './comum'
 
 const TIPOS: { id: TipoNota; nome: string; emoji: string; cor: string; dica: string }[] = [
@@ -200,7 +201,7 @@ export function Caderno({ aoIrCalendario }: { aoIrCalendario: () => void }) {
           <div className="columns-1 gap-3 sm:columns-2 xl:columns-3">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="carregando mb-3 h-28 break-inside-avoid rounded-2xl" />)}</div>
         ) : !lista.length ? (
           <div className="cartao px-6 py-14 text-center">
-            <p className="text-3xl">📝</p>
+            <div className="mx-auto w-fit text-muted"><Mascote tamanho={48} variante="mono" /></div>
             <h3 className="titulo-display mt-2 text-xl font-semibold">Seu caderno de ideias</h3>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
               Jogue aqui o que aparecer no dia a dia: uma pergunta de cliente, uma frase boa, um bastidor, algo que você reparou.

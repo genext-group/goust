@@ -86,3 +86,14 @@
 .pulsar { animation: respirar 1.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
 .girar-lento { animation: florescer 3.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .pulsar, .girar-lento { animation: none; } }
+
+/* ---------------------------------------------------------------- Goust (mascote) */
+@keyframes goust-flutuar { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-3.5px) rotate(-1.5deg); } }
+@keyframes goust-piscar { 0%, 44%, 48%, 100% { transform: scaleY(1); } 46% { transform: scaleY(0.12); } }
+@keyframes goust-estrela { 0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; } 50% { transform: scale(0.55) rotate(45deg); opacity: 0.55; } }
+@keyframes goust-sombra { 0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.55; } 50% { transform: translateX(-50%) scaleX(0.75); opacity: 0.3; } }
+.goust-flutuar { animation: goust-flutuar 3.2s ease-in-out infinite; transform-origin: 50% 60%; transform-box: fill-box; }
+.goust-piscar { animation: goust-piscar 4.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.goust-estrela { animation: goust-estrela 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.goust-sombra { animation: goust-sombra 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .goust-flutuar, .goust-piscar, .goust-estrela, .goust-sombra { animation: none; } }

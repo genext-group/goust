@@ -12,10 +12,11 @@ import { PanoramaMercado } from '../components/ia/PanoramaMercado'
 import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
 import { IconePlataforma, SeloPlataforma } from '../components/Plataforma'
 import { ComparativoMarca } from '../components/ia/ComparativoMarca'
+import { Mascote } from '../components/Goust'
 import { EvolucaoMarca, RadarMercado } from '../components/ia/RadarMercado'
 import { fmtDec, fmtRelativo } from '../formato'
 import { aura } from '../aura'
-import { Orbita, Radar } from '../components/Animacoes'
+import { Orbita } from '../components/Animacoes'
 import { ModalVideo } from './Biblioteca'
 import { useNuvem } from '../ambiente'
 
@@ -367,8 +368,8 @@ function Progresso({ t }: { t: TarefaIA }) {
 function Vazio({ titulo, texto, acao }: { titulo: string; texto: string; acao: React.ReactNode }) {
   return (
     <div className="cartao flex flex-col items-center px-6 py-16 text-center">
-      <div className="text-foreground"><Radar /></div>
-      <h3 className="titulo-display mt-2 text-xl font-semibold">{titulo}</h3>
+      <div className="text-muted"><Mascote tamanho={52} variante="mono" /></div>
+      <h3 className="titulo-display mt-3 text-xl font-semibold">{titulo}</h3>
       <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">{texto}</p>
       {acao && <div className="mt-5">{acao}</div>}
     </div>

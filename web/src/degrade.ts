@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-/** Barra segmentada com UM degradê contínuo (violeta → coral) atravessando todos os segmentos:
+/** Barra segmentada com UM degradê contínuo (azul → azul-gelo) atravessando todos os segmentos:
  *  cada segmento mostra só o seu pedaço, em vez de repetir o degradê inteiro em cada etapa. */
 export function pedacoDoDegrade(i: number, total: number): CSSProperties {
   return {

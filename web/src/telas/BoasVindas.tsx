@@ -40,7 +40,7 @@ export function BoasVindas({ contas, setContas, aoTerminar }: {
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-5 py-8 sm:py-12">
         <header className="flex items-center gap-3">
           <LogoAnimado />
-          <span className="titulo-display text-lg font-semibold">Referências</span>
+          <span className="titulo-display text-lg font-semibold tracking-tight">Goust</span>
           <div className="ml-auto flex items-center gap-1.5" aria-label={`Passo ${passo + 1} de ${PASSOS.length}`}>
             {PASSOS.map((p, i) => (
               <span key={p} className={`h-1.5 rounded-full transition-all duration-500 ${i === passo ? 'botao-sinal w-8' : i < passo ? 'w-3 bg-accent/60' : 'w-3 bg-surface-tertiary'}`} />

@@ -1,1 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0a84ff"/><path d="M16 8v12m0 0-5-5m5 5 5-5M10 24h12" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <radialGradient id="c" cx="0.38" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.45" stop-color="#cfe6ff"/>
+      <stop offset="0.8" stop-color="#6fa8ff"/>
+      <stop offset="1" stop-color="#2f74ff"/>
+    </radialGradient>
+  </defs>
+  <g transform="rotate(-6 52 55)">
+    <path d="M23 63C19 35 35 13 57 13C79 13 91 31 89 53L88 79C88 86 82 90 77 86C73 83 70 88 65 90C60 92 57 86 52 87C47 88 44 94 38 92C33 90 33 84 28 84C21 84 15 81 14 75C13 69 18 65 23 66Z" fill="url(#c)" stroke="#1f63ff" stroke-width="3"/>
+    <rect x="47" y="35" width="9" height="18" rx="4.5" fill="#0b0d14" transform="rotate(-10 51.5 44)"/>
+    <rect x="63" y="33" width="9" height="18" rx="4.5" fill="#0b0d14" transform="rotate(-10 67.5 42)"/>
+  </g>
+  <path d="M88 1C89 8 91 10 98 11C91 12 89 14 88 21C87 14 85 12 78 11C85 10 87 8 88 1Z" fill="#8fd0ff"/>
+</svg>
