@@ -82,17 +82,18 @@ export function TelaEntrar() {
           <LogoGoust tamanho={30} />
 
           {/* o Goust e os sinais que ele traz */}
-          <div className="relative mx-auto mt-6 h-[260px] w-full max-w-[460px] sm:h-[300px] lg:mx-0">
+          {/* cena: sinais em cima (esquerda e direita) e embaixo (centro); o Goust no meio, sem nada por cima */}
+          <div className="relative mx-auto mt-6 h-[330px] w-full max-w-[520px] lg:mx-0">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="absolute inset-0 -z-10 m-auto size-40 rounded-full bg-[radial-gradient(circle,rgba(59,130,255,0.35),transparent_70%)] blur-2xl" />
-              <Mascote tamanho={170} animado voar formar />
+              <Mascote tamanho={150} animado voar formar />
             </div>
-            <Sinal icone={<ChartLine />} titulo="@concorrente acelerou" texto="+83% de alcance este mês" className="top-4 left-0 sm:left-2" atraso="1.4s" />
-            <Sinal icone={<Flame />} titulo="Post em alta no mercado" texto="15,5× a média da conta" className="top-24 right-0" atraso="1.9s" />
-            <Sinal icone={<Bulb />} titulo="3 ideias para hoje" texto="com roteiro pronto para gravar" className="bottom-2 left-6 sm:left-10" atraso="2.4s" />
+            <Sinal icone={<ChartLine />} titulo="@concorrente acelerou" texto="+83% de alcance este mês" className="top-0 left-0" atraso="1.4s" />
+            <Sinal icone={<Flame />} titulo="Post em alta no mercado" texto="15,5× a média da conta" className="top-0 right-0 max-sm:hidden" atraso="1.9s" />
+            <Sinal icone={<Bulb />} titulo="3 ideias para hoje" texto="com roteiro pronto para gravar" className="bottom-0 left-1/2 -translate-x-1/2 max-sm:left-auto max-sm:right-0 max-sm:translate-x-0" atraso="2.4s" />
           </div>
 
-          <h1 className="titulo-display mt-4 text-4xl leading-[1.05] font-semibold tracking-tight sm:text-5xl">
+          <h1 className="titulo-display mt-6 text-[38px] leading-[1.05] font-semibold tracking-tight sm:text-[46px]">
             Veja o que o seu mercado faz.<br /><span className="text-[var(--sinal-b)]">Sem ser visto.</span>
           </h1>
           <p className="mt-4 max-w-xl text-[17px] leading-relaxed text-muted">

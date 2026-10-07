@@ -57,7 +57,7 @@ export function Mascote({ tamanho = 32, variante = 'brilho', animado = false, es
   return (
     <svg width={tamanho} height={tamanho} viewBox="0 0 100 100" aria-hidden className={`shrink-0 overflow-visible ${className}`}>
       <defs>
-        <radialGradient id={`${id}c`} cx="0.38" cy="0.3" r="0.85" gradientUnits="objectBoundingBox">
+        <radialGradient id={`${id}c`} cx="42" cy="32" r="72" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#ffffff" />
           <stop offset="0.45" stopColor="#cfe6ff" />
           <stop offset="0.8" stopColor="#6fa8ff" />
