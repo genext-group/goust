@@ -8,7 +8,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.networking.impersonate import ImpersonateTarget
 
 from .armazenamento import NUVEM
-from .filtros import MAX_FIXADOS, Cancelado, data_inicio_ts, nome_arquivo, quantos_listar
+from .filtros import PARAR_APOS_CONHECIDOS, Cancelado, data_inicio_ts, nome_arquivo, quantos_listar
 from .midia import FFMPEG, salvar_capa
 
 OPCOES_BASE = {
@@ -65,7 +65,7 @@ def listar(conta, opcoes, log, cancelado, conhecido=lambda _id: False):
             # para cedo quando passa da data inicial ou chega em vídeos já baixados (modo "novos")
             antigo = inicio and (e.get("timestamp") or 0) < inicio
             seguidos_parar = seguidos_parar + 1 if (antigo or conhecido(e["id"])) else 0
-            if seguidos_parar > MAX_FIXADOS:
+            if seguidos_parar > PARAR_APOS_CONHECIDOS:
                 break
     return itens
 

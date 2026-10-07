@@ -19,7 +19,7 @@ from . import instagram_descoberta as descoberta
 from .fontes import scrapecreators
 from .armazenamento import NUVEM
 from .midia import FFMPEG, salvar_capa
-from .filtros import (MAX_FIXADOS, PASTA_DADOS, Cancelado, data_inicio_ts,
+from .filtros import (PARAR_APOS_CONHECIDOS, PASTA_DADOS, Cancelado, data_inicio_ts,
                       nome_arquivo, quantos_listar)
 
 ARQ_COOKIES = PASTA_DADOS / "instagram_cookies.json"
@@ -279,7 +279,7 @@ def _listar_com_login(conta, opcoes, log, cancelado, conhecido):
             seguidos_parar = seguidos_parar + 1 if (antigo or conhecido(item["id"])) else 0
 
         log(f"{len(itens)} vídeos encontrados...")
-        if (limite and len(itens) >= limite) or seguidos_parar > MAX_FIXADOS:
+        if (limite and len(itens) >= limite) or seguidos_parar > PARAR_APOS_CONHECIDOS:
             break
         if not dados.get("more_available") or not dados.get("next_max_id"):
             break

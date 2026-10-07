@@ -8,7 +8,7 @@ import time
 
 from curl_cffi import requests
 
-from ..filtros import MAX_FIXADOS, Cancelado
+from ..filtros import PARAR_APOS_CONHECIDOS, Cancelado
 
 BASE = "https://api.scrapecreators.com"
 
@@ -209,7 +209,7 @@ def posts_instagram(conta, opcoes, log, cancelado, conhecido, inicio_ts=None, li
         cursor = d.get("next_max_id")
         if not d.get("more_available") or not cursor:
             break
-        if (limite and len(itens) >= limite) or seguidos_parar > MAX_FIXADOS:
+        if (limite and len(itens) >= limite) or seguidos_parar > PARAR_APOS_CONHECIDOS:
             break
     return itens
 
