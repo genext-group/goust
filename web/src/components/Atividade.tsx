@@ -186,9 +186,20 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
   const principal = ativos.find((p) => p.estado === 'rodando') ?? ativos[0]
   const ir = (d: Destino, filtro?: string) => { setAberta(false); irPara(d, filtro) }
 
+  // fecha ao clicar fora do painel (ou no próprio botão de novo) e com Esc
+  const caixa = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!aberta) return
+    const fora = (e: PointerEvent) => { if (caixa.current && !caixa.current.contains(e.target as Node)) setAberta(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberta(false) }
+    document.addEventListener('pointerdown', fora)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('pointerdown', fora); document.removeEventListener('keydown', esc) }
+  }, [aberta])
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 sm:justify-end sm:px-6" data-sem-som>
-      <div className="pointer-events-auto relative">
+      <div ref={caixa} className="pointer-events-auto relative">
         {aberta && (
           <div className="vidro subir-dock absolute right-0 bottom-full mb-3 w-[min(92vw,26rem)] overflow-hidden rounded-3xl border linha-fina shadow-2xl">
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
