@@ -1,4 +1,5 @@
 import { CheckDesenhado } from '../Animacoes'
+import { Mascote } from '../Goust'
 import { AnimProcesso, type TipoProcesso } from '../AnimProcessos'
 import { COLETA_INICIAL, api, type Conta, type Tarefa, type TarefaIA } from '../../api'
 import { tocar } from '../../sons'
@@ -24,8 +25,10 @@ export function Pipeline({ conta, downloads, tarefasIA, temRelatorio, aoVerifica
 
   if (semPosts) {
     return (
-      <div className="rounded-2xl bg-[var(--ambar)]/10 p-4 text-sm">
-        <p className="font-medium text-[var(--ambar)]">Não encontramos posts públicos em @{conta.conta}</p>
+      <div className="flex gap-4 rounded-2xl bg-surface-secondary/60 p-4 text-sm">
+        <span className="shrink-0 text-muted"><Mascote tamanho={44} variante="mono" animado estrela={false} /></span>
+        <div>
+        <p className="font-medium">@{conta.conta} ainda não tem posts</p>
         <p className="mt-1 text-muted">
           O perfil pode ser novo, privado ou ainda não ter publicações. A IA não tem o que analisar por enquanto, mas
           o resto funciona: preencha as próximas etapas e acompanhe concorrentes e referências.
@@ -33,6 +36,7 @@ export function Pipeline({ conta, downloads, tarefasIA, temRelatorio, aoVerifica
         </p>
         <button onClick={() => { tocar('coleta'); api.baixar([conta], { modo: 'recentes', quantidade: COLETA_INICIAL, somente_reels: false, analisar_ao_fim: true }).then(() => aoVerificar?.()).catch(() => {}) }}
           className="mt-2 text-xs font-medium text-accent hover:underline">Verificar de novo</button>
+        </div>
       </div>
     )
   }
@@ -40,7 +44,7 @@ export function Pipeline({ conta, downloads, tarefasIA, temRelatorio, aoVerifica
   const etapas: { nome: string; detalhe: string; estado: Estado; anim: TipoProcesso }[] = [
     {
       nome: 'Coletar posts', anim: 'coleta',
-      detalhe: coletando ? (dl!.total ? `${dl!.baixados + dl!.pulados} de ${dl!.total}` : 'Listando o perfil…') : coletou ? `${conta.videos} posts` : 'Aguardando',
+      detalhe: coletando ? (dl!.total ? `${dl!.baixados + dl!.pulados} de ${dl!.total}` : 'Contando os posts…') : coletou ? `${conta.videos} posts` : 'Aguardando',
       estado: coletando ? 'agora' : coletou ? 'feito' : 'espera',
     },
     {

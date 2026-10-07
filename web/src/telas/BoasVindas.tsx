@@ -403,7 +403,7 @@ function PassoMagica({ contas, aoTerminar }: { contas: Conta[]; aoTerminar: () =
         : an?.status === 'concluído' ? 'pronto'
           : dl?.status === 'comentários' ? 'comentarios'
             : dl && ['na fila', 'listando', 'baixando'].includes(dl.status) ? 'coleta' : dl ? 'pronto' : 'espera'
-    const texto = { coleta: dl?.total ? `Coletando ${dl.baixados + dl.pulados} de ${dl.total}` : 'Coletando posts…',
+    const texto = { coleta: dl?.total ? `Coletando ${dl.baixados + dl.pulados} de ${dl.total}` : dl?.status === 'listando' ? 'Contando os posts…' : 'Na fila…',
       comentarios: 'Lendo comentários…', analise: an?.total ? `IA analisando ${an.feito} de ${an.total}` : 'IA analisando…',
       pronto: 'Pronto', espera: 'Na fila' }[etapa]
     return { c, etapa, texto }

@@ -43,6 +43,8 @@ export interface Tarefa {
   opcoes: Opcoes
   status: 'na fila' | 'listando' | 'baixando' | 'comentários' | 'concluído' | 'erro' | 'cancelado'
   comentarios?: number
+  /** quantos posts o perfil tinha ao listar (0 = vazio/privado) */
+  listados?: number
   total: number
   baixados: number
   pulados: number

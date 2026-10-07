@@ -2,6 +2,7 @@ import { Button, toast } from '@heroui/react'
 import { ArrowDownToLine, ArrowLeft, Check, Magnifier, Plus } from '@gravity-ui/icons'
 import { useEffect, useRef, useState } from 'react'
 import { interpretarEntrada, perfis, type Conta, type PerfilEncontrado, type Plataforma } from '../api'
+import { COLETA_INICIAL } from '../api'
 import { aura } from '../aura'
 import { fmtNum } from '../formato'
 import { tocar } from '../sons'
@@ -120,7 +121,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
       aoAdicionar(r.contas)
       tocar('coleta')
       toast.success(proprio ? `@${escolhido.conta} conectado` : `@${escolhido.conta} adicionado como ${papel === 'concorrente' ? 'concorrente' : 'referência'}`,
-        { description: proprio ? 'Coletando seus 100 posts mais recentes. A análise da IA começa logo em seguida.' : 'Coletando os 100 posts mais recentes. A análise da IA começa logo em seguida.' })
+        { description: `Coletando ${proprio ? 'seus posts' : 'os posts'} mais recentes (até ${COLETA_INICIAL}). A análise da IA começa logo em seguida.` })
       if (r.aviso) toast.warning('Coleta limitada', { description: r.aviso })
       setTexto(''); setResultados(null); setEscolhido(null); setAberto(false)
     } catch (e) {
@@ -171,7 +172,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
               <Button className="botao-sinal mt-4 w-full" size="lg" isPending={salvando} onPress={() => acompanhar()}>
                 <Plus /> {proprio ? 'Este é o meu perfil: conectar e analisar' : 'Acompanhar e analisar'}
               </Button>
-              <p className="mt-2 text-center text-xs text-muted">{proprio ? 'Coletamos seus posts e a IA analisa em seguida.' : 'Coletamos os 100 posts mais recentes e a IA analisa em seguida.'}</p>
+              <p className="mt-2 text-center text-xs text-muted">{proprio ? 'Coletamos seus posts e a IA analisa em seguida.' : `Coletamos até ${COLETA_INICIAL} posts recentes (ou todos, se o perfil tiver menos) e a IA analisa em seguida.`}</p>
             </div>
           ) : (
             <>

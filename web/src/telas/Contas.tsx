@@ -1,4 +1,5 @@
 import { Button, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
+import { Mascote } from '../components/Goust'
 import { FolderOpen, TrashBin } from '@gravity-ui/icons'
 import { useMemo, useState } from 'react'
 import { COLETA_INICIAL, api, marcas as marcasApi, type Conta, type Opcoes, type Plataforma } from '../api'
@@ -306,8 +307,9 @@ function StatusConta({ c, aoColetar }: { c: Conta; aoColetar: () => void }) {
     return (
       <p className="mt-3 flex items-center gap-2 rounded-xl bg-surface-secondary/60 px-2.5 py-1.5 text-xs">
         <AnimProcesso tipo={dl.status === 'comentários' ? 'comentarios' : 'coleta'} tamanho={20} />
-        {dl.status === 'na fila' ? 'Na fila para coletar' : dl.status === 'listando' ? 'Encontrando os posts…'
-          : dl.status === 'comentários' ? 'Lendo comentários…' : `Coletando ${n} de ${dl.total}`}
+        {dl.status === 'na fila' ? 'Na fila para coletar' : dl.status === 'listando' ? 'Contando os posts do perfil…'
+          : dl.status === 'comentários' ? 'Lendo comentários…'
+            : `Coletando ${n} de ${dl.total}${dl.opcoes.modo !== 'novos' && dl.listados != null && dl.listados < (Number(dl.opcoes.quantidade) || Infinity) ? ' (todos do perfil)' : ''}`}
       </p>
     )
   }
@@ -328,8 +330,9 @@ function StatusConta({ c, aoColetar }: { c: Conta; aoColetar: () => void }) {
   }
   if (!c.videos && dl?.status === 'concluído' && dl.baixados + dl.pulados === 0) {
     return (
-      <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--ambar)]/10 px-2.5 py-1.5 text-xs text-[var(--ambar)]" onClick={parar}>
-        <span className="min-w-0 flex-1">Sem posts públicos: perfil vazio, privado ou ainda sem publicações</span>
+      <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-surface-secondary/60 px-2.5 py-2 text-xs" onClick={parar}>
+        <span className="shrink-0 text-muted"><Mascote tamanho={22} variante="mono" estrela={false} /></span>
+        <span className="min-w-0 flex-1"><span className="block font-medium">Ainda sem posts</span><span className="block text-muted">Perfil vazio ou privado. A coleta diária traz o primeiro post.</span></span>
         <button onClick={aoColetar} className="shrink-0 font-medium underline">Verificar de novo</button>
       </div>
     )

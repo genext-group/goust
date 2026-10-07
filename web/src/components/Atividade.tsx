@@ -69,27 +69,35 @@ export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => vo
     const coment = t.status === 'comentários'
     const fim = t.status === 'concluído'
     const automatica = t.opcoes.modo === 'novos'          // coleta diária / "verificar agora": só os novos
-    const listados = (t as Tarefa & { listados?: number }).listados
+    const listados = t.listados
     // perfil vazio só quando NADA foi listado (coleta "só novos" sem novidade não é perfil vazio)
     const semNada = fim && (listados === 0 || (listados === undefined && !automatica && feitos === 0))
     const emDia = fim && !semNada && t.baixados === 0
     const rede = t.plataforma === 'tiktok' ? 'TikTok' : 'Instagram'
     const q = Number(t.opcoes.quantidade) || 0
-    const buscando = automatica ? `Procurando posts novos de @${t.conta}` : q ? `Buscando os ${q} últimos posts de @${t.conta}` : `Buscando os últimos posts de @${t.conta}`
+    const posts = (n: number) => `${n} ${n === 1 ? 'post' : 'posts'}`
+    // o perfil tem menos posts do que pedimos: coletamos tudo o que existe (não "os últimos 100")
+    const tudo = !automatica && listados != null && listados > 0 && (!q || listados < q)
+    const buscando = automatica ? `Procurando posts novos de @${t.conta}` : `Lendo o perfil de @${t.conta}`
+    const salvando = automatica ? `Salvando posts novos de @${t.conta}` : t.total ? `Salvando ${posts(t.total)} de @${t.conta}` : `Salvando posts de @${t.conta}`
+    const pronto = automatica ? `${t.baixados} ${t.baixados === 1 ? 'post novo' : 'posts novos'} de @${t.conta}`
+      : tudo ? (listados === 1 ? `O único post de @${t.conta}` : `Todos os ${listados} posts de @${t.conta}`)
+        : `${posts(t.baixados)} de @${t.conta}`
     // cancelar só faz sentido no que VOCÊ pediu e enquanto falta bastante (automático e quase pronto: não)
     const cancelavel = ativo && !automatica && !coment && (t.status !== 'baixando' || !t.total || feitos / t.total < 0.8)
     return {
       chave: `d${t.id}`, tipo: coment ? 'comentarios' : 'coleta', plataforma: t.plataforma,
       titulo: ativo
-        ? (t.status === 'na fila' ? `@${t.conta} na fila` : coment ? `Lendo comentários de @${t.conta}` : t.status === 'baixando' ? `Salvando posts de @${t.conta}` : buscando)
-        : semNada ? `@${t.conta} não tem posts públicos` : emDia ? `@${t.conta} está em dia`
-          : fim ? `${t.baixados} ${t.baixados === 1 ? 'post novo' : 'posts novos'} de @${t.conta}`
+        ? (t.status === 'na fila' ? `@${t.conta} na fila` : coment ? `Lendo comentários de @${t.conta}` : t.status === 'baixando' ? salvando : buscando)
+        : semNada ? `@${t.conta} ainda não tem posts` : emDia ? `@${t.conta} está em dia`
+          : fim ? pronto
             : t.status === 'cancelado' ? `Coleta de @${t.conta} cancelada` : `Coleta de @${t.conta} falhou`,
-      detalhe: t.status === 'na fila' ? `${rede} · aguardando a vez` : t.status === 'listando' ? `${rede} · lendo o perfil`
-        : coment ? `${rede} · ${t.comentarios ?? 0} comentários lidos` : t.status === 'baixando' ? `${rede} · ${feitos} de ${t.total}`
+      detalhe: t.status === 'na fila' ? `${rede} · aguardando a vez` : t.status === 'listando' ? `${rede} · contando os posts`
+        : coment ? `${rede} · ${t.comentarios ?? 0} comentários lidos`
+          : t.status === 'baixando' ? `${rede} · ${feitos} de ${t.total}${tudo ? ' · é tudo o que o perfil tem' : ''}`
           : t.status === 'erro' ? (t.logs.at(-1)?.replace(/^\d\d:\d\d:\d\d /, '') ?? 'Erro') : t.status === 'cancelado' ? rede
-            : semNada ? `${rede} · perfil vazio, privado ou sem publicações` : emDia ? `${rede} · nada novo desde a última verificação`
-              : `${rede}${t.pulados ? ` · ${t.pulados} já estavam na Biblioteca` : ''}`,
+            : semNada ? `${rede} · perfil vazio ou privado. Quando publicar, a coleta diária traz` : emDia ? `${rede} · nada novo desde a última verificação`
+              : `${rede}${tudo ? ` · o perfil tem ${listados === 1 ? 'só 1 post' : `só ${listados} posts`}` : !automatica && q ? ` · os ${q} mais recentes` : ''}${t.pulados ? ` · ${t.pulados} já estavam na Biblioteca` : ''}`,
       progresso: t.status === 'baixando' && t.total ? feitos / t.total : null,
       ativo, estado: t.status === 'na fila' ? 'fila' : ativo ? 'rodando' : t.status === 'concluído' ? 'ok' : t.status === 'erro' ? 'erro' : 'cancelado',
       assunto: `conta:${t.plataforma}/${t.conta}`, rotineiro: emDia,
@@ -263,7 +271,7 @@ function Linha({ p, ir }: { p: Processo; ir: (d: Destino, filtro?: string) => vo
     <div className={`group flex items-center gap-3 rounded-2xl p-2.5 transition-colors ${p.ativo ? 'bg-surface-secondary/60' : 'hover:bg-surface-secondary/40'}`}>
       <span className="relative grid size-9 shrink-0 place-items-center rounded-xl bg-surface-secondary text-foreground">
         {p.ativo ? <AnimProcesso tipo={p.tipo} tamanho={26} />
-          : p.vazio ? <span className="text-sm text-muted">∅</span>
+          : p.vazio ? <span className="text-muted"><Mascote tamanho={20} variante="mono" estrela={false} /></span>
           : p.estado === 'ok' ? <span className="text-[var(--menta)]"><CheckDesenhado tamanho={14} /></span>
             : p.estado === 'cancelado' ? <span className="text-xs text-muted">—</span>
               : <Xmark className="size-4 text-danger" />}
