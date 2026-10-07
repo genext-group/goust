@@ -76,7 +76,7 @@ export function Parecidos({ contas, setContas, aoAdicionar }: { contas: Conta[];
     .map(([k, t]) => ({ k, t, itens: res.itens.filter((x) => (x.grupo ?? 'mercado') === k), ideal: res.ideais?.[k] })).filter((g) => g.itens.length) : []
 
   return (
-    <section className="rounded-3xl border linha-fina">
+    <section className="overflow-hidden rounded-3xl border linha-fina">
       <button onClick={() => setAberto((a) => !a)} aria-expanded={aberto}
         className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-surface-secondary/30">
         <span className="min-w-0 flex-1">

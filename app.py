@@ -278,6 +278,31 @@ def api_parecidos():
     return jsonify(r)
 
 
+@app.get("/api/biblioteca/estado")
+@protegido
+def api_biblioteca_estado():
+    """Quando os perfis foram verificados pela última vez (para a Biblioteca não parecer parada)."""
+    from baixador.inteligencia import rotina
+    r = db.um("""select max(p.atualizado_em) as coletado, max(p.publicado_em) as ultimo_post from acompanhamentos a
+                 join posts p on p.conta_id = a.conta_id where a.usuario_id = %s""", contexto.usuario())
+    verificado = rotina.estado().get("ultima_coleta")
+    return jsonify(verificado=verificado, ultimo_post=r["ultimo_post"].isoformat() if r and r["ultimo_post"] else None,
+                   perfis=db.um("select count(*) n from acompanhamentos where usuario_id = %s", contexto.usuario())["n"])
+
+
+@app.post("/api/biblioteca/verificar")
+@protegido
+def api_biblioteca_verificar():
+    """Procura posts novos em todos os perfis acompanhados agora (no máximo uma vez a cada 30 min)."""
+    import time as _t
+    from baixador.inteligencia import rotina
+    ultima = rotina.estado().get("ultima_coleta") or 0
+    if _t.time() - ultima < 1800:
+        return jsonify(erro="Os perfis foram verificados há poucos minutos. Tente de novo daqui a pouco.", recente=True), 429
+    n = rotina.coleta_diaria(limite=100)
+    return jsonify(perfis=n)
+
+
 @app.post("/api/marcas/unir")
 @protegido
 def api_unir_marca():

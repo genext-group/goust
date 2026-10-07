@@ -21,7 +21,7 @@ from .. import contexto as ctx
 from ..ia import cliente, conteudo, estrategia, lote, memoria
 from . import analise, insights
 
-LIMITE_COLETA_DIARIA = 6        # contas acompanhadas por dia (além do seu perfil)
+LIMITE_COLETA_DIARIA = 25       # contas acompanhadas por dia (além do seu perfil): TikTok é grátis, IG ~1 crédito
 DIAS_SEM_VISITA_PARA_IA = 3     # quem não abre o app há mais tempo fica só com coleta e cálculos (sem IA)
 DIAS_SEM_VISITA_PARA_IDEIAS = 2 # ideias que ninguém vê são dinheiro jogado fora
 DIAS_ENTRE_DESCOBERTAS = 7      # busca de referências na web: semanal
@@ -53,13 +53,16 @@ def precisa_rodar():
 
 # ---------------------------------------------------------------- coleta
 
-def coleta_diaria():
-    """Posts novos do seu perfil + das contas mais desatualizadas. Devolve quantas coletas pediu."""
+def coleta_diaria(limite=None):
+    """Posts novos do seu perfil + das contas há mais tempo sem verificação. Devolve quantas coletas pediu.
+    A ordem usa a última COLETA de posts (não a atualização do perfil, que acontece por outros caminhos)."""
     from .. import tarefas as downloads
     proprias = analise.contas(("proprio",))
-    outros = sorted(analise.contas(("concorrente", "referencia")),
-                    key=lambda c: c["atualizado_em"] or datetime(1970, 1, 1, tzinfo=timezone.utc))
-    alvo = proprias + outros[:LIMITE_COLETA_DIARIA]
+    ultima = {r["conta_id"]: r["m"] for r in db.todos("""select a.conta_id, max(p.atualizado_em) as m from acompanhamentos a
+                 left join posts p on p.conta_id = a.conta_id where a.usuario_id = %s group by a.conta_id""", ctx.usuario())}
+    zero = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    outros = sorted(analise.contas(("concorrente", "referencia")), key=lambda c: ultima.get(c["id"]) or zero)
+    alvo = proprias + outros[:limite or LIMITE_COLETA_DIARIA]
     for c in alvo:
         downloads.enfileirar(c["plataforma"], c["conta"], {"modo": "novos", "somente_reels": False})
     _gravar_estado(ultima_coleta=time.time())

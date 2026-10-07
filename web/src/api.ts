@@ -604,3 +604,8 @@ export const marcas = {
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}?marca=1`, { method: 'DELETE' }),
   parecidos: (p: { chaves: string[]; negocio: boolean; forcar?: boolean }) => req<ResultadoParecidos>('/api/parecidos', { body: p }),
 }
+
+export const bibliotecaEstado = {
+  estado: () => req<{ verificado: number | null; ultimo_post: string | null; perfis: number }>('/api/biblioteca/estado'),
+  verificar: () => req<{ perfis: number }>('/api/biblioteca/verificar', { body: {} }),
+}

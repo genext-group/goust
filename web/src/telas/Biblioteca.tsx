@@ -3,14 +3,15 @@ import { toast } from '@heroui/react'
 import { ArrowDownToLine, ArrowUpRightFromSquare, Check, CircleCheck, Comment, Eye, Folder, FolderOpen, FolderPlus, Heart, HeartFill, Palette, Pencil, Play, Plus, Sparkles, TrashBin, Xmark } from '@gravity-ui/icons'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api, baixarArquivo, baixarVarios, criacao, ia, notas as apiNotas, pastas as apiPastas, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Estilo, type Pasta, type Plataforma, type Video } from '../api'
+import { api, bibliotecaEstado, baixarArquivo, baixarVarios, criacao, ia, notas as apiNotas, pastas as apiPastas, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Estilo, type Pasta, type Plataforma, type Video } from '../api'
 import { Explosao } from '../components/AnimProcessos'
+import { useAtividade } from '../components/Atividade'
 import { Menu } from '../components/Menu'
 import { tocar } from '../sons'
 import { useDialogoTexto } from '../components/ui/DialogoTexto'
 import { useNuvem } from '../ambiente'
 import { IconePlataforma, NOME_PLATAFORMA, SeloPlataforma } from '../components/Plataforma'
-import { fmtDec, fmtData, fmtDuracao, fmtInteiro, fmtNum } from '../formato'
+import { fmtDec, fmtData, fmtDuracao, fmtInteiro, fmtNum, fmtRelativo } from '../formato'
 import { useConfirmar } from '../components/ui/Confirmar'
 
 type Ordem = 'recentes' | 'vistos' | 'curtidos' | 'engajamento' | 'antigos'
@@ -40,6 +41,19 @@ export function TelaBiblioteca({ contas, versao, filtroConta }: { contas: Conta[
   const { dialogo: dialogoTexto, pedir: pedirTexto } = useDialogoTexto()
   const { confirmacao, confirmar } = useConfirmar()
   const [selecionando, setSelecionando] = useState(false)
+  const [estado, setEstado] = useState<{ verificado: number | null; ultimo_post: string | null; perfis: number } | null>(null)
+  const [verificando, setVerificando] = useState(false)
+  const { recarregar } = useAtividade()
+  useEffect(() => { bibliotecaEstado.estado().then(setEstado).catch(() => {}) }, [versao])
+  const verificar = async () => {
+    setVerificando(true)
+    try {
+      const r = await bibliotecaEstado.verificar()
+      tocar('coleta'); recarregar()
+      setEstado((e) => e && { ...e, verificado: Date.now() / 1000 })
+      toast.success(`Procurando posts novos em ${r.perfis} perfis`, { description: 'Eles aparecem aqui assim que chegarem.' })
+    } catch (e) { toast((e as Error).message) } finally { setVerificando(false) }
+  }
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [baixando, setBaixando] = useState<{ feitos: number; total: number } | null>(null)
   const chaveV = (v: Video) => `${v.plataforma}/${v.id}`
@@ -166,6 +180,16 @@ export function TelaBiblioteca({ contas, versao, filtroConta }: { contas: Conta[
         <div>
           <h1 className="titulo-display text-4xl font-semibold">Biblioteca</h1>
           <p className="mt-1 text-muted">Os posts dos perfis que você acompanha, prontos para estudar, guardar e baixar.</p>
+          {estado && (
+            <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+              <span className="size-1.5 rounded-full bg-[var(--menta)]" />
+              {estado.verificado ? `Perfis verificados ${fmtRelativo(new Date(estado.verificado * 1000).toISOString())}` : 'Verificação automática todo dia de manhã'}
+              {estado.ultimo_post && <span>· post mais recente {fmtRelativo(estado.ultimo_post)}</span>}
+              <button onClick={verificar} disabled={verificando} className="ml-1 font-medium text-foreground/80 hover:text-foreground disabled:opacity-50">
+                {verificando ? 'Verificando…' : 'Verificar agora'}
+              </button>
+            </p>
+          )}
         </div>
         <div className="flex gap-6">
           <Resumo rotulo="Vídeos" valor={fmtInteiro(filtrados.length)} />
