@@ -1,6 +1,6 @@
 import { Button, Toast } from '@heroui/react'
 import { House, MagicWand, Moon, Person, Persons, Picture, Shield, Sparkles, Sun, Volume, VolumeXmark } from '@gravity-ui/icons'
-import { ClerkProvider, Show, UserButton, useAuth } from '@clerk/react'
+import { ClerkProvider, UserButton, useAuth } from '@clerk/react'
 import { TelaEntrar, aparenciaClerk, localizacaoGoust } from './telas/Entrar'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, definirObtencaoToken, ia, inicio, type Ambiente, type Conta, type Eu, type Tarefa, type TarefaIA } from './api'
@@ -30,7 +30,7 @@ export default function App() {
     api.ambiente().then(setAmb).catch(() => setErro('Não foi possível falar com o servidor.'))
   }, [])
 
-  if (!amb) return erro ? <div className="grid min-h-screen place-items-center text-muted">{erro}</div> : <TelaCarregando texto="Abrindo o painel…" />
+  if (!amb) return erro ? <div className="grid min-h-screen place-items-center text-muted">{erro}</div> : <TelaCarregando texto="Abrindo a Goust…" />
   const painel = (
     <AmbienteContexto.Provider value={{ nuvem: amb.nuvem }}>
       <Painel nuvem={amb.nuvem} clerk={!!amb.clerk} />
@@ -39,14 +39,24 @@ export default function App() {
   if (!amb.clerk) return painel
   return (
     <ClerkProvider publishableKey={amb.clerk} localization={localizacaoGoust} appearance={aparenciaClerk()}>
-      <Show when="signed-out">
-        <TelaEntrar />
-      </Show>
-      <Show when="signed-in">
-        <ComToken>{painel}</ComToken>
-      </Show>
+      <Portao painel={painel} />
     </ClerkProvider>
   )
+}
+
+/**
+ * Entrada sem piscadas: enquanto o Clerk descobre a sessão, a mesma tela de carregamento continua (nada de o login
+ * aparecer por um instante); depois do login/cadastro, limpa o "#/sign-up/..." do endereço e segue direto.
+ */
+function Portao({ painel }: { painel: ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth()
+  useEffect(() => {
+    if (isSignedIn && /^#\/?(sign-|factor|verify|sso|continue)/.test(location.hash)) {
+      history.replaceState(null, '', location.pathname + location.search)
+    }
+  }, [isSignedIn])
+  if (!isLoaded) return <TelaCarregando texto="Abrindo a Goust…" />
+  return isSignedIn ? <ComToken>{painel}</ComToken> : <TelaEntrar />
 }
 
 /** Entrega ao api.ts a forma de obter o token de sessão; só mostra o painel depois disso. */
@@ -58,7 +68,7 @@ function ComToken({ children }: { children: ReactNode }) {
     setPronto(true)
     return () => definirObtencaoToken(null)
   }, [getToken])
-  return pronto ? <>{children}</> : null
+  return pronto ? <>{children}</> : <TelaCarregando texto="Abrindo a Goust…" />
 }
 
 function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
@@ -84,7 +94,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
 
   useEffect(() => {
     api.contas().then(setContas).catch(() => {}).finally(() => setContasCarregadas(true))
-    inicio.eu().then(setEu).catch(() => {})
+    inicio.eu().then(setEu).catch(() => setEmBoasVindas((v) => v ?? false))
     recarregar()
     // consulta só com a aba visível; mais rápido quando há algo rodando
     const t = setInterval(() => { if (!document.hidden) recarregar() }, nuvem ? 3000 : 1500)
@@ -92,12 +102,14 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
   }, [recarregar, nuvem])
 
   // a primeira configuração aparece para quem chega sem nada e só some quando a pessoa termina
-  const [emBoasVindas, setEmBoasVindas] = useState(false)
+  // null = ainda decidindo (mostra o carregamento, e não o painel que trocaria de tela logo em seguida).
+  // Quem parou no meio (atualizou a página, fechou a aba) volta para o mesmo passo.
+  const [emBoasVindas, setEmBoasVindas] = useState<boolean | null>(null)
   const decidido = useRef(false)
   useEffect(() => {
     if (decidido.current || !contasCarregadas || eu === null) return
     decidido.current = true
-    setEmBoasVindas(!eu.onboarding && contas.length === 0)
+    setEmBoasVindas(!eu.onboarding && (contas.length === 0 || eu.onboarding_passo != null))
   }, [contasCarregadas, eu, contas.length])
 
   useSonsDosProcessos(tarefas, tarefasIA)
@@ -154,11 +166,13 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
   }[aba]
 
   const contexto = { downloads: tarefas, ia: tarefasIA, recarregar }
+  if (emBoasVindas === null) return <TelaCarregando texto="Abrindo a Goust…" />
   if (emBoasVindas) {
     return (
       <AtividadeContexto.Provider value={contexto}>
         <Toast.Provider placement="top end" />
-        <BoasVindas contas={contas} setContas={setContas} aoTerminar={() => { setEmBoasVindas(false); irPara('inicio') }} />
+        <BoasVindas contas={contas} setContas={setContas} passoInicial={eu?.onboarding_passo ?? 0}
+          aoTerminar={() => { setEmBoasVindas(false); irPara('inicio') }} />
       </AtividadeContexto.Provider>
     )
   }

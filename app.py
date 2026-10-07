@@ -88,7 +88,7 @@ def api_ambiente():
 def api_eu():
     u = db.um("select id, email, nome, config from usuarios where id = %s", contexto.usuario())
     config = u.pop("config") or {}
-    return jsonify({**u, "onboarding": bool(config.get("onboarding")), "piloto": config.get("piloto") or {},
+    return jsonify({**u, "onboarding": bool(config.get("onboarding")), "onboarding_passo": config.get("onboarding_passo"), "piloto": config.get("piloto") or {},
                     "admin": admin.eh_admin(u["id"]), "plano": (config.get("admin") or {}).get("plano") or "gratis"})
 
 
@@ -1252,7 +1252,7 @@ def api_piloto():
 @protegido
 def api_eu_config():
     """Preferências simples do usuário (ex.: onboarding concluído)."""
-    d = {k: v for k, v in (request.json or {}).items() if k in ("onboarding",)}
+    d = {k: v for k, v in (request.json or {}).items() if k in ("onboarding", "onboarding_passo")}
     if d:
         db.executar("update usuarios set config = config || %s where id = %s", d, contexto.usuario())
     return jsonify(ok=True)

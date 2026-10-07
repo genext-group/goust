@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 
 /**
  * Corpo do Goust em 3 formas com os MESMOS comandos (o SVG interpola entre elas): a barra ondulada de baixo
@@ -123,12 +123,16 @@ export function LogoGoust({ tamanho = 30, texto = true, animado = true, classNam
   )
 }
 
+// a formação toca só na primeira tela de carregamento da visita (as seguintes continuam de onde ele está)
+let jaFormou = false
+
 /** Carregando: o Goust se forma a partir de gotas e fica flutuando, com a sombra respirando. */
 export function CarregandoGoust({ tamanho = 64, texto }: { tamanho?: number; texto?: string }) {
+  const [formar] = useState(() => { const f = !jaFormou; jaFormou = true; return f })
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="relative">
-        <Mascote tamanho={tamanho} animado formar />
+        <Mascote tamanho={tamanho} animado formar={formar} />
         <span className="goust-sombra absolute -bottom-2 left-1/2 h-2 w-1/2 -translate-x-1/2 rounded-full bg-[var(--sinal-a)]/35 blur-[6px]" />
       </div>
       {texto && <p className="text-sm text-muted">{texto}</p>}

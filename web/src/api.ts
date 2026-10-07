@@ -374,7 +374,7 @@ export interface IdeiaGerada {
   gancho: string; ideia: string; cta: string; por_que: string; inspirado_em: string[]
 }
 export interface Sugestao { plataforma: Plataforma; conta: string; nome: string; por_que: string }
-export interface Eu { id: string; email: string | null; nome: string | null; onboarding: boolean; piloto: { estrategia?: boolean; calendario?: boolean }; admin?: boolean; plano?: string }
+export interface Eu { id: string; email: string | null; nome: string | null; onboarding: boolean; onboarding_passo?: number | null; piloto: { estrategia?: boolean; calendario?: boolean }; admin?: boolean; plano?: string }
 
 async function enviarArquivos<T>(url: string, arquivos: File[]): Promise<T> {
   const token = obterToken ? await obterToken() : null
@@ -426,7 +426,7 @@ export const criacao = {
 
 export const inicio = {
   eu: () => req<Eu>('/api/eu'),
-  config: (c: { onboarding?: boolean }) => req('/api/eu/config', { method: 'PUT', body: c }),
+  config: (c: { onboarding?: boolean; onboarding_passo?: number | null }) => req('/api/eu/config', { method: 'PUT', body: c }),
   sugerirConcorrentes: (descricao = '') => req<Sugestao[]>('/api/ia/sugerir-concorrentes', { body: { descricao } }),
   piloto: (p: { estrategia?: boolean; calendario?: boolean } = {}) => req('/api/piloto', { body: p }),
 }

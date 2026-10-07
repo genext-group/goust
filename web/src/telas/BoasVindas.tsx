@@ -19,10 +19,10 @@ function acharConta(lista: Conta[], texto: string, papel: 'proprio' | 'concorren
   return lista.find((c) => c.conta.toLowerCase() === alvo) ?? lista.filter((c) => (c.papel ?? 'concorrente') === papel).at(-1)
 }
 
-export function BoasVindas({ contas, setContas, aoTerminar }: {
-  contas: Conta[]; setContas: (c: Conta[]) => void; aoTerminar: () => void
+export function BoasVindas({ contas, setContas, aoTerminar, passoInicial = 0 }: {
+  contas: Conta[]; setContas: (c: Conta[]) => void; aoTerminar: () => void; passoInicial?: number
 }) {
-  const [passo, setPasso] = useState(0)
+  const [passo, setPasso] = useState(Math.min(Math.max(passoInicial, 0), PASSOS.length - 1))
   const [descricao, setDescricao] = useState('')
   const [nome, setNome] = useState('')
   const proprio = contas.find((c) => c.papel === 'proprio')
@@ -31,9 +31,12 @@ export function BoasVindas({ contas, setContas, aoTerminar }: {
     ia.marca().then((m) => { setDescricao(m.produto || ''); setNome(m.nome || '') }).catch(() => {})
   }, [])
 
-  const ir = (n: number) => { tocar('navegar'); setPasso(n) }
+  const ir = (n: number) => {
+    tocar('navegar'); setPasso(n)
+    inicio.config({ onboarding_passo: n }).catch(() => {})  // atualizar a página volta para cá
+  }
   const concluir = async () => {
-    await inicio.config({ onboarding: true }).catch(() => {})
+    await inicio.config({ onboarding: true, onboarding_passo: null }).catch(() => {})
     aoTerminar()
   }
 
