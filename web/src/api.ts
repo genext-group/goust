@@ -612,3 +612,8 @@ export const bibliotecaEstado = {
 
 /** Primeira coleta de uma marca nova, por rede social (igual a COLETA_INICIAL no backend). */
 export const COLETA_INICIAL = 100
+
+export type MidiaPost = { tipo: 'video'; video: string } | { tipo: 'imagens'; imagens: string[] }
+/** Mídia do post para o visualizador próprio (Instagram): vídeo direto ou imagens do carrossel/foto. */
+export const midiaPost = (v: Pick<Video, 'plataforma' | 'conta' | 'id'>) =>
+  req<MidiaPost>(`/api/midia/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.id)}`)

@@ -77,8 +77,10 @@ def resumo_por_conta():
 def miniatura(plataforma, conta, vid):
     """Bytes do JPG de capa: a capa guardada; no modo local, gerada do arquivo se não houver."""
     dados = armazenamento.imagem_ler(chave_thumb(plataforma, vid))
-    if dados or NUVEM:
+    if dados:
         return dados
+    if NUVEM:
+        return _recuperar_capa(plataforma, conta, vid)
     video = _arquivo_local(plataforma, conta, vid)
     if not video:
         return None
@@ -87,6 +89,22 @@ def miniatura(plataforma, conta, vid):
         thumb.parent.mkdir(exist_ok=True)
         rodar_ffmpeg("-ss", "0.8", "-i", video, "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", thumb)
     return thumb.read_bytes() if thumb.exists() else None
+
+
+def _recuperar_capa(plataforma, conta, vid):
+    """Capa que não veio na coleta: busca uma vez (no máximo a cada 3 dias por post, para não gastar à toa)."""
+    from . import db, midia
+    p = db.um("""select p.id, p.url, p.extra->>'capa_tentada' as tentada from posts p join contas c on c.id = p.conta_id
+                 where c.plataforma = %s and c.conta = %s and p.codigo = %s""", plataforma, conta, vid)
+    if not p:
+        return None
+    import time
+    if p["tentada"] and time.time() - float(p["tentada"]) < 3 * 86400:
+        return None
+    db.executar("update posts set extra = jsonb_set(coalesce(extra, '{}'), '{capa_tentada}', to_jsonb(%s::float)) where id = %s",
+                time.time(), p["id"])
+    return midia.recuperar_capa(plataforma, vid, p["url"] or (f"https://www.instagram.com/p/{vid}/" if plataforma == "instagram"
+                                                            else f"https://www.tiktok.com/@{conta}/video/{vid}"))
 
 
 # ---------------------------------------------------------------- perfis (catálogo compartilhado)

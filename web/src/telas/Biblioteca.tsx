@@ -1,9 +1,9 @@
 import { Button, Label, ListBox, Modal, SearchField, Select, ToggleButton, ToggleButtonGroup } from '@heroui/react'
 import { toast } from '@heroui/react'
-import { ArrowDownToLine, ArrowUpRightFromSquare, Check, CircleCheck, Comment, Eye, Folder, FolderOpen, FolderPlus, Heart, HeartFill, Palette, Pencil, Play, Plus, Sparkles, TrashBin, Xmark } from '@gravity-ui/icons'
+import { ArrowDownToLine, ArrowUpRightFromSquare, Check, ChevronLeft, ChevronRight, CircleCheck, Comment, Eye, Folder, FolderOpen, FolderPlus, Heart, HeartFill, Palette, Pencil, Play, Plus, Sparkles, TrashBin, Xmark } from '@gravity-ui/icons'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api, bibliotecaEstado, baixarArquivo, baixarVarios, criacao, ia, notas as apiNotas, pastas as apiPastas, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Estilo, type Pasta, type Plataforma, type Video } from '../api'
+import { api, bibliotecaEstado, baixarArquivo, baixarVarios, midiaPost, type MidiaPost, criacao, ia, notas as apiNotas, pastas as apiPastas, urlEmbed, urlThumb, type AnaliseVideo, type Comentario, type Conta, type Estilo, type Pasta, type Plataforma, type Video } from '../api'
 import { Explosao } from '../components/AnimProcessos'
 import { useAtividade } from '../components/Atividade'
 import { Menu } from '../components/Menu'
@@ -395,7 +395,7 @@ function CartaoVideo({ v, nome, onAbrir, pastas, dentro, favoritos, aoColocar, a
         className="block w-full text-left outline-none">
         <div className={`relative aspect-[9/16] overflow-hidden rounded-2xl bg-surface-secondary ring-accent transition-all group-focus-visible:ring-2 ${selecionado ? 'scale-[0.94] ring-[3px]' : ''}`}>
           <img src={urlThumb(v)} alt="" loading="lazy"
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            className={`size-full transition-transform duration-500 group-hover:scale-[1.03] ${v.tipo === 'carrossel' || v.tipo === 'foto' ? 'bg-[#161618] object-contain' : 'object-cover'}`}
             onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
           {/* marca d'água da plataforma de origem */}
@@ -409,11 +409,7 @@ function CartaoVideo({ v, nome, onAbrir, pastas, dentro, favoritos, aoColocar, a
                 <IconePlataforma plataforma={v.plataforma} className="size-3.5" />
               </span>
             )}
-            {(v.tipo === 'carrossel' || v.tipo === 'foto') && (
-              <span className="rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">
-                {v.tipo === 'carrossel' ? 'Carrossel' : 'Foto'}
-              </span>
-            )}
+            <TagFormato v={v} />
           </div>
           <div className={`absolute inset-0 grid place-items-center opacity-0 transition-opacity ${selecionando ? '' : 'group-hover:opacity-100'}`}>
             <span className="grid size-12 place-items-center rounded-full bg-white/25 text-white backdrop-blur-md"><Play className="size-5" /></span>
@@ -468,6 +464,8 @@ export function ModalVideo({ video, nome, onFechar, aoMudarPastas }: { video: Vi
               <div className="bg-black">
                 {video.url_video ? (
                   <video key={video.id} src={video.url_video} controls autoPlay className="mx-auto max-h-[78vh] w-full" />
+                ) : video.plataforma === 'instagram' ? (
+                  <VisualizadorInstagram key={video.id} v={video} />
                 ) : (
                   <iframe key={video.id} src={urlEmbed(video)} title="Vídeo" allow="autoplay; encrypted-media; fullscreen"
                     className="mx-auto aspect-[9/16] max-h-[78vh] w-full border-0" />
@@ -569,9 +567,11 @@ function AnaliseIA({ video }: { video: Video }) {
     return (
       <div className="rounded-2xl bg-surface-secondary p-4">
         <p className="flex items-center gap-1.5 text-sm font-medium"><Sparkles className="size-4 text-accent" /> Análise com IA</p>
-        <p className="mt-1 text-sm text-muted">Transcreve a fala, lê os quadros e explica gancho, formato, mensagem e por que performou assim.</p>
+        <p className="mt-1 text-sm text-muted">{video.tipo === 'carrossel' || video.tipo === 'foto'
+          ? 'Lê as imagens e a legenda e explica gancho, formato, mensagem e por que performou assim.'
+          : 'Transcreve a fala, lê os quadros e explica gancho, formato, mensagem e por que performou assim.'}</p>
         <Button size="sm" className="mt-3" isPending={carregando} onPress={analisar}>
-          {carregando ? 'Analisando (~15s)…' : 'Analisar este vídeo'}
+          {carregando ? 'Analisando (~15s)…' : video.tipo === 'carrossel' || video.tipo === 'foto' ? 'Analisar este post' : 'Analisar este vídeo'}
         </Button>
         {erro && <p className="mt-2 text-sm text-danger">{erro}</p>}
       </div>
@@ -722,5 +722,69 @@ function AnotarPost({ video }: { video: Video }) {
         <Button size="sm" type="submit" className="botao-sinal">Guardar nota</Button>
       </div>
     </form>
+  )
+}
+
+const FORMATO: Record<string, { nome: string; cor: string }> = {
+  reel: { nome: 'Reels', cor: '#a78bfa' }, carrossel: { nome: 'Carrossel', cor: '#fbbf24' },
+  foto: { nome: 'Foto', cor: '#34d399' }, tiktok: { nome: 'TikTok', cor: '#22d3ee' },
+}
+/** Formato do post: Reels, Carrossel, Foto (Instagram) ou TikTok, cada um com uma cor. */
+function TagFormato({ v }: { v: Video }) {
+  const k = v.tipo === 'carrossel' || v.tipo === 'foto' ? v.tipo : v.plataforma === 'tiktok' ? 'tiktok' : 'reel'
+  const f = FORMATO[k]
+  return (
+    <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide text-[#0b0b0c] uppercase shadow-sm"
+      style={{ background: f.cor }}>{f.nome}</span>
+  )
+}
+
+/** Visualizador do Instagram no nosso layout: vídeo direto (como no TikTok) ou carrossel/foto com setas. */
+function VisualizadorInstagram({ v }: { v: Video }) {
+  const [m, setM] = useState<MidiaPost | null>(null)
+  const [erro, setErro] = useState(false)
+  const [i, setI] = useState(0)
+  useEffect(() => { midiaPost(v).then(setM).catch(() => setErro(true)) }, [v])
+  const imgs = m?.tipo === 'imagens' ? m.imagens : []
+  const ir = (d: number) => setI((x) => Math.max(0, Math.min(imgs.length - 1, x + d)))
+  useEffect(() => {
+    if (imgs.length < 2) return
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'ArrowRight') ir(1); if (e.key === 'ArrowLeft') ir(-1) }
+    window.addEventListener('keydown', tecla)
+    return () => window.removeEventListener('keydown', tecla)
+  }, [imgs.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (erro) {
+    return <iframe src={urlEmbed(v)} title="Post" allow="autoplay; encrypted-media; fullscreen" className="mx-auto aspect-[9/16] max-h-[78vh] w-full border-0" />
+  }
+  return (
+    <div className="relative mx-auto aspect-[9/16] max-h-[78vh] w-full overflow-hidden bg-black">
+      {!m && (
+        <>
+          <img src={urlThumb(v)} alt="" className="size-full object-contain opacity-60" />
+          <span className="absolute inset-0 grid place-items-center"><span className="size-8 animate-spin rounded-full border-2 border-white/70 border-t-transparent" /></span>
+        </>
+      )}
+      {m?.tipo === 'video' && (
+        <video src={m.video} poster={urlThumb(v)} controls autoPlay playsInline className="size-full object-contain" />
+      )}
+      {m?.tipo === 'imagens' && (
+        <>
+          <div className="flex size-full transition-transform duration-300 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
+            {imgs.map((u, k) => <img key={k} src={u} alt={`Imagem ${k + 1} de ${imgs.length}`} className="size-full shrink-0 object-contain" />)}
+          </div>
+          {imgs.length > 1 && (
+            <>
+              <span className="num absolute top-3 right-3 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">{i + 1}/{imgs.length}</span>
+              {i > 0 && <button onClick={() => ir(-1)} aria-label="Imagem anterior" className="absolute top-1/2 left-2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow"><ChevronLeft className="size-4" /></button>}
+              {i < imgs.length - 1 && <button onClick={() => ir(1)} aria-label="Próxima imagem" className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow"><ChevronRight className="size-4" /></button>}
+              <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+                {imgs.map((_, k) => <button key={k} onClick={() => setI(k)} aria-label={`Ir para a imagem ${k + 1}`} className={`h-1.5 rounded-full transition-all ${k === i ? 'w-4 bg-white' : 'w-1.5 bg-white/45'}`} />)}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
   )
 }

@@ -50,14 +50,56 @@ def salvar_capa(plataforma, item):
         return "pulado"
     url = item.get("capa") or item.get("_info", {}).get("thumbnail")
     if url:
-        try:
-            r = requests.get(url, impersonate="chrome", timeout=30)
-            if r.status_code == 200 and len(r.content) < 900_000:
-                armazenamento.imagem_gravar(chave, r.content)
-        except Exception:
-            pass  # sem capa o vídeo ainda entra no catálogo
+        gravar_capa_de_url(chave, url)   # sem capa o post ainda entra no catálogo (e a capa é recuperada depois)
     item.pop("_info", None)
     return "baixado"
+
+
+def capa_leve(dados):
+    """Normaliza a capa: JPEG de até 720 px no lado maior (carrosséis em alta resolução passavam de 1 MB e eram
+    descartados; WEBP/PNG viram JPEG). Devolve None se não for uma imagem que o Pillow abra."""
+    from io import BytesIO
+    from PIL import Image
+    try:
+        im = Image.open(BytesIO(dados))
+        im = im.convert("RGB")
+        im.thumbnail((720, 720))
+        saida = BytesIO()
+        im.save(saida, "JPEG", quality=82, optimize=True)
+        return saida.getvalue()
+    except Exception:
+        return None
+
+
+def gravar_capa_de_url(chave, url):
+    try:
+        r = requests.get(url, impersonate="chrome", timeout=30)
+        if r.status_code == 200:
+            leve = capa_leve(r.content)
+            if leve:
+                armazenamento.imagem_gravar(chave, leve)
+                return leve
+    except Exception:
+        pass
+    return None
+
+
+def recuperar_capa(plataforma, vid, url_post):
+    """Capa que faltou na coleta: Instagram pela API de dados (1 crédito), TikTok pelo yt-dlp (grátis)."""
+    chave = chave_thumb(plataforma, vid)
+    try:
+        if plataforma == "instagram":
+            from .fontes import scrapecreators
+            imagens = scrapecreators.post_instagram(vid) if scrapecreators.ativo() else []
+            return gravar_capa_de_url(chave, imagens[0]) if imagens else None
+        from yt_dlp import YoutubeDL
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+        with YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True,
+                        "impersonate": ImpersonateTarget.from_str("chrome")}) as ydl:
+            info = ydl.extract_info(url_post, download=False)
+        return gravar_capa_de_url(chave, info.get("thumbnail")) if info.get("thumbnail") else None
+    except Exception:
+        return None
 
 
 def baixar_temporario(url, plataforma):
@@ -97,4 +139,5 @@ def link_direto(url, plataforma):
     return info["url"], cab
 
 
-__all__ = ["FFMPEG", "NUVEM", "duracao", "rodar_ffmpeg", "salvar_capa", "baixar_temporario", "link_direto", "chave_thumb"]
+__all__ = ["FFMPEG", "NUVEM", "duracao", "rodar_ffmpeg", "salvar_capa", "baixar_temporario", "link_direto", "chave_thumb",
+           "capa_leve", "gravar_capa_de_url", "recuperar_capa"]

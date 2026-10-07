@@ -432,6 +432,51 @@ def thumb(plataforma, conta, vid):
     return Response(dados, mimetype="image/jpeg", headers={"Cache-Control": "public, max-age=604800, immutable"})
 
 
+_MIDIA_CACHE = {}
+
+
+@app.get("/api/midia/<plataforma>/<conta>/<vid>")
+@protegido
+def api_midia(plataforma, conta, vid):
+    """O que mostrar no visualizador do post (Instagram): vídeo direto da CDN ou as imagens do carrossel/foto.
+    O TikTok continua no player oficial (já encaixa bem)."""
+    import time as _t
+    chave = f"{plataforma}/{vid}"
+    c = _MIDIA_CACHE.get(chave)
+    if c and _t.time() - c[0] < 1800:
+        return jsonify(c[1])
+    v = next((x for x in biblioteca.videos(plataforma, conta) if x["id"] == vid), None)
+    if not v or plataforma != "instagram":
+        return jsonify(erro="Post não encontrado."), 404
+    from baixador import busca_perfis
+    from baixador.fontes import scrapecreators
+    tipo = v.get("tipo") or "video"
+    url_post = v.get("url") or f"https://www.instagram.com/p/{vid}/"
+    saida = None
+    if tipo in ("video", "reel"):
+        try:
+            url, _ = midia.link_direto(url_post, plataforma)   # grátis (yt-dlp)
+            saida = {"tipo": "video", "video": url}
+        except Exception:
+            saida = None
+    if not saida and scrapecreators.ativo():
+        try:
+            d = scrapecreators._get("/v1/instagram/post", url=url_post)
+            m = (d.get("data") or {}).get("xdt_shortcode_media") or d.get("data") or {}
+            if m.get("video_url") and tipo in ("video", "reel"):
+                saida = {"tipo": "video", "video": m["video_url"]}
+            else:
+                imgs = [e["node"]["display_url"] for e in ((m.get("edge_sidecar_to_children") or {}).get("edges") or []) if (e.get("node") or {}).get("display_url")]
+                imgs = imgs or ([m["display_url"]] if m.get("display_url") else [])
+                saida = {"tipo": "imagens", "imagens": [busca_perfis._foto(u) for u in imgs[:12]]} if imgs else None
+        except Exception:
+            saida = None
+    if not saida:
+        return jsonify(erro="Não deu para carregar a mídia agora."), 502
+    _MIDIA_CACHE[chave] = (_t.time(), saida)
+    return jsonify(saida)
+
+
 @app.get("/api/arquivo/<plataforma>/<conta>/<vid>")
 @protegido
 def api_arquivo(plataforma, conta, vid):
