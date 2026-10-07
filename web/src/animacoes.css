@@ -97,3 +97,55 @@
 .goust-estrela { animation: goust-estrela 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
 .goust-sombra { animation: goust-sombra 3.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .goust-flutuar, .goust-piscar, .goust-estrela, .goust-sombra { animation: none; } }
+
+/* Goust líquido: gotas brotam da cauda, escorrem e são reabsorvidas (o filtro gooey funde as formas) */
+@keyframes goust-gota {
+  0% { transform: translateY(-7px) scale(0.35); }
+  40% { transform: translateY(3px) scale(1); }
+  70% { transform: translateY(10px) scale(0.55); }
+  100% { transform: translateY(-7px) scale(0.3); }
+}
+.goust-gota { animation: goust-gota 3.3s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+
+/* voo: deriva orgânica (amplitude maior que o flutuar) */
+@keyframes goust-voar {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(6%, -7%) rotate(-5deg); }
+  50% { transform: translate(-3%, -11%) rotate(3deg); }
+  75% { transform: translate(-7%, -3%) rotate(-2deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+.goust-voar { animation: goust-voar 9s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 60%; }
+
+/* formação: gotas espalhadas convergem, o corpo surge da fusão e os olhos abrem por último */
+@keyframes goust-formar-gota {
+  0% { transform: translate(var(--dx), var(--dy)) scale(0.35); opacity: 0; }
+  15% { opacity: 1; }
+  60% { transform: translate(0, 0) scale(1); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+}
+@keyframes goust-formar-corpo {
+  0%, 35% { transform: scale(0.35); opacity: 0; }
+  70% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes goust-formar-olhos { 0%, 70% { opacity: 0; } 100% { opacity: 1; } }
+.goust-formar-gota { animation: goust-formar-gota 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-box: fill-box; transform-origin: center; }
+.goust-formar-corpo { animation: goust-formar-corpo 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-box: fill-box; transform-origin: 50% 55%; }
+.goust-formar-olhos { animation: goust-formar-olhos 1.7s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .goust-gota, .goust-voar, .goust-formar-gota { animation: none; }
+  .goust-formar-gota { opacity: 0; }
+  .goust-formar-corpo, .goust-formar-olhos { animation: none; opacity: 1; }
+}
+
+/* login: os sinais aparecem depois do Goust se formar e ficam flutuando */
+@keyframes entrar-sinal {
+  0% { opacity: 0; transform: translateY(10px) scale(0.96); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes sinal-flutuar { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
+.entrar-sinal { animation: entrar-sinal 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both, sinal-flutuar 5s ease-in-out 2.5s infinite; }
+@media (prefers-reduced-motion: reduce) { .entrar-sinal { animation: none; } }

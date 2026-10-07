@@ -1,7 +1,7 @@
 import { Button, Toast } from '@heroui/react'
 import { House, MagicWand, Moon, Person, Persons, Picture, Shield, Sparkles, Sun, Volume, VolumeXmark } from '@gravity-ui/icons'
-import { ClerkProvider, Show, SignIn, UserButton, useAuth } from '@clerk/react'
-import { ptBR } from '@clerk/localizations'
+import { ClerkProvider, Show, UserButton, useAuth } from '@clerk/react'
+import { TelaEntrar, aparenciaClerk, localizacaoGoust } from './telas/Entrar'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, definirObtencaoToken, ia, inicio, type Ambiente, type Conta, type Eu, type Tarefa, type TarefaIA } from './api'
 import { AtividadeContexto, CentralAtividade, processos, useSonsDosProcessos } from './components/Atividade'
@@ -38,7 +38,7 @@ export default function App() {
   )
   if (!amb.clerk) return painel
   return (
-    <ClerkProvider publishableKey={amb.clerk} localization={ptBR} appearance={{ variables: { colorPrimary: '#0071e3', borderRadius: '0.875rem' } }}>
+    <ClerkProvider publishableKey={amb.clerk} localization={localizacaoGoust} appearance={aparenciaClerk()}>
       <Show when="signed-out">
         <TelaEntrar />
       </Show>
@@ -46,21 +46,6 @@ export default function App() {
         <ComToken>{painel}</ComToken>
       </Show>
     </ClerkProvider>
-  )
-}
-
-function TelaEntrar() {
-  return (
-    <div className="grid min-h-screen place-items-center px-4 py-10">
-      <div className="surgir flex flex-col items-center gap-6">
-        <div className="text-center">
-          <div className="mx-auto w-fit"><LogoAnimado tamanho={48} /></div>
-          <h1 className="titulo-display mt-3 text-3xl font-semibold">Goust</h1>
-          <p className="mt-1 text-muted">Monitore concorrentes e crie conteúdo com IA.</p>
-        </div>
-        <SignIn routing="hash" />
-      </div>
-    </div>
   )
 }
 
