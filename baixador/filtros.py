@@ -9,6 +9,9 @@ PASTA_DADOS = RAIZ / "dados"
 
 # Itens fixados no topo do perfil (máx. 3 no TikTok e no Instagram) quebram a ordem cronológica.
 MAX_FIXADOS = 3
+# Primeira coleta de uma marca nova (por rede): base da primeira análise e da Biblioteca. O resto vem pela
+# coleta diária (só os novos). Perfil inteiro não compensa: custo alto e o que é antigo diz pouco do agora.
+COLETA_INICIAL = 100
 # Modo "só novos": quantos posts JÁ CONHECIDOS seguidos encerram a listagem. Precisa folga além dos fixados,
 # porque o topo do perfil mistura fixados, collabs e posts fora de ordem (um post novo pode vir depois de vários antigos).
 PARAR_APOS_CONHECIDOS = 10

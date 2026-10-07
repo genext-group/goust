@@ -164,7 +164,7 @@ def api_foto_externa():
 @app.post("/api/contas/acompanhar")
 @protegido
 def api_acompanhar():
-    """Seguir um perfil e já começar a coleta (30 posts recentes) e a análise. Devolve aviso se a fonte não puder coletar."""
+    """Seguir um perfil e já começar a coleta (os 100 posts mais recentes por rede) e a análise. Devolve aviso se a fonte não puder coletar."""
     from baixador.fontes import scrapecreators
     d = request.json or {}
     try:
@@ -186,8 +186,8 @@ def api_acompanhar():
     if plataforma == "instagram" and scrapecreators.ativo() and scrapecreators.saldo() == 0:
         aviso = ("A API de dados está sem créditos: a coleta do Instagram fica limitada "
                  + ("(na versão online, o Instagram bloqueia a coleta sem ela)." if NUVEM else "aos posts públicos mais recentes."))
-    opcoes = {"modo": "todos", "somente_reels": False, "analisar_ao_fim": True} if papel == "proprio" else \
-             {"modo": "recentes", "quantidade": 30, "somente_reels": False, "analisar_ao_fim": True}
+    from baixador.filtros import COLETA_INICIAL
+    opcoes = {"modo": "recentes", "quantidade": COLETA_INICIAL, "somente_reels": False, "analisar_ao_fim": True}
     t = tarefas.enfileirar(plataforma, conta, opcoes)
     return jsonify(contas=contas_completas(), aviso=aviso, tarefa=t.get("id") if isinstance(t, dict) else t,
                    conta={"plataforma": plataforma, "conta": conta})
@@ -1060,7 +1060,8 @@ def api_descoberta(did):
             db.executar("update descobertas set estado = 'oculta' where id = %s", did)
             return jsonify(erro=str(e)), 409
         biblioteca.atualizar_perfil(d["plataforma"], d["conta"])
-        tarefas.enfileirar(d["plataforma"], d["conta"], {"modo": "recentes", "quantidade": 30, "somente_reels": False, "analisar_ao_fim": True})
+        from baixador.filtros import COLETA_INICIAL
+        tarefas.enfileirar(d["plataforma"], d["conta"], {"modo": "recentes", "quantidade": COLETA_INICIAL, "somente_reels": False, "analisar_ao_fim": True})
         estado = "adicionada"
     elif acao in ("ignorar", "ocultar", "interessante"):
         estado = {"ignorar": "ignorada", "ocultar": "oculta", "interessante": "interessante"}[acao]

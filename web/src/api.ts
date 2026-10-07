@@ -609,3 +609,6 @@ export const bibliotecaEstado = {
   estado: () => req<{ verificado: number | null; ultimo_post: string | null; perfis: number }>('/api/biblioteca/estado'),
   verificar: () => req<{ perfis: number }>('/api/biblioteca/verificar', { body: {} }),
 }
+
+/** Primeira coleta de uma marca nova, por rede social (igual a COLETA_INICIAL no backend). */
+export const COLETA_INICIAL = 100

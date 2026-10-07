@@ -1,6 +1,6 @@
 import { CheckDesenhado } from '../Animacoes'
 import { AnimProcesso, type TipoProcesso } from '../AnimProcessos'
-import { api, type Conta, type Tarefa, type TarefaIA } from '../../api'
+import { COLETA_INICIAL, api, type Conta, type Tarefa, type TarefaIA } from '../../api'
 import { tocar } from '../../sons'
 
 type Estado = 'feito' | 'agora' | 'espera'
@@ -31,7 +31,7 @@ export function Pipeline({ conta, downloads, tarefasIA, temRelatorio, aoVerifica
           o resto funciona: preencha as próximas etapas e acompanhe concorrentes e referências.
           Quando publicar (ou deixar o perfil público), é só verificar de novo.
         </p>
-        <button onClick={() => { tocar('coleta'); api.baixar([conta], { modo: 'recentes', quantidade: 30, somente_reels: false, analisar_ao_fim: true }).then(() => aoVerificar?.()).catch(() => {}) }}
+        <button onClick={() => { tocar('coleta'); api.baixar([conta], { modo: 'recentes', quantidade: COLETA_INICIAL, somente_reels: false, analisar_ao_fim: true }).then(() => aoVerificar?.()).catch(() => {}) }}
           className="mt-2 text-xs font-medium text-accent hover:underline">Verificar de novo</button>
       </div>
     )

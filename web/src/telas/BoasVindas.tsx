@@ -1,7 +1,7 @@
 import { Button, Input, Label, TextArea, TextField, toast } from '@heroui/react'
 import { ArrowLeft, ArrowRight, Check, Plus, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useState } from 'react'
-import { api, ia, inicio, type Conta, type Plataforma, type Sugestao } from '../api'
+import { COLETA_INICIAL, api, ia, inicio, type Conta, type Plataforma, type Sugestao } from '../api'
 import { aura, auraMarca } from '../aura'
 import { CheckDesenhado, LogoAnimado, Radar } from '../components/Animacoes'
 import { AnimProcesso } from '../components/AnimProcessos'
@@ -241,7 +241,7 @@ function PassoConcorrentes({ descricao, setContas, aoSeguir, aoVoltar }: {
       }
       if (lista.length) setContas(lista)
       if (adicionadas.length) {
-        await api.baixar(adicionadas, { modo: 'recentes', quantidade: 30, somente_reels: false, analisar_ao_fim: true })
+        await api.baixar(adicionadas, { modo: 'recentes', quantidade: COLETA_INICIAL, somente_reels: false, analisar_ao_fim: true })
       }
       aoSeguir()
     } finally { setOcupado(false) }

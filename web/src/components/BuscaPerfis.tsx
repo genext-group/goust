@@ -120,7 +120,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
       aoAdicionar(r.contas)
       tocar('coleta')
       toast.success(proprio ? `@${escolhido.conta} conectado` : `@${escolhido.conta} adicionado como ${papel === 'concorrente' ? 'concorrente' : 'referência'}`,
-        { description: proprio ? 'Coletando seus posts. A análise da IA começa logo em seguida.' : 'Coletando os 30 posts mais recentes. A análise da IA começa logo em seguida.' })
+        { description: proprio ? 'Coletando seus 100 posts mais recentes. A análise da IA começa logo em seguida.' : 'Coletando os 100 posts mais recentes. A análise da IA começa logo em seguida.' })
       if (r.aviso) toast.warning('Coleta limitada', { description: r.aviso })
       setTexto(''); setResultados(null); setEscolhido(null); setAberto(false)
     } catch (e) {
@@ -171,7 +171,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
               <Button className="botao-sinal mt-4 w-full" size="lg" isPending={salvando} onPress={() => acompanhar()}>
                 <Plus /> {proprio ? 'Este é o meu perfil: conectar e analisar' : 'Acompanhar e analisar'}
               </Button>
-              <p className="mt-2 text-center text-xs text-muted">{proprio ? 'Coletamos seus posts e a IA analisa em seguida.' : 'Coletamos os 30 posts mais recentes e a IA analisa em seguida.'}</p>
+              <p className="mt-2 text-center text-xs text-muted">{proprio ? 'Coletamos seus posts e a IA analisa em seguida.' : 'Coletamos os 100 posts mais recentes e a IA analisa em seguida.'}</p>
             </div>
           ) : (
             <>

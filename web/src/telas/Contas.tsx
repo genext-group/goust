@@ -1,7 +1,7 @@
 import { Button, ToggleButton, ToggleButtonGroup, toast } from '@heroui/react'
 import { FolderOpen, TrashBin } from '@gravity-ui/icons'
 import { useMemo, useState } from 'react'
-import { api, marcas as marcasApi, type Conta, type Opcoes, type Plataforma } from '../api'
+import { COLETA_INICIAL, api, marcas as marcasApi, type Conta, type Opcoes, type Plataforma } from '../api'
 import { useDialogoTexto } from '../components/ui/DialogoTexto'
 import { IconePlataforma } from '../components/Plataforma'
 import { Parecidos } from '../components/Parecidos'
@@ -78,7 +78,7 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
   }
 
   async function coletarDeNovo(c: Conta) {
-    await api.baixar([c], { modo: 'recentes', quantidade: 30, somente_reels: false, analisar_ao_fim: true })
+    await api.baixar([c], { modo: 'recentes', quantidade: COLETA_INICIAL, somente_reels: false, analisar_ao_fim: true })
     tocar('coleta')
     aoBaixar()
   }
