@@ -251,8 +251,13 @@ def _pela_web(lados, seguidos, descartados, assinatura):
 
 def _guardar(resultado, assinatura):
     memoria.gravar_documento("parecidos", {"assinatura": assinatura, "ate": time.time() + 24 * 3600, "resultado": resultado})
+    _registrar(resultado["itens"])
+
+
+def _registrar(itens):
+    """Entra nas descobertas: "ignorar" vale para sempre e o Início também mostra."""
     uid = ctx.usuario()
-    for x in resultado["itens"]:   # entra nas descobertas: "ignorar" vale para sempre e o Início também mostra
+    for x in itens:
         db.executar("""insert into descobertas (usuario_id, plataforma, conta, nome, tipo, categoria, motivo, seguidores, relevancia)
                        values (%s, %s, %s, %s, %s, 'parecido', %s, %s, %s) on conflict (usuario_id, plataforma, conta) do nothing""",
                     uid, x["plataforma"], x["conta"], x["nome"], x["tipo"], x["motivo"], x["seguidores"], round(x["semelhanca"] / 100, 2))

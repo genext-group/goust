@@ -581,6 +581,8 @@ export const notas = {
 export interface Parecido {
   id: number | null; plataforma: Plataforma; conta: string; nome: string | null; foto: string | null; seguidores: number | null
   bio: string | null; tipo: 'concorrente' | 'referencia'; semelhanca: number; parecido_com: string[]; motivo: string; fonte: 'busca' | 'web'
+  /** descoberta da primeira configuração: comparação com o usuário e o que vende/de que fala */
+  comparacao?: string; produto?: string; marca_oficial?: boolean
   grupo?: 'mercado' | 'marcas'
 }
 export interface ResultadoParecidos {
@@ -608,6 +610,8 @@ export const marcas = {
   removerMarca: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}?marca=1`, { method: 'DELETE' }),
   parecidos: (p: { chaves: string[]; negocio: boolean; forcar?: boolean }) => req<ResultadoParecidos>('/api/parecidos', { body: p }),
+  /** primeira configuração: cruza o perfil do usuário, o brief e os perfis que ele informou */
+  descobrirInicio: (forcar = false) => req<ResultadoParecidos & { categoria?: string; base?: { proprios: number; concorrentes: number; referencias: number } }>('/api/parecidos/inicio', { body: { forcar } }),
 }
 
 export const bibliotecaEstado = {

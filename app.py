@@ -262,19 +262,34 @@ def api_remover_conta(plataforma, conta):
 @protegido
 def api_parecidos():
     """Marcas parecidas com as que o usuário já acompanha (sementes escolhidas ou todos os concorrentes)."""
-    from baixador import busca_perfis
     from baixador.inteligencia import parecidos
     d = request.json or {}
     try:
         r = parecidos.buscar(d.get("chaves") or [], d.get("negocio", True), bool(d.get("forcar")))
     except ValueError as e:
         return jsonify(erro=str(e)), 400
-    for x in r["itens"]:
+    _fotos_pelo_proxy(r["itens"])
+    eventos.registrar("ia:parecidos", {"sementes": len(d.get("chaves") or []), "achados": len(r["itens"])})
+    return jsonify(r)
+
+
+def _fotos_pelo_proxy(itens):
+    from baixador import busca_perfis
+    for x in itens:
         foto = x.get("foto")
         if foto and ".heic" in foto.split("?")[0].lower():
             foto = None   # formato que o navegador não exibe (resultados antigos do cache)
         x["foto"] = busca_perfis._foto(foto) if foto and not str(foto).startswith("/") else foto
-    eventos.registrar("ia:parecidos", {"sementes": len(d.get("chaves") or []), "achados": len(r["itens"])})
+
+
+@app.post("/api/parecidos/inicio")
+@protegido
+def api_parecidos_inicio():
+    """Primeira configuração: cruza perfil do usuário, brief e perfis que ele informou (descoberta precisa)."""
+    from baixador.inteligencia import descobrir
+    r = descobrir.buscar(bool((request.json or {}).get("forcar")))
+    _fotos_pelo_proxy(r["itens"])
+    eventos.registrar("ia:descobrir_inicio", {"achados": len(r["itens"]), **r.get("base", {})})
     return jsonify(r)
 
 

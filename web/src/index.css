@@ -31,6 +31,8 @@
   --sinal-b: #5fb4ff;
   --menta: #12b886;
   --ambar: #f59f00;
+  --concorrente: #e8395f;
+  --referencia: #7c5cff;
   --card-shadow: 0 1px 2px rgb(20 20 40 / 0.04), 0 10px 30px -12px rgb(20 20 40 / 0.12);
 }
 
@@ -56,6 +58,8 @@
   --sinal-b: #8fd0ff;
   --menta: #2ee6a6;
   --ambar: #ffb547;
+  --concorrente: #ff6b86;
+  --referencia: #a993ff;
   --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.07);
 }
 
