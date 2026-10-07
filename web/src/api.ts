@@ -576,6 +576,11 @@ export const notas = {
 export interface Parecido {
   id: number | null; plataforma: Plataforma; conta: string; nome: string | null; foto: string | null; seguidores: number | null
   bio: string | null; tipo: 'concorrente' | 'referencia'; semelhanca: number; parecido_com: string[]; motivo: string; fonte: 'busca' | 'web'
+  grupo?: 'mercado' | 'marcas'
+}
+export interface ResultadoParecidos {
+  itens: Parecido[]; ideais?: Partial<Record<'mercado' | 'marcas', string>>
+  pesquisa?: { buscas: number; candidatos: number; termos: string[]; web?: boolean }
 }
 export interface ComparativoMarca {
   resumo: string; consistencia: number; leitura_consistencia: string; estrategia_multiplataforma: string
@@ -597,6 +602,5 @@ export const marcas = {
   gerarComparativo: (id: number) => req<TarefaIA>(`/api/marcas/${id}/comparativo`, { body: {} }),
   removerMarca: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}?marca=1`, { method: 'DELETE' }),
-  parecidos: (p: { chaves?: string[]; papel?: 'negocio' | 'concorrente' | 'referencia'; forcar?: boolean }) =>
-    req<{ perfil_ideal: string | null; itens: Parecido[] }>('/api/parecidos', { body: p }),
+  parecidos: (p: { chaves: string[]; negocio: boolean; forcar?: boolean }) => req<ResultadoParecidos>('/api/parecidos', { body: p }),
 }

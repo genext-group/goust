@@ -1,21 +1,19 @@
 import { Button, toast } from '@heroui/react'
-import { ArrowsRotateRight, Check, Sparkles, Xmark } from '@gravity-ui/icons'
+import { ArrowsRotateRight, Check, ChevronDown, Xmark } from '@gravity-ui/icons'
 import { useEffect, useMemo, useState } from 'react'
-import { central, marcas as marcasApi, perfis, type Conta, type Parecido } from '../api'
-import { aura } from '../aura'
+import { central, marcas as marcasApi, perfis, type Conta, type Parecido, type ResultadoParecidos } from '../api'
 import { fmtNum } from '../formato'
 import { tocar } from '../sons'
-import { AnimProcesso } from './AnimProcessos'
 import { ContextoPerfil, type ContextoEscolhido } from './ContextoPerfil'
 import { IconePlataforma } from './Plataforma'
 
-const ETAPAS = ['Lendo os perfis escolhidos…', 'Procurando no Instagram e no TikTok…', 'Comparando os candidatos…', 'Separando concorrentes de referências…']
+const ETAPAS = ['Lendo a base da busca', 'Buscando perfis no Instagram', 'Buscando perfis e vídeos no TikTok', 'Comparando os candidatos', 'Separando concorrentes de referências']
 
 interface Semente { chave: string; nome: string; contas: Conta[] }
 
 /**
- * Encontrar marcas parecidas: com o seu negócio (brief) ou com marcas que você já acompanha.
- * A IA monta buscas por assunto, a API de dados traz perfis reais e a IA ranqueia por semelhança.
+ * Descobrir perfis: duas pesquisas independentes, do seu mercado (brief) e parecidos com as marcas escolhidas.
+ * Visual neutro: o destaque fica no conteúdo (perfis), não nos controles.
  */
 export function Parecidos({ contas, setContas, aoAdicionar }: { contas: Conta[]; setContas: (c: Conta[]) => void; aoAdicionar: () => void }) {
   const sementes = useMemo<Semente[]>(() => {
@@ -27,27 +25,35 @@ export function Parecidos({ contas, setContas, aoAdicionar }: { contas: Conta[];
     })
     return [...m.values()].sort((a, b) => Number(b.contas[0].papel === 'concorrente') - Number(a.contas[0].papel === 'concorrente'))
   }, [contas])
-  const [sel, setSel] = useState<Set<string>>(new Set())   // vazio = para o meu negócio
+  const [aberto, setAberto] = useState(false)
+  const [negocio, setNegocio] = useState(true)
+  const [sel, setSel] = useState<Set<string> | null>(null)   // null = padrão (todos os concorrentes)
+  const escolhidas = sel ?? new Set(sementes.filter((s) => s.contas[0].papel === 'concorrente').map((s) => s.chave))
   const [buscando, setBuscando] = useState(false)
   const [etapa, setEtapa] = useState(0)
-  const [res, setRes] = useState<{ perfil_ideal: string | null; itens: Parecido[] } | null>(null)
+  const [res, setRes] = useState<ResultadoParecidos | null>(null)
   const [adicionando, setAdicionando] = useState<Parecido | null>(null)
   const [salvando, setSalvando] = useState(false)
-  const [aberto, setAberto] = useState(false)
 
   useEffect(() => {
     if (!buscando) return
     setEtapa(0)
-    const t = setInterval(() => setEtapa((e) => Math.min(ETAPAS.length - 1, e + 1)), 7000)
+    const t = setInterval(() => setEtapa((e) => Math.min(ETAPAS.length - 1, e + 1)), 8000)
     return () => clearInterval(t)
   }, [buscando])
 
-  const alternar = (k: string) => { tocar('clique'); setSel((s) => { const x = new Set(s); if (x.has(k)) x.delete(k); else x.add(k); return x }) }
+  const alternar = (k: string) => {
+    tocar('clique')
+    const x = new Set(escolhidas); if (x.has(k)) x.delete(k); else x.add(k)
+    setSel(x)
+  }
+  const nada = !negocio && !escolhidas.size
   const buscar = async (forcar = false) => {
+    if (nada) return
     setBuscando(true); setRes(null); tocar('analise')
     try {
-      const chaves = sementes.filter((s) => sel.has(s.chave)).flatMap((s) => s.contas.map((c) => `${c.plataforma}/${c.conta}`))
-      const r = await marcasApi.parecidos(chaves.length ? { chaves, forcar } : { papel: 'negocio', forcar })
+      const chaves = sementes.filter((s) => escolhidas.has(s.chave)).flatMap((s) => s.contas.map((c) => `${c.plataforma}/${c.conta}`))
+      const r = await marcasApi.parecidos({ chaves, negocio, forcar })
       setRes(r); tocar(r.itens.length ? 'analiseFim' : 'aviso')
     } catch (e) { toast.danger('Não deu para buscar agora', { description: (e as Error).message }) } finally { setBuscando(false) }
   }
@@ -62,73 +68,88 @@ export function Parecidos({ contas, setContas, aoAdicionar }: { contas: Conta[];
         : await perfis.acompanhar({ plataforma: p.plataforma, conta: p.conta, papel: c.papel, nome: p.nome, aspectos: c.aspectos, nota: c.nota })
       if (r.contas) setContas(r.contas)
       tirar(p); setAdicionando(null); tocar('coleta'); aoAdicionar()
-      toast.success(`@${p.conta} adicionado como ${c.papel === 'concorrente' ? 'concorrente' : 'referência'}`, { description: 'Coletando os posts recentes. A análise da IA vem em seguida.' })
+      toast.success(`@${p.conta} adicionado`, { description: 'Coletando os posts recentes. A análise vem em seguida.' })
     } catch (e) { toast.danger('Não deu para adicionar', { description: (e as Error).message }) } finally { setSalvando(false) }
   }
 
-  const nomesSel = sementes.filter((s) => sel.has(s.chave)).map((s) => s.nome)
+  const grupos = res ? ([['mercado', 'Do seu mercado'], ['marcas', 'Parecidos com as suas marcas']] as const)
+    .map(([k, t]) => ({ k, t, itens: res.itens.filter((x) => (x.grupo ?? 'mercado') === k), ideal: res.ideais?.[k] })).filter((g) => g.itens.length) : []
 
   return (
-    <section className="cartao overflow-hidden">
-      <button onClick={() => setAberto((a) => !a)} className="flex w-full items-center gap-3 p-5 text-left" aria-expanded={aberto}>
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/15 text-accent"><Sparkles className="size-5" /></span>
+    <section className="rounded-3xl border linha-fina">
+      <button onClick={() => setAberto((a) => !a)} aria-expanded={aberto}
+        className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-surface-secondary/30">
         <span className="min-w-0 flex-1">
-          <span className="titulo-display block text-lg font-semibold">Encontrar marcas parecidas</span>
-          <span className="block text-sm text-muted">Concorrentes do seu negócio ou perfis parecidos com os que você já acompanha.</span>
+          <span className="block font-medium">Descobrir perfis parecidos</span>
+          <span className="block text-sm text-muted">Do seu mercado e parecidos com as marcas que você já acompanha, no Instagram e no TikTok.</span>
         </span>
-        <span className={`text-muted transition-transform ${aberto ? 'rotate-180' : ''}`}>⌄</span>
+        <ChevronDown className={`size-4 shrink-0 text-muted transition-transform duration-300 ${aberto ? 'rotate-180' : ''}`} />
       </button>
 
       {aberto && (
-        <div className="entrar-cima border-t px-5 pt-4 pb-5 linha-fina">
-          <p className="mb-2 text-xs font-medium tracking-wide text-muted uppercase">Parecidos com</p>
-          <div data-rolavel="y" className="flex max-h-[132px] flex-wrap gap-1.5 overflow-y-auto">
-            <button onClick={() => { tocar('clique'); setSel(new Set()) }} aria-pressed={!sel.size}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-all ${!sel.size ? 'bg-accent text-accent-foreground' : 'bg-surface-secondary/70 hover:bg-surface-secondary'}`}>
-              {!sel.size && <Check className="size-3.5" />} O meu negócio
-            </button>
+        <div className="entrar-cima border-t px-5 pt-5 pb-5 linha-fina">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs text-muted">Base da busca</p>
+            <div className="flex gap-3 text-xs text-muted">
+              <button onClick={() => setSel(new Set(sementes.map((s) => s.chave)))} className="hover:text-foreground">Todas as marcas</button>
+              <button onClick={() => setSel(new Set())} className="hover:text-foreground">Nenhuma</button>
+            </div>
+          </div>
+          <div data-rolavel="y" className="mt-2 flex max-h-[124px] flex-wrap gap-1.5 overflow-y-auto">
+            <Chip ativo={negocio} onPress={() => { tocar('clique'); setNegocio((n) => !n) }}>Seu negócio</Chip>
+            <span className="mx-1 self-center text-border">·</span>
             {sementes.map((s) => {
-              const ativo = sel.has(s.chave)
               const c = s.contas[0]
               return (
-                <button key={s.chave} onClick={() => alternar(s.chave)} aria-pressed={ativo}
-                  className={`flex items-center gap-1.5 rounded-full py-1 pr-3 pl-1 text-sm transition-all ${ativo ? 'bg-accent text-accent-foreground' : 'bg-surface-secondary/70 hover:bg-surface-secondary'}`}>
-                  {c.perfil?.foto ? <img src={c.perfil.foto} alt="" className="size-6 rounded-full object-cover" />
-                    : <span className="aura grid size-6 place-items-center rounded-full text-[10px] font-semibold text-white uppercase" style={aura(c.conta)}>{c.conta[0]}</span>}
+                <Chip key={s.chave} ativo={escolhidas.has(s.chave)} onPress={() => alternar(s.chave)}>
+                  {c.perfil?.foto ? <img src={c.perfil.foto} alt="" className="size-4 rounded-full object-cover" />
+                    : <span className="grid size-4 place-items-center rounded-full bg-surface-secondary text-[9px] uppercase">{c.conta[0]}</span>}
                   {s.nome}
-                  <span className={`text-[10px] ${ativo ? 'opacity-80' : 'text-muted'}`}>{c.papel === 'referencia' ? 'ref.' : 'conc.'}</span>
-                </button>
+                </Chip>
               )
             })}
           </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button className="botao-sinal" isPending={buscando} onPress={() => buscar()}>
-              <Sparkles /> {sel.size ? `Buscar parecidos com ${nomesSel.length === 1 ? nomesSel[0] : `${nomesSel.length} marcas`}` : 'Buscar concorrentes do meu negócio'}
-            </Button>
-            <span className="text-xs text-muted">Busca perfis reais no Instagram e no TikTok e a IA escolhe os mais parecidos.</span>
+            <Button size="sm" className="bg-foreground text-background" isPending={buscando} isDisabled={nada} onPress={() => buscar()}>Buscar perfis</Button>
+            <span className="text-xs text-muted">
+              {nada ? 'Escolha o seu negócio ou alguma marca como base.'
+                : [negocio && 'seu mercado', escolhidas.size && `parecidos com ${escolhidas.size} ${escolhidas.size === 1 ? 'marca' : 'marcas'}`].filter(Boolean).join(' + ')}
+            </span>
           </div>
 
           {buscando && (
-            <div className="mt-5 flex items-center gap-4 rounded-2xl bg-surface-secondary/50 p-4">
-              <AnimProcesso tipo="analise" tamanho={40} />
-              <div>
-                <p key={etapa} className="entrar-cima text-sm font-medium">{ETAPAS[etapa]}</p>
-                <p className="text-xs text-muted">Leva uns 30 segundos.</p>
-              </div>
+            <div className="mt-6 space-y-2">
+              {ETAPAS.map((e, i) => (
+                <p key={e} className={`flex items-center gap-2.5 text-sm transition-opacity ${i > etapa ? 'opacity-30' : ''}`}>
+                  {i < etapa ? <Check className="size-3.5 text-[var(--menta)]" />
+                    : i === etapa ? <span className="size-3.5 animate-spin rounded-full border-[1.5px] border-foreground/70 border-t-transparent" />
+                      : <span className="size-3.5 rounded-full border border-border" />}
+                  {e}
+                </p>
+              ))}
             </div>
           )}
 
           {res && !buscando && (
-            <div className="mt-5">
-              {res.perfil_ideal && <p className="mb-3 text-sm text-muted"><span className="text-foreground">O que procuramos:</span> {res.perfil_ideal}</p>}
-              {!res.itens.length ? (
-                <p className="rounded-2xl bg-surface-secondary/50 p-4 text-sm text-muted">Nada novo dessa vez. Tente outras marcas como base, ou volte depois.</p>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {res.itens.map((p) => <CartaoParecido key={`${p.plataforma}/${p.conta}`} p={p} aoAcompanhar={() => setAdicionando(p)} aoIgnorar={() => ignorar(p)} />)}
+            <div className="mt-6 space-y-7">
+              {!grupos.length && <p className="text-sm text-muted">Nada novo dessa vez. Tente outra base, ou volte depois.</p>}
+              {grupos.map((g) => (
+                <div key={g.k}>
+                  <div className="mb-3 flex items-baseline gap-2">
+                    <h4 className="text-sm font-medium">{g.t}</h4>
+                    <span className="num text-xs text-muted">{g.itens.length}</span>
+                  </div>
+                  {g.ideal && <p className="-mt-1 mb-3 max-w-3xl text-xs leading-relaxed text-muted">{g.ideal}</p>}
+                  <div className="grid gap-px overflow-hidden rounded-2xl border bg-[var(--border)] linha-fina sm:grid-cols-2 xl:grid-cols-3">
+                    {g.itens.map((p) => <CartaoParecido key={`${p.plataforma}/${p.conta}`} p={p} aoAcompanhar={() => setAdicionando(p)} aoIgnorar={() => ignorar(p)} />)}
+                  </div>
                 </div>
-              )}
-              <button onClick={() => buscar(true)} className="mt-3 flex items-center gap-1.5 text-xs text-muted hover:text-foreground"><ArrowsRotateRight className="size-3" /> Buscar de novo</button>
+              ))}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                <span>{res.pesquisa?.web ? 'Encontrados pela busca na web' : res.pesquisa ? `${res.pesquisa.buscas} buscas · ${fmtNum(res.pesquisa.candidatos)} perfis avaliados` : ''}</span>
+                <button onClick={() => buscar(true)} className="flex items-center gap-1.5 hover:text-foreground"><ArrowsRotateRight className="size-3" /> Buscar de novo</button>
+              </div>
             </div>
           )}
         </div>
@@ -144,32 +165,43 @@ export function Parecidos({ contas, setContas, aoAdicionar }: { contas: Conta[];
   )
 }
 
+function Chip({ ativo, onPress, children }: { ativo: boolean; onPress: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onPress} aria-pressed={ativo}
+      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors ${ativo ? 'border-foreground/40 bg-foreground/[0.06] text-foreground' : 'border-transparent text-muted hover:text-foreground'}`}>
+      {ativo && <Check className="size-3" />}{children}
+    </button>
+  )
+}
+
 function CartaoParecido({ p, aoAcompanhar, aoIgnorar }: { p: Parecido; aoAcompanhar: () => void; aoIgnorar: () => void }) {
   const [falhou, setFalhou] = useState(false)
   return (
-    <div className="surgir flex flex-col rounded-2xl bg-surface-secondary/50 p-4">
+    <div className="group surgir flex flex-col bg-[var(--surface)] p-4">
       <div className="flex items-start gap-3">
-        <span className="relative shrink-0">
-          {p.foto && !falhou ? <img src={p.foto} alt="" onError={() => setFalhou(true)} className="size-11 rounded-full object-cover" />
-            : <span className="aura grid size-11 place-items-center rounded-full text-sm font-semibold text-white uppercase" style={aura(p.conta)}>{p.conta[0]}</span>}
-          <span className="absolute -right-0.5 -bottom-0.5 grid size-4 place-items-center rounded-full bg-surface ring-2 ring-[var(--surface)] [&_svg]:size-2.5"><IconePlataforma plataforma={p.plataforma} /></span>
+        <span className="relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-secondary text-xs font-medium text-muted uppercase">
+          {p.conta[0]}
+          {p.foto && !falhou && <img src={p.foto} alt="" loading="lazy" onError={() => setFalhou(true)} className="absolute inset-0 size-full object-cover" />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{p.nome || `@${p.conta}`}</p>
-          <p className="truncate text-xs text-muted">@{p.conta}{p.seguidores != null ? ` · ${fmtNum(p.seguidores)} seguidores` : ''}</p>
+          <p className="truncate text-sm font-medium">{p.nome || `@${p.conta}`}</p>
+          <p className="flex items-center gap-1 truncate text-xs text-muted">
+            <IconePlataforma plataforma={p.plataforma} className="size-3 shrink-0" />@{p.conta}{p.seguidores != null ? ` · ${fmtNum(p.seguidores)}` : ''}
+          </p>
         </div>
-        <button onClick={aoIgnorar} aria-label="Ignorar" className="grid size-7 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-foreground"><Xmark className="size-3.5" /></button>
+        <button onClick={aoIgnorar} aria-label="Ignorar" title="Não mostrar mais"
+          className="grid size-6 shrink-0 place-items-center rounded-full text-muted opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground max-sm:opacity-100"><Xmark className="size-3.5" /></button>
       </div>
-      <div className="mt-3 flex items-center gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${p.tipo === 'concorrente' ? 'bg-[var(--sinal-b)]/15 text-[var(--sinal-b)]' : 'bg-accent/15 text-accent'}`}>
-          {p.tipo === 'concorrente' ? 'Concorrente direto' : 'Referência'}
-        </span>
-        <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-tertiary"><span className="block h-full rounded-full bg-[var(--menta)]" style={{ width: `${p.semelhanca}%` }} /></span>
-        <span className="num text-[11px] text-muted">{p.semelhanca}%</span>
+      <p className="mt-3 flex-1 text-[13px] leading-relaxed text-foreground/80">{p.motivo}</p>
+      {p.parecido_com.length > 0 && <p className="mt-2 truncate text-xs text-muted">Parecido com {p.parecido_com.slice(0, 3).join(', ')}</p>}
+      <div className="mt-3 flex items-center gap-2 text-xs whitespace-nowrap text-muted">
+        <span>{p.tipo === 'concorrente' ? 'Concorrente' : 'Referência'}</span>
+        <span>·</span>
+        <span className="num">{p.semelhanca}%</span>
+        <button onClick={aoAcompanhar} className="ml-auto shrink-0 rounded-full border px-3 py-1 text-xs font-medium text-foreground transition-colors linha-fina hover:bg-foreground hover:text-background">
+          Acompanhar
+        </button>
       </div>
-      <p className="mt-2 flex-1 text-sm leading-relaxed">{p.motivo}</p>
-      {p.parecido_com.length > 0 && <p className="mt-1.5 text-[11px] text-muted">Parecido com {p.parecido_com.join(', ')}</p>}
-      <Button size="sm" className="botao-sinal mt-3" onPress={aoAcompanhar}>Acompanhar</Button>
     </div>
   )
 }

@@ -266,11 +266,14 @@ def api_parecidos():
     from baixador.inteligencia import parecidos
     d = request.json or {}
     try:
-        r = parecidos.buscar(d.get("chaves") or [], d.get("papel"), bool(d.get("forcar")))
+        r = parecidos.buscar(d.get("chaves") or [], d.get("negocio", True), bool(d.get("forcar")))
     except ValueError as e:
         return jsonify(erro=str(e)), 400
     for x in r["itens"]:
-        x["foto"] = busca_perfis._foto(x.get("foto")) if x.get("foto") and not str(x["foto"]).startswith("/") else x.get("foto")
+        foto = x.get("foto")
+        if foto and ".heic" in foto.split("?")[0].lower():
+            foto = None   # formato que o navegador não exibe (resultados antigos do cache)
+        x["foto"] = busca_perfis._foto(foto) if foto and not str(foto).startswith("/") else foto
     eventos.registrar("ia:parecidos", {"sementes": len(d.get("chaves") or []), "achados": len(r["itens"])})
     return jsonify(r)
 

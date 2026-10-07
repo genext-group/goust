@@ -71,6 +71,12 @@ def com_credito():
 
 # ---------------------------------------------------------------- busca de perfis
 
+def foto_compativel(lista):
+    """O TikTok manda o mesmo avatar em HEIC e em JPEG; o navegador só exibe o JPEG."""
+    lista = [u for u in (lista or []) if isinstance(u, str)]
+    return next((u for u in lista if u.split("?")[0].lower().endswith((".jpeg", ".jpg", ".png", ".webp"))), lista[-1] if lista else None)
+
+
 def _usuarios(no, plataforma, saida):
     """Acha objetos de usuário em qualquer formato de resposta (a API muda a forma às vezes)."""
     if isinstance(no, dict):
@@ -79,7 +85,7 @@ def _usuarios(no, plataforma, saida):
             foto = no.get("profile_pic_url_hd") or no.get("profile_pic_url")
             if not foto:
                 av = no.get("avatar_thumb") or no.get("avatar_medium") or no.get("avatarThumb") or {}
-                foto = (av.get("url_list") or [None])[0] if isinstance(av, dict) else av
+                foto = foto_compativel(av.get("url_list")) if isinstance(av, dict) else av
             seg = no.get("follower_count") or no.get("followerCount") or (no.get("edge_followed_by") or {}).get("count")
             saida.append({"plataforma": plataforma, "conta": handle.lower(), "nome": no.get("full_name") or no.get("nickname"),
                           "foto": foto, "seguidores": seg,
