@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } 
 import { api, central as apiCentral, criacao, type Central, type Conta, type DescobertaRef, type Evidencia, type IdeiaGerada,
   type Insight, type Metrica, type Video } from '../api'
 import { aura, auraMarca } from '../aura'
-import { CheckDesenhado, Radar } from '../components/Animacoes'
+import { CheckDesenhado } from '../components/Animacoes'
 import { AnimProcesso, Explosao } from '../components/AnimProcessos'
 import { useAoConcluir } from '../components/Atividade'
 import { FORMATOS } from '../components/criar/comum'
@@ -16,6 +16,7 @@ import { tocar } from '../sons'
 import { ModalVideo } from './Biblioteca'
 import { pedacoDoDegrade } from '../degrade'
 import { Carrossel } from '../components/ui/Carrossel'
+import { Ilustracao, type TipoIlustracao } from '../components/Ilustracao'
 
 type Aba = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'criar' | 'downloads'
 
@@ -138,7 +139,7 @@ export function TelaInicio({ contas, setContas, irPara }: Props) {
         {/* BLOCO 2 · merece sua atenção */}
         <Bloco titulo="Merece sua atenção">
           {c.atencao.length === 0 ? (
-            <Vazio texto="Nada pedindo sua atenção agora. Quando algo mudar de verdade no seu perfil ou no mercado, aparece aqui." />
+            <Vazio tipo="atencao" texto="Nada pedindo sua atenção agora. Quando algo mudar de verdade no seu perfil ou no mercado, aparece aqui." />
           ) : (
             <div className="cascata space-y-3">
               {c.atencao.map((i, n) => <CartaoAtencao key={i.id} i={i} n={n} agir={agir} avaliar={avaliar} abrirPost={abrirPost} />)}
@@ -149,7 +150,7 @@ export function TelaInicio({ contas, setContas, irPara }: Props) {
         {/* BLOCO 4 · mercado */}
         <Bloco titulo="O que está acontecendo no seu mercado">
           {c.mercado.length === 0 ? (
-            <Vazio texto={contas.some((x) => x.papel !== 'proprio')
+            <Vazio tipo="mercado" texto={contas.some((x) => x.papel !== 'proprio')
               ? 'Ainda não há sinais com dados suficientes. Não vamos mostrar tendência sem evidência.'
               : 'Acompanhe concorrentes e referências para começarmos a observar seu mercado.'} />
           ) : (
@@ -168,7 +169,7 @@ export function TelaInicio({ contas, setContas, irPara }: Props) {
       {/* BLOCO 3 · ideias para hoje */}
       <Bloco titulo="Ideias para hoje" extra={c.ideias.length ? <button onClick={() => irPara('criar')} className="text-sm text-muted hover:text-foreground">Abrir calendário <ArrowRight className="inline size-3.5" /></button> : null}>
         {c.ideias.length === 0 ? (
-          <Vazio texto={c.rodando || c.primeira_vez ? 'Estamos analisando seus conteúdos e seu mercado. As primeiras ideias chegam em instantes.' : 'Estamos conhecendo seu perfil. Conforme coletarmos mais informações, as ideias ficam mais personalizadas.'} />
+          <Vazio tipo="ideias" texto={c.rodando || c.primeira_vez ? 'Estamos analisando seus conteúdos e seu mercado. As primeiras ideias chegam em instantes.' : 'Estamos conhecendo seu perfil. Conforme coletarmos mais informações, as ideias ficam mais personalizadas.'} />
         ) : (
           <div className="cascata grid gap-3 md:grid-cols-3">
             {c.ideias.map((i, n) => <CartaoIdeia key={i.id} i={i} n={n} avaliar={avaliar} abrirPost={abrirPost} />)}
@@ -180,7 +181,7 @@ export function TelaInicio({ contas, setContas, irPara }: Props) {
       <section id="descobertas" className="scroll-mt-24">
         <Bloco titulo="Novas referências para você" extra={<span className="text-xs text-muted">Descobertas automaticamente · você decide quem acompanhar</span>}>
           {c.descobertas.length === 0 ? (
-            <Vazio texto="Procuramos perfis do seu nicho todos os dias. Quando surgir algo que valha a pena, aparece aqui." />
+            <Vazio tipo="descobertas" texto="Procuramos perfis do seu nicho todos os dias. Quando surgir algo que valha a pena, aparece aqui." />
           ) : (
             <Descobertas lista={c.descobertas} setLista={(l) => setC((x) => x && { ...x, descobertas: l })} setContas={setContas} />
           )}
@@ -304,10 +305,10 @@ function Bloco({ titulo, extra, children }: { titulo: string; extra?: ReactNode;
   )
 }
 
-function Vazio({ texto }: { texto: string }) {
+function Vazio({ texto, tipo }: { texto: string; tipo: TipoIlustracao }) {
   return (
     <div className="cartao flex items-center gap-4 p-5 text-sm leading-relaxed text-muted">
-      <span className="shrink-0 text-foreground"><Radar tamanho={56} /></span>
+      <Ilustracao tipo={tipo} tamanho={72} />
       <p>{texto}</p>
     </div>
   )
@@ -559,7 +560,11 @@ function Descobertas({ lista, setLista, setContas }: { lista: DescobertaRef[]; s
         return (
           <article key={d.id} style={{ '--i': n } as CSSProperties} className="group cartao flex w-[300px] shrink-0 snap-start flex-col gap-3 p-5">
             <div className="flex items-center gap-3">
-              <span className="aura grid size-11 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold text-white uppercase" style={aura(d.conta)}>{d.conta.slice(0, 1)}</span>
+              <span className="aura relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold text-white uppercase" style={aura(d.conta)}>
+                {d.conta.slice(0, 1)}
+                <img src={`/api/descobertas/${d.id}/foto`} alt="" loading="lazy" className="absolute inset-0 size-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none' }} />
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{d.nome || `@${d.conta}`}</p>
                 <a href={d.plataforma === 'tiktok' ? `https://www.tiktok.com/@${d.conta}` : `https://www.instagram.com/${d.conta}/`} target="_blank" rel="noreferrer"

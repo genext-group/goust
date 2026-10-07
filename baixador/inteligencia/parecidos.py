@@ -258,9 +258,11 @@ def _registrar(itens):
     """Entra nas descobertas: "ignorar" vale para sempre e o Início também mostra."""
     uid = ctx.usuario()
     for x in itens:
-        db.executar("""insert into descobertas (usuario_id, plataforma, conta, nome, tipo, categoria, motivo, seguidores, relevancia)
-                       values (%s, %s, %s, %s, %s, 'parecido', %s, %s, %s) on conflict (usuario_id, plataforma, conta) do nothing""",
-                    uid, x["plataforma"], x["conta"], x["nome"], x["tipo"], x["motivo"], x["seguidores"], round(x["semelhanca"] / 100, 2))
+        foto = x.get("foto") if x.get("foto") and not str(x["foto"]).startswith("/") else None
+        db.executar("""insert into descobertas (usuario_id, plataforma, conta, nome, tipo, categoria, motivo, seguidores, relevancia, foto)
+                       values (%s, %s, %s, %s, %s, 'parecido', %s, %s, %s, %s)
+                       on conflict (usuario_id, plataforma, conta) do update set foto = coalesce(excluded.foto, descobertas.foto)""",
+                    uid, x["plataforma"], x["conta"], x["nome"], x["tipo"], x["motivo"], x["seguidores"], round(x["semelhanca"] / 100, 2), foto)
 
 
 def _filtrar(resultado, seguidos, descartados):

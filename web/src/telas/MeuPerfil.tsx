@@ -9,9 +9,10 @@ import { Assistente } from '../components/meuperfil/Assistente'
 import { EstrategiaView } from '../components/meuperfil/EstrategiaView'
 import { PreferenciasIA } from '../components/meuperfil/PreferenciasIA'
 import { Pipeline } from '../components/meuperfil/Pipeline'
-import { Orbita, Radar } from '../components/Animacoes'
+import { Orbita } from '../components/Animacoes'
 import { fmtNum } from '../formato'
 import { ModalVideo } from './Biblioteca'
+import { Ilustracao } from '../components/Ilustracao'
 
 const fmtVersao = (v: string) => `${v.slice(6, 8)}/${v.slice(4, 6)}/${v.slice(0, 4)} ${v.slice(9, 11)}:${v.slice(11, 13)}`
 
@@ -222,7 +223,7 @@ export function TelaMeuPerfil({ contas, setContas, versaoBiblioteca, tarefasDown
             <EstrategiaView r={est.estrategia} />
           ) : !tarefaEst && (
             <div className="cartao px-6 py-14 text-center">
-              <div className="mx-auto w-fit text-foreground"><Radar /></div>
+              <Ilustracao tipo="estrategia" className="mx-auto" />
               <h3 className="titulo-display mt-2 text-xl font-semibold">Sua estratégia ainda não foi gerada</h3>
               <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
                 Ela cruza o seu perfil, o seu brief e os concorrentes já analisados. Quanto mais completo o brief, mais específica ela fica.

@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { criacao, type Estilo, type FormatoImagem, type Imagem } from '../../api'
 import type { PedidoImagem } from '../../telas/Criar'
 import { tocar } from '../../sons'
-import { Radar } from '../Animacoes'
 import { AnimProcesso, Explosao } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { Menu } from '../Menu'
 import { Carrossel } from '../ui/Carrossel'
 import { useConfirmar } from '../ui/Confirmar'
+import { Ilustracao } from '../Ilustracao'
 
 const PROPORCAO: Record<string, string> = { post: 'aspect-[4/5]', quadrado: 'aspect-square', story: 'aspect-[9/16]', paisagem: 'aspect-video' }
 const ROTULO: Record<string, string> = { post: 'Post 4:5', quadrado: '1:1', story: 'Story 9:16', paisagem: '16:9' }
@@ -201,7 +201,7 @@ export function Imagens({ pedidoInicial, aoConsumirPedido, irParaEstilos }: {
 
         {imagens === null ? <div className="carregando h-80" /> : lista.length === 0 && pendentes.length === 0 ? (
           <div className="cartao flex flex-col items-center px-6 py-16 text-center">
-            <div className="text-foreground"><Radar /></div>
+            <Ilustracao tipo="imagem" />
             <h3 className="titulo-display mt-2 text-xl font-semibold">{filtro === 'favoritas' ? 'Nenhuma favorita ainda' : 'Sua primeira imagem começa aqui'}</h3>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">
               Descreva a peça ao lado. Para ficar com a cara da sua marca, crie um estilo visual com 4 a 8 referências.

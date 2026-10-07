@@ -38,37 +38,70 @@ export default function App() {
   )
   if (!amb.clerk) return painel
   return (
-    <ClerkProvider publishableKey={amb.clerk} localization={localizacaoGoust} appearance={aparenciaClerk()}>
+    <ClerkProvider publishableKey={amb.clerk} localization={localizacaoGoust} appearance={aparenciaClerk()} afterSignOutUrl="/?saiu=1">
       <Portao painel={painel} />
     </ClerkProvider>
   )
 }
 
 /**
- * Entrada sem piscadas: enquanto o Clerk descobre a sessão, a mesma tela de carregamento continua (nada de o login
- * aparecer por um instante); depois do login/cadastro, limpa o "#/sign-up/..." do endereço e segue direto.
+ * Entrada sem piscadas. Vale o login do Clerk OU a nossa sessão (cookie HttpOnly emitido a partir de um token do
+ * Clerk): se o Clerk perder a sessão do navegador (acontece na instância de desenvolvimento), o painel continua
+ * montado, sem voltar ao login. "Sair" (Clerk ou o nosso botão) apaga a nossa sessão também.
  */
 function Portao({ painel }: { painel: ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth()
+  const { isLoaded, isSignedIn, getToken } = useAuth()
+  const [saiu] = useState(() => new URLSearchParams(location.search).has('saiu'))
+  const [propria, setPropria] = useState<boolean | null>(saiu ? false : null)
+
   useEffect(() => {
     if (isSignedIn && /^#\/?(sign-|factor|verify|sso|continue)/.test(location.hash)) {
       history.replaceState(null, '', location.pathname + location.search)
     }
   }, [isSignedIn])
+  useEffect(() => {
+    if (!saiu) return
+    fetch('/api/sessao', { method: 'DELETE' }).catch(() => {}).finally(() => history.replaceState(null, '', location.pathname))
+  }, [saiu])
+  // logado no Clerk: renova a nossa sessão (7 dias) com o token dele
+  useEffect(() => {
+    if (!isSignedIn) return
+    getToken().then((t) => (t ? fetch('/api/sessao', { method: 'POST', headers: { Authorization: `Bearer ${t}` } }) : null))
+      .then((r) => { if (r && r.ok) setPropria(true) }).catch(() => {})
+  }, [isSignedIn, getToken])
+  // o Clerk diz que não há sessão: a nossa ainda vale?
+  useEffect(() => {
+    if (!isLoaded || isSignedIn || saiu) return
+    fetch('/api/eu').then((r) => setPropria(r.ok)).catch(() => setPropria(false))
+  }, [isLoaded, isSignedIn, saiu])
+
   if (!isLoaded) return <TelaCarregando texto="Abrindo a Goust…" />
-  return isSignedIn ? <ComToken>{painel}</ComToken> : <TelaEntrar />
+  if (isSignedIn || propria) return <ComToken clerk={!!isSignedIn}>{painel}</ComToken>
+  if (propria === null) return <TelaCarregando texto="Abrindo a Goust…" />
+  return <TelaEntrar />
 }
 
-/** Entrega ao api.ts a forma de obter o token de sessão; só mostra o painel depois disso. */
-function ComToken({ children }: { children: ReactNode }) {
+/** Entrega ao api.ts a forma de obter o token (Clerk; sem ele, vale o cookie da nossa sessão). */
+function ComToken({ children, clerk }: { children: ReactNode; clerk: boolean }) {
   const { getToken } = useAuth()
   const [pronto, setPronto] = useState(false)
   useEffect(() => {
-    definirObtencaoToken(() => getToken())
+    definirObtencaoToken(clerk ? () => getToken().catch(() => null) : null)
     setPronto(true)
     return () => definirObtencaoToken(null)
-  }, [getToken])
+  }, [getToken, clerk])
   return pronto ? <>{children}</> : <TelaCarregando texto="Abrindo a Goust…" />
+}
+
+/** Menu da conta do Clerk; se só a nossa sessão estiver valendo, um "Sair" simples. */
+function MenuConta() {
+  const { isSignedIn } = useAuth()
+  if (isSignedIn) return <UserButton />
+  return (
+    <Button size="sm" variant="ghost" onPress={() => { fetch('/api/sessao', { method: 'DELETE' }).finally(() => location.assign('/?saiu=1')) }}>
+      Sair
+    </Button>
+  )
 }
 
 function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
@@ -204,7 +237,7 @@ function Painel({ nuvem, clerk }: { nuvem: boolean; clerk: boolean }) {
             <Button isIconOnly size="sm" variant="ghost" aria-label="Alternar tema" onPress={() => setEscuro((e) => !e)}>
               {escuro ? <Sun /> : <Moon />}
             </Button>
-            {clerk && <UserButton />}
+            {clerk && <MenuConta />}
           </div>
         </div>
         <div data-rolavel="x" className="overflow-x-auto px-2 pb-2 md:hidden">

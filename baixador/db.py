@@ -271,6 +271,7 @@ create table if not exists descobertas (
 -- como o usuário enxerga cada perfil que acompanha (contexto para a IA antes de analisar)
 alter table acompanhamentos add column if not exists aspectos jsonb not null default '[]';
 alter table acompanhamentos add column if not exists nota text;
+alter table descobertas add column if not exists foto text;
 
 -- custo real por usuário, dia, operação e modelo (base para limites, planos e margem)
 create table if not exists custos (

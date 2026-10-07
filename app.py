@@ -49,7 +49,7 @@ def protegido(f):
     @wraps(f)
     def envolto(*a, **kw):
         if CLERK:
-            usuario = auth.validar_token(_token() or "")
+            usuario = auth.validar_token(_token() or "") or auth.validar_sessao(request.cookies.get(auth.COOKIE_SESSAO))
             if not usuario:
                 return jsonify(erro="Faça login."), 401
             auth.garantir_usuario(usuario)
@@ -67,6 +67,25 @@ def protegido(f):
         except eventos.LimiteAtingido as e:
             return jsonify(erro=str(e), codigo="limite"), 402
     return envolto
+
+
+@app.post("/api/sessao")
+def api_criar_sessao():
+    """Troca um token válido do Clerk pela sessão própria (cookie HttpOnly). Só com token do Clerk, nunca com o cookie."""
+    usuario = auth.validar_token(_token() or "") if CLERK else None
+    if not usuario:
+        return jsonify(erro="Faça login."), 401
+    r = jsonify(ok=True)
+    r.set_cookie(auth.COOKIE_SESSAO, auth.criar_sessao(usuario), max_age=auth.SESSAO_DIAS * 86400,
+                 httponly=True, secure=NUVEM, samesite="Lax", path="/")
+    return r
+
+
+@app.delete("/api/sessao")
+def api_encerrar_sessao():
+    r = jsonify(ok=True)
+    r.delete_cookie(auth.COOKIE_SESSAO, path="/")
+    return r
 
 
 def so_local(f):
@@ -159,6 +178,39 @@ def api_foto_externa():
     except ValueError:
         abort(404)
     return Response(dados, mimetype=tipo, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/descobertas/<int:did>/foto")
+@protegido
+def api_foto_descoberta(did):
+    """Foto de um perfil descoberto: a guardada; se faltar ou tiver expirado, busca a atual e guarda."""
+    from baixador import busca_perfis
+    from baixador.fontes import scrapecreators
+    d = db.um("select plataforma, conta, foto from descobertas where id = %s and usuario_id = %s", did, contexto.usuario())
+    if not d:
+        abort(404)
+
+    def atual():
+        e = busca_perfis._exato(d["plataforma"], d["conta"]) or {}
+        if not e.get("foto") and d["plataforma"] == "instagram" and scrapecreators.ativo():
+            try:
+                e = scrapecreators.perfil_instagram(d["conta"])
+            except Exception:
+                e = {}
+        return e.get("foto")
+
+    for url, nova in ((d["foto"], False), (None, True)):
+        url = atual() if nova else url
+        if not url or ".heic" in url.split("?")[0].lower():
+            continue
+        try:
+            dados, tipo = busca_perfis.baixar_foto(url)
+        except Exception:
+            continue
+        if nova:
+            db.executar("update descobertas set foto = %s where id = %s", url, did)
+        return Response(dados, mimetype=tipo, headers={"Cache-Control": "private, max-age=86400"})
+    abort(404)
 
 
 @app.post("/api/contas/acompanhar")

@@ -3,11 +3,11 @@ import { ArrowUpFromLine, Copy, Picture, Plus, Sparkles, TrashBin, Xmark } from 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { criacao, type Conta, type Estilo } from '../../api'
 import { tocar } from '../../sons'
-import { Radar } from '../Animacoes'
 import { AnimProcesso } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { SeletorPosts } from './SeletorPosts'
 import { useConfirmar } from '../ui/Confirmar'
+import { Ilustracao } from '../Ilustracao'
 
 /** Reduz no navegador (máx. 1600 px, JPEG) antes de enviar: upload rápido e dentro do limite do servidor. */
 async function reduzir(arquivo: File): Promise<File> {
@@ -80,7 +80,7 @@ export function Estilos({ contas, versaoBiblioteca, aoGerar }: { contas: Conta[]
   if (estilos.length === 0) {
     return (
       <div className="cartao flex flex-col items-center px-6 py-16 text-center">
-        <div className="text-foreground"><Radar /></div>
+        <Ilustracao tipo="estilo" />
         <h3 className="titulo-display mt-2 text-xl font-semibold">Ensine a IA a desenhar do seu jeito</h3>
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted">
           Um estilo visual é um conjunto de 4 a 8 imagens que têm a cara que você quer: seus posts, referências que você

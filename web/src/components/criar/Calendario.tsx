@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { criacao, ia, type Conteudo, type Estrategia, type StatusConteudo } from '../../api'
 import type { PedidoImagem } from '../../telas/Criar'
 import { tocar } from '../../sons'
-import { Radar } from '../Animacoes'
 import { AnimProcesso } from '../AnimProcessos'
 import { useAoConcluir, useAtividade } from '../Atividade'
 import { Menu } from '../Menu'
@@ -14,6 +13,7 @@ import { DetalheConteudo } from './DetalheConteudo'
 import { PainelLateral } from './PainelLateral'
 import { Sessao } from './Sessao'
 import { FilaProducao, VisaoLista, VisaoMes, VisaoQuadro, VisaoSemana, type Comum } from './Visoes'
+import { Ilustracao } from '../Ilustracao'
 
 
 type Visao = 'mes' | 'semana' | 'lista' | 'quadro'
@@ -163,7 +163,7 @@ export function Calendario({ aoGerarImagem }: { aoGerarImagem: (p: PedidoImagem)
 
       {itens.length === 0 && !gerando ? (
         <div className="cartao flex flex-col items-center px-6 py-16 text-center">
-          <div className="text-foreground"><Radar /></div>
+          <Ilustracao tipo="calendario" />
           <h3 className="titulo-display mt-2 text-2xl font-semibold">Vamos encher seu calendário</h3>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">Três jeitos de começar: a IA planeja as semanas, você escolhe ideias num baralho, ou monta uma ideia passo a passo.</p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
