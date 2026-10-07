@@ -41,7 +41,9 @@ INSTRUCOES_PLANO = """Você ajuda um criador brasileiro a encontrar perfis PAREC
 - 'perfil_ideal': 1 frase com o que um perfil parecido tem (mercado, produto, público, abordagem).
 - 'termos_instagram' e 'termos_tiktok': {n} buscas cada, por ASSUNTO, em português, como alguém digitaria na busca
   da plataforma. No TikTok prefira termos de conteúdo (o que os vídeos falam); no Instagram, termos de nicho/serviço
-  (o que a bio diz). Varie produto, público e dor. Nada de nomes de marcas. 2 a 4 palavras por busca."""
+  (o que a bio diz). Varie produto, público e dor. Nada de nomes de marcas. 2 a 4 palavras por busca.
+- Se a base disser que o negócio é LOCAL (atende uma cidade/região), metade das buscas inclui a cidade
+  (ex.: "hamburgueria campinas", "lanche em campinas"): é assim que aparecem os concorrentes de verdade dele."""
 
 ALVO = {
     "mercado": "A base é o NEGÓCIO do criador (brief): procure quem disputa o mesmo cliente e referências do mercado DELE.",
@@ -92,7 +94,8 @@ def _marcas_base(chaves):
 
 def _resumo_negocio():
     m = memoria.marca()
-    return json.dumps({k: m.get(k) for k in ("nome", "produto", "publico") if m.get(k)}, ensure_ascii=False)
+    return (json.dumps({k: m.get(k) for k in ("nome", "produto", "publico", "alcance", "cidade") if m.get(k)}, ensure_ascii=False)
+            + "\n" + memoria.regra_concorrencia(m))
 
 
 def _ja_conhecidos():
@@ -194,7 +197,9 @@ def buscar(chaves=None, negocio=True, forcar=False):
     tem_brief = negocio and bool(memoria.marca().get("produto") or memoria.marca().get("publico"))
     if not marcas_base and not tem_brief:
         raise ValueError("Preencha o seu brief ou escolha marcas que você acompanha para servir de base.")
-    assinatura = hashlib.sha1(json.dumps({"c": sorted(x["perfil"] for x in marcas_base), "n": tem_brief}).encode()).hexdigest()[:16]
+    m = memoria.marca()
+    brief = [m.get(k) for k in ("produto", "publico", "alcance", "cidade")] if tem_brief else None
+    assinatura = hashlib.sha1(json.dumps({"c": sorted(x["perfil"] for x in marcas_base), "n": brief}).encode()).hexdigest()[:16]
     guardado = memoria.ler_documento("parecidos", {})
     seguidos, descartados = _ja_conhecidos()
     if not forcar and guardado.get("assinatura") == assinatura and guardado.get("ate", 0) > time.time():

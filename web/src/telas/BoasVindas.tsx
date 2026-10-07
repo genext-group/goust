@@ -1,7 +1,9 @@
 import { Button, Input, Label, TextArea, TextField, toast } from '@heroui/react'
-import { ArrowLeft, ArrowRight, Check, Plus, Sparkles } from '@gravity-ui/icons'
+import { ArrowLeft, ArrowRight, ArrowsRotateRight, Check, Plus, Sparkles } from '@gravity-ui/icons'
 import { useEffect, useState } from 'react'
-import { COLETA_INICIAL, api, ia, inicio, type Conta, type Plataforma, type Sugestao } from '../api'
+import { COLETA_INICIAL, api, ia, inicio, marcas, type Conta, type Parecido, type Plataforma } from '../api'
+import { fmtNum } from '../formato'
+import { IconePlataforma } from '../components/Plataforma'
 import { aura, auraMarca } from '../aura'
 import { CheckDesenhado, LogoAnimado, Radar } from '../components/Animacoes'
 import { AnimProcesso } from '../components/AnimProcessos'
@@ -12,7 +14,7 @@ import { tocar } from '../sons'
 const PASSOS = ['Boas-vindas', 'Seu perfil', 'Seu negócio', 'Concorrentes', 'Pronto'] as const
 
 /** Acha, na lista devolvida pelo servidor, a conta que acabou de ser adicionada. */
-function acharConta(lista: Conta[], texto: string, papel: 'proprio' | 'concorrente') {
+function acharConta(lista: Conta[], texto: string, papel: 'proprio' | 'concorrente' | 'referencia') {
   const alvo = texto.trim().replace(/^@/, '').replace(/\/+$/, '').split('/').pop()!.split('?')[0].replace(/^@/, '').toLowerCase()
   return lista.find((c) => c.conta.toLowerCase() === alvo) ?? lista.filter((c) => (c.papel ?? 'concorrente') === papel).at(-1)
 }
@@ -139,6 +141,15 @@ function PassoNegocio({ descricao, setDescricao, nome, setNome, temPerfil, aoSeg
 }) {
   const [lendo, setLendo] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [alcance, setAlcance] = useState<'' | 'local' | 'online'>('')
+  const [cidade, setCidade] = useState('')
+
+  useEffect(() => {
+    ia.marca().then((m) => {
+      if (m.alcance) setAlcance(/local|cidade|regi/i.test(m.alcance) ? 'local' : 'online')
+      setCidade(m.cidade || '')
+    }).catch(() => {})
+  }, [])
 
   const preencher = async () => {
     setLendo(true)
@@ -160,7 +171,11 @@ function PassoNegocio({ descricao, setDescricao, nome, setNome, temPerfil, aoSeg
     setSalvando(true)
     try {
       const atual = await ia.marca()
-      await ia.salvarMarca({ ...atual, nome: nome.trim(), produto: descricao.trim() })
+      await ia.salvarMarca({
+        ...atual, nome: nome.trim(), produto: descricao.trim(),
+        alcance: alcance === 'local' ? 'local (atende uma cidade/região)' : 'online/nacional (atende o Brasil todo)',
+        cidade: alcance === 'local' ? cidade.trim() : '',
+      })
     } catch { /* segue mesmo assim */ }
     setSalvando(false)
     aoSeguir()
@@ -185,57 +200,93 @@ function PassoNegocio({ descricao, setDescricao, nome, setNome, temPerfil, aoSeg
         </TextField>
         <TextField value={descricao} onChange={setDescricao}>
           <Label>O que você vende e para quem</Label>
-          <TextArea className="min-h-28 text-base" placeholder="Ex.: Consultoria de finanças para casais que querem sair das dívidas em 12 meses." />
+          <TextArea className="min-h-24 text-base" placeholder="Ex.: Consultoria de finanças para casais que querem sair das dívidas em 12 meses." />
         </TextField>
+        <div>
+          <p className="text-sm font-medium">Onde estão os seus clientes?</p>
+          <p className="mt-0.5 text-sm text-muted">Isso muda quem é seu concorrente de verdade.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <OpcaoAlcance ativo={alcance === 'local'} onPress={() => setAlcance('local')} titulo="Na minha cidade ou região"
+              texto="Lanchonete, clínica, academia, loja física. Concorrente é quem atende a sua cidade." />
+            <OpcaoAlcance ativo={alcance === 'online'} onPress={() => setAlcance('online')} titulo="No Brasil todo (online)"
+              texto="App, curso, e-commerce, serviço online. Concorrente é quem vende algo parecido, em qualquer lugar." />
+          </div>
+          {alcance === 'local' && (
+            <TextField value={cidade} onChange={setCidade} className="mt-3">
+              <Label>Cidade</Label>
+              <Input placeholder="Ex.: Campinas, SP" />
+            </TextField>
+          )}
+        </div>
       </div>
       <Rodape aoVoltar={aoVoltar}>
-        <Button className="botao-sinal" isPending={salvando} isDisabled={!descricao.trim()} onPress={seguir}>Continuar <ArrowRight /></Button>
+        <Button className="botao-sinal" isPending={salvando} isDisabled={!descricao.trim() || !alcance || (alcance === 'local' && !cidade.trim())} onPress={seguir}>Continuar <ArrowRight /></Button>
       </Rodape>
     </div>
   )
 }
 
+function OpcaoAlcance({ ativo, onPress, titulo, texto }: { ativo: boolean; onPress: () => void; titulo: string; texto: string }) {
+  return (
+    <button type="button" onClick={onPress} aria-pressed={ativo}
+      className={`flex items-start gap-3 rounded-2xl p-3.5 text-left transition-all ${ativo ? 'bg-accent/12 ring-1 ring-accent/50' : 'bg-surface hover:bg-surface-secondary'}`}>
+      <span className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border transition-colors ${ativo ? 'botao-sinal' : 'linha-fina'}`}>
+        {ativo && <Check className="size-3" />}
+      </span>
+      <span><span className="block text-sm font-medium">{titulo}</span><span className="mt-0.5 block text-[13px] leading-relaxed text-muted">{texto}</span></span>
+    </button>
+  )
+}
+
+type Tipo = 'concorrente' | 'referencia'
+type Candidato = Pick<Parecido, 'plataforma' | 'conta' | 'nome' | 'foto' | 'seguidores' | 'motivo'> & { tipo: Tipo }
+
 function PassoConcorrentes({ descricao, setContas, aoSeguir, aoVoltar }: {
   descricao: string; setContas: (c: Conta[]) => void; aoSeguir: () => void; aoVoltar: () => void
 }) {
-  const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null)
+  const [itens, setItens] = useState<Candidato[] | null>(null)
   const [erro, setErro] = useState('')
   const [marcados, setMarcados] = useState<Set<string>>(new Set())
   const [manual, setManual] = useState('')
-  const [extras, setExtras] = useState<Sugestao[]>([])
   const [ocupado, setOcupado] = useState(false)
+  const [cidade, setCidade] = useState<string | null>(null)
 
   useEffect(() => {
     tocar('analise')
-    inicio.sugerirConcorrentes(descricao)
-      .then((s) => {
-        setSugestoes(s)
-        setMarcados(new Set(s.slice(0, 4).map((x) => `${x.plataforma}/${x.conta}`)))
+    ia.marca().then((m) => setCidade(/local|cidade|regi/i.test(m.alcance || '') ? (m.cidade || 'sua cidade') : null)).catch(() => {})
+    marcas.parecidos({ chaves: [], negocio: true })
+      .then((r) => {
+        const lista: Candidato[] = r.itens.map((x) => ({ ...x, tipo: x.tipo }))
+        setItens(lista)
+        const chave = (x: Candidato) => `${x.plataforma}/${x.conta}`
+        setMarcados(new Set([...lista.filter((x) => x.tipo === 'concorrente').slice(0, 4), ...lista.filter((x) => x.tipo === 'referencia').slice(0, 2)].map(chave)))
         tocar('analiseFim')
       })
-      .catch((e) => { setSugestoes([]); setErro((e as Error).message) })
+      .catch((e) => { setItens([]); setErro((e as Error).message) })
   }, [descricao])
 
-  const todos = [...extras, ...(sugestoes ?? [])]
-  const alternar = (k: string) => setMarcados((m) => { const n = new Set(m); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const k = (x: Candidato) => `${x.plataforma}/${x.conta}`
+  const alternar = (c: string) => setMarcados((m) => { const n = new Set(m); n.has(c) ? n.delete(c) : n.add(c); return n })
+  const trocarTipo = (c: Candidato) => setItens((l) => (l ?? []).map((x) => k(x) === k(c) ? { ...x, tipo: x.tipo === 'concorrente' ? 'referencia' : 'concorrente' } : x))
   const adicionarManual = () => {
-    const conta = manual.trim().replace(/^@/, '').split('/').filter(Boolean).pop()?.split('?')[0]
+    const conta = manual.trim().replace(/^@/, '').split('/').filter(Boolean).pop()?.split('?')[0]?.replace(/^@/, '').toLowerCase()
     if (!conta) return
     const plataforma: Plataforma = manual.includes('tiktok') ? 'tiktok' : 'instagram'
-    setExtras((x) => [{ plataforma, conta, nome: '', por_que: 'Adicionado por você' }, ...x])
-    setMarcados((m) => new Set(m).add(`${plataforma}/${conta}`))
+    const novo: Candidato = { plataforma, conta, nome: null, foto: null, seguidores: null, motivo: 'Adicionado por você', tipo: 'concorrente' }
+    setItens((l) => [novo, ...(l ?? []).filter((x) => k(x) !== k(novo))])
+    setMarcados((m) => new Set(m).add(k(novo)))
     setManual('')
   }
   const seguir = async () => {
     setOcupado(true)
     try {
-      const escolhidos = todos.filter((s) => marcados.has(`${s.plataforma}/${s.conta}`))
+      const escolhidos = (itens ?? []).filter((s) => marcados.has(k(s)))
       let lista: Conta[] = []
       const adicionadas: Conta[] = []
       for (const s of escolhidos) {
         try {
-          lista = await api.adicionarConta(s.conta, s.plataforma, 'concorrente')
-          const c = acharConta(lista, s.conta, 'concorrente')
+          lista = await api.adicionarConta(s.conta, s.plataforma, s.tipo)
+          const c = acharConta(lista, s.conta, s.tipo)
           if (c) adicionadas.push(c)
         } catch { /* perfil inválido: segue com os outros */ }
       }
@@ -247,44 +298,52 @@ function PassoConcorrentes({ descricao, setContas, aoSeguir, aoVoltar }: {
     } finally { setOcupado(false) }
   }
 
+  const grupos: { tipo: Tipo; titulo: string; texto: string }[] = [
+    {
+      tipo: 'concorrente', titulo: 'Concorrentes diretos',
+      texto: cidade ? `Disputam o mesmo cliente que você em ${cidade}.` : 'Vendem algo parecido para o mesmo público, em qualquer lugar do Brasil.',
+    },
+    {
+      tipo: 'referencia', titulo: 'Referências',
+      texto: cidade ? 'O mesmo tipo de negócio em outras cidades e perfis que inspiram. Não disputam seu cliente, mas ensinam.'
+        : 'Não disputam o seu cliente, mas fazem conteúdo que vale estudar.',
+    },
+  ]
+
   return (
     <div>
       <p className="num text-sm text-muted">Passo 3 de 3</p>
       <h2 className="titulo-display mt-1 text-4xl font-semibold">Quem você quer acompanhar?</h2>
-      <p className="mt-2 max-w-xl text-muted">A IA pesquisou perfis do seu nicho. Marque os que fazem sentido ou adicione os seus.</p>
+      <p className="mt-2 max-w-xl text-muted">A Goust buscou perfis reais no Instagram e no TikTok. Marque quem faz sentido; se algum estiver no grupo errado, toque na etiqueta para trocar.</p>
 
       <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault(); adicionarManual() }}>
         <Input aria-label="Adicionar perfil" value={manual} onChange={(e) => setManual(e.target.value)} placeholder="@perfil ou link (Instagram ou TikTok)" className="flex-1" />
         <Button type="submit" variant="tertiary" isDisabled={!manual.trim()}><Plus /> Adicionar</Button>
       </form>
 
-      {sugestoes === null ? (
+      {itens === null ? (
         <div className="cartao mt-5 flex flex-col items-center gap-3 px-6 py-12 text-center">
           <div className="text-foreground"><Radar tamanho={110} /></div>
-          <p className="font-medium">Procurando perfis do seu nicho na web…</p>
-          <p className="text-sm text-muted">Leva uns 30 segundos.</p>
+          <p className="font-medium">Buscando perfis do seu mercado no Instagram e no TikTok…</p>
+          <p className="text-sm text-muted">Leva até um minuto.</p>
         </div>
       ) : (
-        <div className="cascata mt-5 grid gap-2 sm:grid-cols-2">
-          {erro && <p className="text-sm text-muted sm:col-span-2">Não consegui pesquisar agora ({erro}). Adicione os perfis acima.</p>}
-          {todos.map((s, i) => {
-            const k = `${s.plataforma}/${s.conta}`
-            const ativo = marcados.has(k)
+        <div className="mt-6 grid gap-7">
+          {erro && <p className="text-sm text-muted">Não consegui buscar agora ({erro}). Adicione os perfis acima.</p>}
+          {!erro && !itens.length && <p className="text-sm text-muted">Não encontrei perfis parecidos. Adicione os que você conhece acima.</p>}
+          {grupos.map((g) => {
+            const doGrupo = itens.filter((x) => x.tipo === g.tipo)
+            if (!doGrupo.length) return null
             return (
-              <button key={k} onClick={() => alternar(k)} style={{ '--i': i } as React.CSSProperties}
-                className={`flex items-start gap-3 rounded-2xl p-3.5 text-left transition-all ${ativo ? 'bg-accent/12 ring-1 ring-accent/50' : 'bg-surface hover:bg-surface-secondary'}`}>
-                <span className="aura grid size-11 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold text-white uppercase" style={aura(k)}>
-                  {s.conta.slice(0, 1)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">@{s.conta} <span className="text-xs font-normal text-muted">· {s.plataforma === 'tiktok' ? 'TikTok' : 'Instagram'}</span></span>
-                  {s.nome && <span className="block truncate text-xs text-muted">{s.nome}</span>}
-                  <span className="mt-1 line-clamp-2 block text-sm leading-relaxed text-muted">{s.por_que}</span>
-                </span>
-                <span className={`grid size-6 shrink-0 place-items-center rounded-full border transition-colors ${ativo ? 'botao-sinal' : 'linha-fina'}`}>
-                  {ativo && <Check className="size-3.5" />}
-                </span>
-              </button>
+              <section key={g.tipo}>
+                <h3 className="text-sm font-semibold">{g.titulo} <span className="font-normal text-muted">· {doGrupo.length}</span></h3>
+                <p className="mt-0.5 text-[13px] text-muted">{g.texto}</p>
+                <div className="cascata mt-3 grid gap-2 sm:grid-cols-2">
+                  {doGrupo.map((s, i) => (
+                    <CartaoCandidato key={k(s)} s={s} i={i} ativo={marcados.has(k(s))} aoAlternar={() => alternar(k(s))} aoTrocarTipo={() => trocarTipo(s)} />
+                  ))}
+                </div>
+              </section>
             )
           })}
         </div>
@@ -292,10 +351,39 @@ function PassoConcorrentes({ descricao, setContas, aoSeguir, aoVoltar }: {
 
       <Rodape aoVoltar={aoVoltar}>
         <span className="hidden text-sm text-muted sm:inline">{marcados.size} selecionado{marcados.size === 1 ? '' : 's'}</span>
-        <Button className="botao-sinal" isPending={ocupado} isDisabled={sugestoes === null && extras.length === 0} onPress={seguir}>
+        <Button className="botao-sinal" isPending={ocupado} isDisabled={itens === null} onPress={seguir}>
           {marcados.size ? 'Acompanhar e analisar' : 'Pular'} <ArrowRight />
         </Button>
       </Rodape>
+    </div>
+  )
+}
+
+function CartaoCandidato({ s, i, ativo, aoAlternar, aoTrocarTipo }: { s: Candidato; i: number; ativo: boolean; aoAlternar: () => void; aoTrocarTipo: () => void }) {
+  const [falhou, setFalhou] = useState(false)
+  const chave = `${s.plataforma}/${s.conta}`
+  return (
+    <div role="button" tabIndex={0} onClick={aoAlternar} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); aoAlternar() } }}
+      style={{ '--i': i } as React.CSSProperties}
+      className={`flex cursor-pointer items-start gap-3 rounded-2xl p-3.5 text-left transition-all ${ativo ? 'bg-accent/12 ring-1 ring-accent/50' : 'bg-surface hover:bg-surface-secondary'}`}>
+      <span className="aura relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold text-white uppercase" style={aura(chave)}>
+        {s.conta.slice(0, 1)}
+        {s.foto && !falhou && <img src={s.foto} alt="" loading="lazy" onError={() => setFalhou(true)} className="absolute inset-0 size-full object-cover" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{s.nome || `@${s.conta}`}</span>
+        <span className="flex items-center gap-1 truncate text-xs text-muted">
+          <IconePlataforma plataforma={s.plataforma} className="size-3 shrink-0" />@{s.conta}{s.seguidores != null ? ` · ${fmtNum(s.seguidores)} seguidores` : ''}
+        </span>
+        <span className="mt-1.5 line-clamp-2 block text-[13px] leading-relaxed text-foreground/75">{s.motivo}</span>
+        <button type="button" onClick={(e) => { e.stopPropagation(); aoTrocarTipo() }} title="Trocar de grupo"
+          className="mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted linha-fina transition-colors hover:text-foreground">
+          {s.tipo === 'concorrente' ? 'Concorrente direto' : 'Referência'} <ArrowsRotateRight className="size-2.5" />
+        </button>
+      </span>
+      <span className={`grid size-6 shrink-0 place-items-center rounded-full border transition-colors ${ativo ? 'botao-sinal' : 'linha-fina'}`}>
+        {ativo && <Check className="size-3.5" />}
+      </span>
     </div>
   )
 }

@@ -102,7 +102,7 @@ export interface Ambiente { nuvem: boolean; clerk: string | null }
 export const api = {
   ambiente: () => req<Ambiente>('/api/ambiente'),
   contas: () => req<Conta[]>('/api/contas'),
-  adicionarConta: (conta: string, plataforma?: Plataforma, papel: 'proprio' | 'concorrente' = 'concorrente') =>
+  adicionarConta: (conta: string, plataforma?: Plataforma, papel: 'proprio' | 'concorrente' | 'referencia' = 'concorrente') =>
     req<Conta[]>('/api/contas', { body: { conta, plataforma, papel } }),
   papelConta: (c: Pick<Conta, 'plataforma' | 'conta'>, papel: 'proprio' | 'concorrente' | 'referencia') =>
     req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}/papel`, { method: 'PUT', body: { papel } }),

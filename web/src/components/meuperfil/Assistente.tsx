@@ -16,6 +16,8 @@ const ETAPAS: { id: string; titulo: string; pergunta: string; campos: Campo[] }[
     campos: [
       { k: 'nome', rotulo: 'Nome da marca ou do criador', dica: 'Ex.: Dinheiro em Dia' },
       { k: 'produto', rotulo: 'O que você vende', dica: 'Oferta, preço e como funciona', longo: true },
+      { k: 'alcance', rotulo: 'Onde estão os seus clientes', dica: 'Na sua cidade/região ou no Brasil todo (online)', atalhos: ['local (atende uma cidade/região)', 'online/nacional (atende o Brasil todo)'] },
+      { k: 'cidade', rotulo: 'Cidade (se for local)', dica: 'Ex.: Campinas, SP' },
       { k: 'diferenciais', rotulo: 'Por que escolher você', dica: 'O que só você tem', longo: true },
       { k: 'site', rotulo: 'Site', dica: 'https://…' },
     ],

@@ -19,11 +19,12 @@ from . import cliente
 DESTILAR_A_CADA = 5
 _trava = threading.Lock()
 
-CAMPOS_MARCA = ["nome", "produto", "publico", "dores_do_publico", "objetivos", "metas", "onde_quer_chegar",
+CAMPOS_MARCA = ["nome", "produto", "alcance", "cidade", "publico", "dores_do_publico", "objetivos", "metas", "onde_quer_chegar",
                 "posicionamento_desejado", "tom", "diferenciais", "frequencia_possivel", "recursos_producao",
                 "restricoes", "site", "observacoes"]
 NOMES_CAMPOS = {
-    "nome": "marca", "produto": "o que vende (oferta, preço, como funciona)", "publico": "público-alvo",
+    "nome": "marca", "produto": "o que vende (oferta, preço, como funciona)",
+    "alcance": "onde vende (local ou online/nacional)", "cidade": "cidade/região onde atua", "publico": "público-alvo",
     "dores_do_publico": "dores e desejos do público", "objetivos": "objetivo principal com conteúdo",
     "metas": "metas em números e prazo", "onde_quer_chegar": "onde quer chegar (visão de 6 a 12 meses)",
     "posicionamento_desejado": "como quer ser percebido", "tom": "tom de voz", "diferenciais": "diferenciais",
@@ -172,6 +173,7 @@ def contexto():
     else:
         partes.append("## Sobre o usuário\nCriador/empresa que monitora concorrentes. Ainda não descreveu a própria marca; "
                       "faça recomendações úteis para quem compete nesse mesmo mercado.")
+    partes.append(regra_concorrencia(m))
     regras = aprendizados()["regras"]
     if regras:
         partes.append("## Preferências aprendidas com o feedback do usuário (siga à risca)\n"
@@ -186,6 +188,33 @@ def contexto():
         partes.append("## Exemplos que o usuário reprovou (não repita esse estilo)\n" + "\n".join(
             f"- ({f['secao']}) {f['item'][:300]}" + (f" — motivo: {f['comentario']}" if f["comentario"] else "") for f in ruins))
     return "\n\n".join(partes)
+
+
+def eh_local(m=None):
+    """Negócio local (atende uma cidade/região) × online/nacional, pelo que o usuário disse no brief."""
+    m = m or marca()
+    texto = f"{m.get('alcance', '')} {m.get('cidade', '')}".lower()
+    if any(p in texto for p in ("online", "brasil todo", "nacional", "todo o brasil", "internet")):
+        return False
+    return bool(m.get("cidade")) or any(p in texto for p in ("local", "cidade", "região", "regiao", "bairro"))
+
+
+def regra_concorrencia(m=None):
+    """O que é concorrente direto depende de o negócio ser local ou não (vale para toda a IA)."""
+    m = m or marca()
+    titulo = "## Quem é concorrente (regra)\n"
+    if eh_local(m):
+        cidade = m.get("cidade")
+        onde = f"em {cidade}" if cidade else "na mesma cidade/região"
+        return (titulo + "Negócio LOCAL" + (f", em {cidade}" if cidade else "") + ". "
+                f"Concorrente DIRETO = o mesmo tipo de negócio atendendo o mesmo público {onde}. "
+                "O mesmo tipo de negócio em OUTRAS cidades é REFERÊNCIA (inspiração), não concorrente.")
+    if m.get("alcance"):
+        return (titulo + "Negócio ONLINE/NACIONAL (não depende de localização). Concorrente DIRETO = quem "
+                "vende algo parecido para o mesmo público, em qualquer lugar do país. Perfis que só inspiram (outro "
+                "produto, outro público ou outro mercado) são REFERÊNCIA.")
+    return (titulo + "Concorrente DIRETO = disputa o mesmo cliente que o usuário (mesmo produto e público; "
+            "se o negócio parecer local, na mesma cidade). O resto é REFERÊNCIA.")
 
 
 def _destilar_tarefa(usuario_id, _prazo):
