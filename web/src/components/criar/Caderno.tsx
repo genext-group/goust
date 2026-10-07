@@ -2,7 +2,7 @@ import { Button, toast } from '@heroui/react'
 import { ArrowRight, Check, CircleCheck, Magnifier, Pin, PinFill, Sparkles, TrashBin, Xmark } from '@gravity-ui/icons'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { criacao, notas as apiNotas, urlThumb, type IdeiaDasNotas, type Nota, type OrganizacaoNotas, type Provocacao, type TipoNota } from '../../api'
+import { criacao, notas as apiNotas, urlCapa, type IdeiaDasNotas, type Nota, type OrganizacaoNotas, type Provocacao, type TipoNota } from '../../api'
 import { useAtividade } from '../Atividade'
 import { AnimProcesso } from '../AnimProcessos'
 import { fmtRelativo } from '../../formato'
@@ -371,7 +371,7 @@ function CartaoNota({ n, selecionada, aoSelecionar, aoMudar, aoApagar, aoDesenvo
 
       {n.ref && (
         <div className="mt-2 flex items-center gap-2 rounded-xl bg-surface-secondary/60 p-1.5">
-          <img src={urlThumb({ plataforma: n.ref.plataforma, conta: n.ref.conta, id: n.ref.id } as never)} alt="" className="h-12 w-9 rounded-lg object-cover" />
+          <img src={urlCapa(n.ref.plataforma, n.ref.conta, n.ref.id)} alt="" className="h-12 w-9 rounded-lg object-cover" />
           <span className="min-w-0 text-xs text-muted"><span className="block font-medium text-foreground">@{n.ref.conta}</span><span className="line-clamp-2">{n.ref.legenda}</span></span>
         </div>
       )}

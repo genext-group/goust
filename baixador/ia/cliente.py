@@ -61,6 +61,11 @@ def uso():
     return {r["modelo"]: {k: int(r[k]) for k in ("chamadas", "entrada", "saida", "segundos_audio")} for r in linhas}
 
 
+# vale para todo texto que o usuário lê: termos simples (o cálculo pode ser mediana; o nome para ele é "média")
+LINGUAGEM = ("\n\nLinguagem para o usuário: escreva \"média\" (ex.: \"média de views\", \"média da conta\") em vez de "
+             "\"mediana\"/\"mediano\".")
+
+
 def _raciocina(modelo):
     return modelo.startswith(("gpt-5", "gpt-6", "o"))
 
@@ -69,7 +74,7 @@ def com_busca_na_web(tipo, instrucoes, conteudo, formato, esforco="low"):
     """Resposta estruturada usando a ferramenta de busca na web (cobrada por chamada + tokens)."""
     eventos.verificar_limite()
     modelo = MODELOS[tipo]
-    args = dict(model=modelo, instructions=instrucoes, input=conteudo, text_format=formato, tools=[{"type": "web_search"}])
+    args = dict(model=modelo, instructions=instrucoes + LINGUAGEM, input=conteudo, text_format=formato, tools=[{"type": "web_search"}])
     if _raciocina(modelo):
         args["reasoning"] = {"effort": esforco}
     r = cliente().responses.parse(**args)
@@ -110,7 +115,7 @@ def estruturado(tipo, instrucoes, conteudo, formato, esforco="medium"):
     """Chamada com saída em JSON validado por um modelo pydantic."""
     eventos.verificar_limite()
     modelo = MODELOS[tipo]
-    args = dict(model=modelo, instructions=instrucoes, input=conteudo, text_format=formato)
+    args = dict(model=modelo, instructions=instrucoes + LINGUAGEM, input=conteudo, text_format=formato)
     if _raciocina(modelo):
         args["reasoning"] = {"effort": esforco}
     r = cliente().responses.parse(**args)
@@ -123,7 +128,7 @@ def estruturado(tipo, instrucoes, conteudo, formato, esforco="medium"):
 def texto(tipo, instrucoes, conteudo, esforco="medium"):
     eventos.verificar_limite()
     modelo = MODELOS[tipo]
-    args = dict(model=modelo, instructions=instrucoes, input=conteudo)
+    args = dict(model=modelo, instructions=instrucoes + LINGUAGEM, input=conteudo)
     if _raciocina(modelo):
         args["reasoning"] = {"effort": esforco}
     r = cliente().responses.create(**args)

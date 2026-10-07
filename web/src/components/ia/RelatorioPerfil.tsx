@@ -53,9 +53,9 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
           {[
             ['Posts no catálogo', fmtNum(m.videos)],
             ['Posts/semana', m.posts_por_semana?.toLocaleString('pt-BR') ?? '—'],
-            ['Views (mediana)', fmtNum(m.mediana_views)],
-            ['Engajamento (mediana)', m.mediana_engajamento != null ? `${fmtDec(m.mediana_engajamento, 2)}%` : '—'],
-            ['Duração (mediana)', m.duracao_mediana_s ? fmtDuracao(Math.round(m.duracao_mediana_s)) : '—'],
+            ['Views (média)', fmtNum(m.mediana_views)],
+            ['Engajamento (média)', m.mediana_engajamento != null ? `${fmtDec(m.mediana_engajamento, 2)}%` : '—'],
+            ['Duração (média)', m.duracao_mediana_s ? fmtDuracao(Math.round(m.duracao_mediana_s)) : '—'],
           ].map(([k, v]) => (
             <div key={k} className="border-r p-4 linha-fina last:border-r-0">
               <p className="text-[11px] tracking-wide text-muted uppercase">{k}</p>
@@ -137,7 +137,7 @@ export function RelatorioPerfil({ r }: { r: RegistroRelatorio }) {
       </div>
 
       {/* Pilares */}
-      <Secao titulo="Pilares de conteúdo" icone={<ChartLine />} descricao="Participação no conteúdo e desempenho comparado à mediana da própria conta.">
+      <Secao titulo="Pilares de conteúdo" icone={<ChartLine />} descricao="Participação no conteúdo e desempenho comparado à média da própria conta.">
         <ul className="divide-y linha-fina [&>li]:linha-fina">
           {rel.pilares.map((p) => (
             <Insight key={p.nome} secao="pilares" texto={`${p.nome}: ${p.descricao}`} videos={p.videos}>

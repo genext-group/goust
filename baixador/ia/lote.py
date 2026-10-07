@@ -40,7 +40,7 @@ def pendente(nome):
 def pedir(nome, tipo_modelo, instrucoes, conteudo, dados=None, esforco="low"):
     formato, _ = _TIPOS[nome]
     modelo = cliente.MODELOS[tipo_modelo]
-    corpo = {"model": modelo, "instructions": instrucoes, "input": conteudo,
+    corpo = {"model": modelo, "instructions": instrucoes + cliente.LINGUAGEM, "input": conteudo,
              "text": {"format": type_to_text_format_param(formato)}}
     if cliente._raciocina(modelo):
         corpo["reasoning"] = {"effort": esforco}

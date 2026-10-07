@@ -118,7 +118,7 @@ export function ComparativoMarca({ marcaId, contas, tarefas, aoAnalisar, aoPedir
         <div data-rolavel="x" className="overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">
             <thead className="text-left text-[11px] tracking-wide text-muted uppercase">
-              <tr className="border-b linha-fina"><th className="px-5 py-3 font-normal" /><th className="px-3 py-3 font-normal">Posts/semana</th><th className="px-3 py-3 font-normal">Views (mediana)</th><th className="px-3 py-3 font-normal">Engajamento</th><th className="px-3 py-3 font-normal">Duração</th></tr>
+              <tr className="border-b linha-fina"><th className="px-5 py-3 font-normal" /><th className="px-3 py-3 font-normal">Posts/semana</th><th className="px-3 py-3 font-normal">Views (média)</th><th className="px-3 py-3 font-normal">Engajamento</th><th className="px-3 py-3 font-normal">Duração</th></tr>
             </thead>
             <tbody>
               {r.contas.map((x) => (

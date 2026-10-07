@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { urlThumb, type FormatoPost, type MarcaRadar, type Momento, type Plataforma, type Radar } from '../../api'
+import { urlCapa, type FormatoPost, type MarcaRadar, type Momento, type Plataforma, type Radar } from '../../api'
 import { fmtDec, fmtNum } from '../../formato'
 import { IconePlataforma } from '../Plataforma'
 
@@ -105,7 +105,7 @@ export function RadarMercado({ r, aoAbrirMarca, aoAbrirPost }: {
 
       {/* destaques */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {acelerou && <Cartao rotulo="Mais acelerou" m={acelerou} valor={<>+{fmtDec(acelerou.views_delta!, 0)}%</>} sub="de alcance mediano por post" onClick={() => aoAbrirMarca(acelerou)} />}
+        {acelerou && <Cartao rotulo="Mais acelerou" m={acelerou} valor={<>+{fmtDec(acelerou.views_delta!, 0)}%</>} sub="na média de alcance por post" onClick={() => aoAbrirMarca(acelerou)} />}
         {ativo && <Cartao rotulo="Mais ativo" m={ativo} valor={ativo.posts} sub={`posts em ${r.dias} dias`} onClick={() => aoAbrirMarca(ativo)} />}
         {engaja && <Cartao rotulo="Maior engajamento" m={engaja} valor={<>{fmtDec(engaja.engajamento!, 1)}%</>} sub="curtidas + comentários ÷ views" onClick={() => aoAbrirMarca(engaja)} />}
         {postMes?.melhor && (
@@ -123,7 +123,7 @@ export function RadarMercado({ r, aoAbrirMarca, aoAbrirPost }: {
                 <th className="px-4 py-2.5 font-normal">Marca</th>
                 <Cab k="seguidores">Seguidores</Cab>
                 <Cab k="posts">Ritmo</Cab>
-                <Cab k="views">Alcance mediano</Cab>
+                <Cab k="views">Média de alcance</Cab>
                 <Cab k="engajamento">Engajamento</Cab>
                 <th className="px-3 py-2.5 font-normal">Momento</th>
               </tr>
@@ -159,7 +159,7 @@ export function RadarMercado({ r, aoAbrirMarca, aoAbrirPost }: {
           </table>
         </div>
         <p className="border-t px-4 py-2 text-[11px] text-muted linha-fina">
-          Ritmo: posts por semana nas últimas 12 semanas. Alcance: mediana de views por post (posts com 2+ dias).
+          Ritmo: posts por semana nas últimas 12 semanas. Média de alcance: views típicas por post (posts com 2+ dias).
           {r.historico_seguidores_desde ? ` Seguidores: variação aparece com alguns dias de histórico (desde ${new Date(r.historico_seguidores_desde + 'T12:00').toLocaleDateString('pt-BR')}).` : ''}
         </p>
       </div>
@@ -188,7 +188,7 @@ export function RadarMercado({ r, aoAbrirMarca, aoAbrirPost }: {
           </div>
           <div className="rounded-2xl border p-5 linha-fina">
             <p className="text-sm font-medium">O que está funcionando</p>
-            <p className="mb-4 text-xs text-muted">Formatos nos últimos 60 dias: quanto o mercado usa × o retorno mediano</p>
+            <p className="mb-4 text-xs text-muted">Formatos nos últimos 60 dias: quanto o mercado usa × o retorno médio</p>
             <div className="space-y-3.5">
               {mk.por_formato.map((f) => (
                 <div key={f.formato}>
@@ -210,12 +210,12 @@ export function RadarMercado({ r, aoAbrirMarca, aoAbrirPost }: {
       {mk && mk.em_alta.length > 0 && (
         <div>
           <p className="text-sm font-medium">Em alta nas últimas 2 semanas</p>
-          <p className="mb-3 text-xs text-muted">Posts que mais superaram a mediana da própria conta</p>
+          <p className="mb-3 text-xs text-muted">Posts que mais superaram a média da própria conta</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             {mk.em_alta.map((p) => (
               <button key={p.id} onClick={() => aoAbrirPost(p)} className="group text-left">
                 <span className="relative block aspect-[9/16] overflow-hidden rounded-xl bg-surface-secondary">
-                  <img src={urlThumb({ plataforma: p.plataforma, conta: p.conta, id: p.id } as never)} alt="" loading="lazy"
+                  <img src={urlCapa(p.plataforma, p.conta, p.id)} alt="" loading="lazy"
                     className={`size-full transition-transform duration-500 group-hover:scale-[1.04] ${p.formato === 'carrossel' || p.formato === 'foto' ? 'object-contain' : 'object-cover'}`} />
                   <span className="num absolute top-1.5 left-1.5 rounded-full bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                     {p.vezes >= 100 ? '100×+' : `${fmtDec(p.vezes, 1)}×`}
@@ -244,7 +244,7 @@ export function EvolucaoMarca({ m }: { m: MarcaRadar }) {
           <span className="text-right"><span className="num block text-lg font-semibold">{m.posts}</span><span className="text-[11px] text-muted">posts/30d</span> <Delta v={m.posts_delta} /></span></div>
       </div>
       <div className="bg-[var(--surface)] p-4">
-        <p className="text-xs text-muted">Alcance mediano por mês</p>
+        <p className="text-xs text-muted">Média de alcance por mês</p>
         <div className="mt-2 flex h-10 items-end gap-1.5">
           {m.por_mes.map((x) => (
             <div key={x.mes} className="flex h-full flex-1 flex-col items-center justify-end gap-0.5" title={`${nomeMes(x.mes)}: ${x.views !== null ? fmtNum(x.views) + ' views' : 'sem views'} · ${x.posts} posts`}>

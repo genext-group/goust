@@ -126,6 +126,9 @@ export const api = {
 }
 
 export const urlThumb = (v: Video) => v.url_thumb
+/** Capa de um post a partir de plataforma, conta e id (para listas que não trazem o objeto Video completo). */
+export const urlCapa = (plataforma: Plataforma, conta: string, id: string) =>
+  `/thumb/${plataforma}/${encodeURIComponent(conta)}/${encodeURIComponent(id)}`
 /** Download do vídeo: o token vai na URL porque a navegação do navegador não leva o cabeçalho. */
 export async function baixarArquivo(v: Video) {
   const token = obterToken ? await obterToken() : null
