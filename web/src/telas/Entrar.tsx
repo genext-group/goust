@@ -94,7 +94,8 @@ export function TelaEntrar() {
           </div>
 
           <h1 className="titulo-display mt-6 text-[38px] leading-[1.05] font-semibold tracking-tight sm:text-[46px]">
-            Veja o que o seu mercado faz.<br /><span className="text-[var(--sinal-b)]">Sem ser visto.</span>
+            <span className="block [text-wrap:balance]">Veja o que o seu mercado faz.</span>
+            <span className="block text-[var(--sinal-b)]">Sem ser visto.</span>
           </h1>
           <p className="mt-4 max-w-xl text-[17px] leading-relaxed text-muted">
             A Goust acompanha todos os dias os perfis que importam para você no Instagram e no TikTok, entende o que
