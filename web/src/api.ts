@@ -617,3 +617,30 @@ export type MidiaPost = { tipo: 'video'; video: string } | { tipo: 'imagens'; im
 /** Mídia do post para o visualizador próprio (Instagram): vídeo direto ou imagens do carrossel/foto. */
 export const midiaPost = (v: Pick<Video, 'plataforma' | 'conta' | 'id'>) =>
   req<MidiaPost>(`/api/midia/${v.plataforma}/${encodeURIComponent(v.conta)}/${encodeURIComponent(v.id)}`)
+
+// ---------------------------------------------------------------- radar do mercado (números, sem IA)
+
+export type Momento = 'acelerando' | 'estavel' | 'esfriando' | 'retomou' | 'parado'
+export type FormatoPost = 'reel' | 'carrossel' | 'foto' | 'tiktok'
+export interface MarcaRadar {
+  chave: string; nome: string; papel: 'proprio' | 'concorrente' | 'referencia'
+  contas: { plataforma: Plataforma; conta: string; seguidores: number | null; foto: string | null }[]
+  seguidores: number | null; seguidores_delta: number | null; seguidores_desde: string | null
+  serie_seguidores: { dia: string; v: number }[]
+  posts: number; posts_antes: number; posts_delta: number | null; semanas: number[]
+  views_mediana: number | null; views_delta: number | null; engajamento: number | null; interacoes: number | null
+  momento: Momento | null
+  melhor: { plataforma: Plataforma; conta: string; id: string; views: number; formato: FormatoPost } | null
+  por_mes: { mes: string; posts: number; views: number | null }[]
+}
+export interface Radar {
+  dias: number; historico_seguidores_desde: string | null
+  marcas: MarcaRadar[]
+  mercado: {
+    semanas: Record<FormatoPost, number>[]; inicio_semanas: string
+    por_formato: { formato: FormatoPost; posts: number; parcela: number; views: number | null; engajamento: number | null; interacoes: number | null }[]
+    em_alta: { plataforma: Plataforma; conta: string; marca: string; id: string; views: number; formato: FormatoPost; vezes: number; publicado: string }[]
+    posts_30: number; posts_30_antes: number
+  } | null
+}
+export const radarMercado = (dias = 30) => req<Radar>(`/api/mercado/radar?dias=${dias}`)

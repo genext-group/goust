@@ -2,7 +2,7 @@ import { Button, Label, ListBox, Select, ToggleButton, ToggleButtonGroup, toast 
 import { ArrowsRotateRight, CircleExclamation, Comments, Sparkles } from '@gravity-ui/icons'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  api, ia, type Conta, type Plataforma, type RegistroPanorama, type RegistroRelatorio, type ResumoRelatorio,
+  api, ia, radarMercado, type Conta, type Radar as RadarDados, type Plataforma, type RegistroPanorama, type RegistroRelatorio, type ResumoRelatorio,
   type StatusIA, type TarefaIA, type Video,
 } from '../api'
 import { AvatarConta } from '../components/Avatar'
@@ -12,6 +12,7 @@ import { PanoramaMercado } from '../components/ia/PanoramaMercado'
 import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
 import { IconePlataforma, SeloPlataforma } from '../components/Plataforma'
 import { ComparativoMarca } from '../components/ia/ComparativoMarca'
+import { EvolucaoMarca, RadarMercado } from '../components/ia/RadarMercado'
 import { fmtDec, fmtRelativo } from '../formato'
 import { aura } from '../aura'
 import { Orbita, Radar } from '../components/Animacoes'
@@ -38,6 +39,8 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
   const [versaoMercado, setVersaoMercado] = useState<string | undefined>()
   const [votos, setVotos] = useState<Record<string, number>>({})
   const [videoAberto, setVideoAberto] = useState<Video | null>(null)
+  const [radar, setRadar] = useState<RadarDados | null>(null)
+  useEffect(() => { radarMercado().then(setRadar).catch(() => {}) }, [versaoBiblioteca])
   const [chatAberto, setChatAberto] = useState(false)
   const [conjunta, setConjunta] = useState(false)
 
@@ -239,6 +242,11 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
                 </div>
               )}
 
+              {conta && (() => {
+                const m = radar?.marcas.find((x) => x.contas.some((c) => c.plataforma === conta.plataforma && c.conta === conta.conta))
+                return m && (m.posts > 0 || m.posts_antes > 0) ? <EvolucaoMarca m={m} /> : null
+              })()}
+
               {ehMarca && (
                 <div className="flex w-fit rounded-full bg-surface-secondary/70 p-1 text-sm" role="tablist">
                   <button role="tab" aria-selected={verConjunta} onClick={() => setConjunta(true)}
@@ -279,6 +287,17 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
 
         {visao === 'mercado' && (
           <div className="space-y-4">
+            {radar ? (
+              <RadarMercado r={radar}
+                aoAbrirMarca={(m) => {
+                  const c = contas.find((x) => x.plataforma === m.contas[0].plataforma && x.conta === m.contas[0].conta)
+                  if (!c) return
+                  setVisao('perfis'); setSelecionada(chave(c)); setVersao(undefined); setConjunta(m.contas.length > 1)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+                aoAbrirPost={(p) => { const v = videos.find((x) => x.plataforma === p.plataforma && x.id === p.id); if (v) setVideoAberto(v) }} />
+            ) : <div className="carregando h-64 rounded-3xl" />}
+            <div className="flex items-center gap-3 pt-4"><span className="h-px flex-1 bg-[var(--border)]" /><span className="text-xs text-muted">Leitura da IA</span><span className="h-px flex-1 bg-[var(--border)]" /></div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {panorama && panorama.versoes.length > 1 && (
                 <Select className="w-48" value={panorama.panorama?.versao ?? null} onChange={(v) => setVersaoMercado(String(v))} aria-label="Versão">

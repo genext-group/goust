@@ -303,6 +303,14 @@ def api_biblioteca_verificar():
     return jsonify(perfis=n)
 
 
+@app.get("/api/mercado/radar")
+@protegido
+def api_radar_mercado():
+    """Números do mercado calculados dos posts coletados (sem IA): ranking, ritmo, formatos e posts em alta."""
+    from baixador.inteligencia import numeros
+    return jsonify(numeros.radar(min(int(request.args.get("dias", 30)), 90)))
+
+
 @app.post("/api/marcas/unir")
 @protegido
 def api_unir_marca():
