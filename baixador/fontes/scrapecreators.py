@@ -83,6 +83,8 @@ def _usuarios(no, plataforma, saida):
             seg = no.get("follower_count") or no.get("followerCount") or (no.get("edge_followed_by") or {}).get("count")
             saida.append({"plataforma": plataforma, "conta": handle.lower(), "nome": no.get("full_name") or no.get("nickname"),
                           "foto": foto, "seguidores": seg,
+                          "bio": (no.get("biography") or no.get("signature") or "")[:300] or None,
+                          "privado": bool(no.get("is_private") or no.get("secret")),
                           "verificado": bool(no.get("is_verified") or no.get("verified") or no.get("custom_verify"))})
             return
         for v in no.values():
@@ -102,6 +104,19 @@ def buscar_perfis(plataforma, termo):
             vistos.add(u["conta"])
             unicos.append(u)
     return unicos[:8]
+
+
+def buscar_nicho(plataforma, termo, limite=12):
+    """Busca por assunto (não por nome): perfis com bio e seguidores, para achar marcas parecidas."""
+    caminho = "/v1/instagram/search/profiles" if plataforma == "instagram" else "/v1/tiktok/search/users"
+    saida = []
+    _usuarios(_get(caminho, query=termo), plataforma, saida)
+    vistos, unicos = set(), []
+    for u in saida:
+        if u["conta"] not in vistos and not u["privado"]:
+            vistos.add(u["conta"])
+            unicos.append(u)
+    return unicos[:limite]
 
 
 # ---------------------------------------------------------------- Instagram

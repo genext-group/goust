@@ -11,6 +11,9 @@ export interface Conta {
   /** o que o usuário vê no perfil (vai para a IA antes da análise) */
   aspectos?: string[]
   nota?: string | null
+  /** contas da mesma marca em outras plataformas compartilham marca_id (cartão, papel e análise conjunta) */
+  marca_id?: number | null
+  marca?: string | null
   nome: string
   plataforma: Plataforma
   conta: string
@@ -251,7 +254,7 @@ export interface AnaliseVideo {
 
 export interface TarefaIA {
   id: number
-  tipo: 'perfil' | 'mercado' | 'estrategia' | 'imagem' | 'estilo' | 'calendario' | 'roteiro' | 'inteligencia'
+  tipo: 'perfil' | 'mercado' | 'estrategia' | 'imagem' | 'estilo' | 'calendario' | 'roteiro' | 'inteligencia' | 'marca'
   params?: Record<string, unknown>
   resultado?: Record<string, unknown> | null
   plataforma: Plataforma | null
@@ -462,8 +465,8 @@ export const central = {
   atualizar: () => req<TarefaIA>('/api/inicio/atualizar', { method: 'POST' }),
   avaliar: (id: number, estado: 'interessante' | 'irrelevante' | 'oculto' | 'feito') => req(`/api/insights/${id}`, { body: { estado } }),
   reclassificar: (id: number) => req<Conta[]>(`/api/insights/${id}/reclassificar`, { method: 'POST' }),
-  descoberta: (id: number, acao: 'adicionar' | 'ignorar' | 'ocultar' | 'interessante', papel?: 'concorrente' | 'referencia') =>
-    req<{ ok: boolean; contas: Conta[] | null }>(`/api/descobertas/${id}`, { body: { acao, papel } }),
+  descoberta: (id: number, acao: 'adicionar' | 'ignorar' | 'ocultar' | 'interessante', papel?: 'concorrente' | 'referencia', extra?: { aspectos?: string[]; nota?: string }) =>
+    req<{ ok: boolean; contas: Conta[] | null }>(`/api/descobertas/${id}`, { body: { acao, papel, ...extra } }),
   ideia: (tema: string, contexto = '') => req<IdeiaGerada[]>('/api/inicio/ideia', { body: { tema, contexto } }),
 }
 
@@ -566,4 +569,34 @@ export const notas = {
   organizar: (forcar = false) => req<OrganizacaoNotas>('/api/notas/organizar', { body: { forcar } }),
   virarConteudo: (ideia: IdeiaDasNotas, roteiro: boolean, data?: string | null) =>
     req<{ conteudo: Conteudo; tarefa: TarefaIA | null }>('/api/notas/virar-conteudo', { body: { ideia, roteiro, data } }),
+}
+
+// ---------------------------------------------------------------- marcas e parecidos
+
+export interface Parecido {
+  id: number | null; plataforma: Plataforma; conta: string; nome: string | null; foto: string | null; seguidores: number | null
+  bio: string | null; tipo: 'concorrente' | 'referencia'; semelhanca: number; parecido_com: string[]; motivo: string; fonte: 'busca' | 'web'
+}
+export interface ComparativoMarca {
+  resumo: string; consistencia: number; leitura_consistencia: string; estrategia_multiplataforma: string
+  diferencas: { dimensao: string; por_plataforma: { plataforma: Plataforma; como_e: string }[]; leitura: string; diferente: boolean }[]
+  funciona_em_cada: { plataforma: Plataforma; itens: string[] }[]
+  plataforma_mais_forte: Plataforma | 'equilibrado'; por_que_mais_forte: string; para_voce: string[]
+}
+export interface RegistroComparativo {
+  versao: string; gerado: string; marca: string; papel: string
+  contas: { plataforma: Plataforma; conta: string; relatorio: string; metricas: Metricas }[]
+  comparativo: ComparativoMarca
+}
+
+export const marcas = {
+  unir: (contas: Pick<Conta, 'plataforma' | 'conta'>[], nome?: string) => req<Conta[]>('/api/marcas/unir', { body: { contas, nome } }),
+  separar: (c: Pick<Conta, 'plataforma' | 'conta'>) => req<Conta[]>('/api/marcas/separar', { body: c }),
+  renomear: (id: number, nome: string) => req<Conta[]>(`/api/marcas/${id}`, { method: 'PUT', body: { nome } }),
+  comparativo: (id: number) => req<{ comparativo: RegistroComparativo | null; desatualizado: boolean; faltam: string[]; marca: string }>(`/api/marcas/${id}/comparativo`),
+  gerarComparativo: (id: number) => req<TarefaIA>(`/api/marcas/${id}/comparativo`, { body: {} }),
+  removerMarca: (c: Pick<Conta, 'plataforma' | 'conta'>) =>
+    req<Conta[]>(`/api/contas/${c.plataforma}/${encodeURIComponent(c.conta)}?marca=1`, { method: 'DELETE' }),
+  parecidos: (p: { chaves?: string[]; papel?: 'negocio' | 'concorrente' | 'referencia'; forcar?: boolean }) =>
+    req<{ perfil_ideal: string | null; itens: Parecido[] }>('/api/parecidos', { body: p }),
 }

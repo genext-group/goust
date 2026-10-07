@@ -307,6 +307,26 @@ create table if not exists lote_pedidos (
 create index if not exists lote_pedidos_estado on lote_pedidos (estado, lote_id);
 create index if not exists lote_pedidos_usuario on lote_pedidos (usuario_id, estado);
 
+-- marcas: contas da mesma marca em plataformas diferentes viram uma unidade (cartão, papel, análise conjunta)
+create table if not exists marcas (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  nome text not null,
+  criado_em timestamptz not null default now()
+);
+alter table acompanhamentos add column if not exists marca_id bigint references marcas(id) on delete set null;
+alter table acompanhamentos add column if not exists agrupar boolean not null default true;
+
+create table if not exists analises_marca (
+  id bigserial primary key,
+  usuario_id text not null references usuarios(id) on update cascade on delete cascade,
+  marca_id bigint not null references marcas(id) on delete cascade,
+  versao text not null,
+  gerado_em timestamptz not null default now(),
+  dados jsonb not null
+);
+create index if not exists analises_marca_idx on analises_marca (usuario_id, marca_id, gerado_em desc);
+
 -- caderno de ideias: anotações do dia a dia que a IA ajuda a virar conteúdo
 create table if not exists notas (
   id bigserial primary key,

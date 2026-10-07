@@ -10,7 +10,8 @@ import { Chat } from '../components/ia/Chat'
 import { ContextoIA } from '../components/ia/Compartilhado'
 import { PanoramaMercado } from '../components/ia/PanoramaMercado'
 import { RelatorioPerfil } from '../components/ia/RelatorioPerfil'
-import { SeloPlataforma } from '../components/Plataforma'
+import { IconePlataforma, SeloPlataforma } from '../components/Plataforma'
+import { ComparativoMarca } from '../components/ia/ComparativoMarca'
 import { fmtDec, fmtRelativo } from '../formato'
 import { aura } from '../aura'
 import { Orbita, Radar } from '../components/Animacoes'
@@ -38,6 +39,7 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
   const [votos, setVotos] = useState<Record<string, number>>({})
   const [videoAberto, setVideoAberto] = useState<Video | null>(null)
   const [chatAberto, setChatAberto] = useState(false)
+  const [conjunta, setConjunta] = useState(false)
 
   const carregarStatus = useCallback(() => ia.status().then(setStatus).catch(() => {}), [])
   const [pronto, setPronto] = useState({ resumos: false, videos: false })
@@ -59,9 +61,18 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
     || Number(!!resumos[chave(b)]) - Number(!!resumos[chave(a)]) || (qtdPorConta.get(chave(b)) ?? 0) - (qtdPorConta.get(chave(a)) ?? 0)),
   [contas, resumos, qtdPorConta])
   // só escolhe/mostra depois de ordenar com tudo carregado (senão a lista reordena e pisca)
-  useEffect(() => { if (listaPronta && !selecionada && ordenadas.length) setSelecionada(chave(ordenadas[0])) }, [listaPronta, ordenadas, selecionada])
+  useEffect(() => { if (listaPronta && !selecionada && ordenadas.length) { setSelecionada(chave(ordenadas[0])); setConjunta(!!ordenadas[0].marca_id) } }, [listaPronta, ordenadas, selecionada])
 
   const conta = contas.find((c) => chave(c) === selecionada)
+  // marcas: contas da mesma marca em plataformas diferentes viram um item só, com visão conjunta
+  const grupos = useMemo(() => {
+    const m = new Map<string, Conta[]>()
+    ordenadas.forEach((c) => { const k = c.marca_id ? `m${c.marca_id}` : chave(c); m.set(k, [...(m.get(k) ?? []), c]) })
+    return [...m.values()].map((cs) => cs.sort((a, b) => b.plataforma.localeCompare(a.plataforma)))
+  }, [ordenadas])
+  const grupo = grupos.find((g) => g.some((c) => chave(c) === selecionada))
+  const ehMarca = !!grupo && grupo.length > 1 && !!grupo[0].marca_id
+  const verConjunta = ehMarca && conjunta
 
   const carregarRelatorio = useCallback(() => {
     if (!conta) return
@@ -165,26 +176,31 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
               {listaPronta && !ordenadas.length && (
                 <p className="rounded-2xl bg-surface-secondary/50 p-4 text-sm text-muted">Acompanhe concorrentes ou referências em Concorrentes para ver a análise de cada um aqui.</p>
               )}
-              {listaPronta && ordenadas.map((c, i) => {
-                const r = resumos[chave(c)]
-                const titulo = i === 0 || (ordenadas[i - 1].papel === 'referencia') !== (c.papel === 'referencia')
+              {listaPronta && grupos.map((g, i) => {
+                const c = g[0]
+                const marca = g.length > 1 && !!c.marca_id
+                const rs = g.map((x) => resumos[chave(x)]).filter(Boolean)
+                const nota = rs.length ? rs.reduce((s2, r) => s2 + notaMedia(r!.notas), 0) / rs.length : null
+                const titulo = i === 0 || (grupos[i - 1][0].papel === 'referencia') !== (c.papel === 'referencia')
                   ? (c.papel === 'referencia' ? 'Referências' : 'Concorrentes') : null
-                const t = tarefaDe(c)
-                const qtd = qtdPorConta.get(chave(c)) ?? 0
-                const ativa = chave(c) === selecionada
+                const t = g.map(tarefaDe).find(Boolean)
+                const qtd = g.reduce((s2, x) => s2 + (qtdPorConta.get(chave(x)) ?? 0), 0)
+                const ativa = g.some((x) => chave(x) === selecionada)
+                const ultimo = rs.map((r) => r!.gerado).sort().at(-1)
                 return (
                   <Fragment key={chave(c)}>
                   {titulo && <p className={`px-2.5 pb-1 text-[11px] font-medium tracking-wide text-muted uppercase ${i ? 'pt-4' : ''}`}>{titulo}</p>}
-                  <button style={{ '--i': i } as React.CSSProperties} onClick={() => { setSelecionada(chave(c)); setVersao(undefined) }}
+                  <button style={{ '--i': i } as React.CSSProperties} onClick={() => { setSelecionada(chave(c)); setVersao(undefined); setConjunta(marca) }}
                     className={`flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition-colors ${ativa ? 'bg-surface shadow-sm' : 'hover:bg-surface/60'}`}>
-                    <AvatarConta conta={c} tamanho="sm" />
+                    <div className="flex shrink-0 -space-x-2.5">{g.map((x) => <div key={x.plataforma} className="rounded-full ring-2 ring-[var(--background)]"><AvatarConta conta={x} tamanho="sm" /></div>)}</div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{c.perfil?.nome || c.nome}</p>
+                      <p className="truncate text-sm font-medium">{marca ? c.marca : c.perfil?.nome || c.nome}</p>
                       <p className="truncate text-xs text-muted">
-                        {t ? <span className="text-accent">{t.status === 'rodando' ? 'analisando…' : 'na fila'}</span> : r ? `analisado ${fmtRelativo(r.gerado)}` : qtd ? `${qtd} posts · ainda sem análise` : 'sem posts ainda'}
+                        {t ? <span className="text-accent">{t.status === 'rodando' ? 'analisando…' : 'na fila'}</span>
+                          : ultimo ? `${marca ? `${rs.length} de ${g.length} plataformas · ` : ''}analisado ${fmtRelativo(ultimo)}` : qtd ? `${qtd} posts · ainda sem análise` : 'sem posts ainda'}
                       </p>
                     </div>
-                    {r && <span className="num text-sm font-semibold">{fmtDec(notaMedia(r.notas), 1)}</span>}
+                    {nota !== null && <span className="num text-sm font-semibold">{fmtDec(nota, 1)}</span>}
                   </button>
                   </Fragment>
                 )
@@ -197,11 +213,11 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
                   style={aura(`${conta.plataforma}/${conta.conta}`)}>
                   <div className="rounded-full ring-4 ring-white/20"><AvatarConta conta={conta} tamanho="lg" /></div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-white/70">{conta.papel === 'proprio' ? 'Seu perfil' : 'Concorrente'}</p>
-                    <h2 className="titulo-display truncate text-3xl font-semibold">{conta.perfil?.nome || conta.nome}</h2>
-                    <div className="flex items-center gap-2 text-sm text-white/80"><SeloPlataforma plataforma={conta.plataforma} /> @{conta.conta}</div>
+                    <p className="text-xs text-white/70">{conta.papel === 'proprio' ? 'Seu perfil' : conta.papel === 'referencia' ? 'Referência' : 'Concorrente'}{ehMarca ? ` · marca em ${grupo!.length} plataformas` : ''}</p>
+                    <h2 className="titulo-display truncate text-3xl font-semibold">{ehMarca ? conta.marca : conta.perfil?.nome || conta.nome}</h2>
+                    {!verConjunta && <div className="flex items-center gap-2 text-sm text-white/80"><SeloPlataforma plataforma={conta.plataforma} /> @{conta.conta}</div>}
                   </div>
-                  {relatorio && relatorio.versoes.length > 1 && (
+                  {!verConjunta && relatorio && relatorio.versoes.length > 1 && (
                     <Select className="w-48" value={relatorio.relatorio?.versao ?? null} onChange={(v) => setVersao(String(v))} aria-label="Versão">
                       <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                       <Select.Popover>
@@ -215,7 +231,7 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
                       </Select.Popover>
                     </Select>
                   )}
-                  {relatorio?.relatorio && (
+                  {!verConjunta && relatorio?.relatorio && (
                     <Button variant="tertiary" isDisabled={!!tarefaDe(conta)} onPress={() => analisar(conta)}>
                       <ArrowsRotateRight /> Reanalisar
                     </Button>
@@ -223,9 +239,28 @@ export function TelaInteligencia({ contas, versaoBiblioteca }: { contas: Conta[]
                 </div>
               )}
 
-              {conta && tarefaDe(conta) && <Progresso t={tarefaDe(conta)!} />}
+              {ehMarca && (
+                <div className="flex w-fit rounded-full bg-surface-secondary/70 p-1 text-sm" role="tablist">
+                  <button role="tab" aria-selected={verConjunta} onClick={() => setConjunta(true)}
+                    className={`rounded-full px-4 py-1.5 transition-all ${verConjunta ? 'bg-surface font-medium shadow-sm' : 'text-muted hover:text-foreground'}`}>Visão conjunta</button>
+                  {grupo!.map((x) => (
+                    <button key={x.plataforma} role="tab" aria-selected={!verConjunta && chave(x) === selecionada}
+                      onClick={() => { setConjunta(false); setSelecionada(chave(x)); setVersao(undefined) }}
+                      className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 transition-all ${!verConjunta && chave(x) === selecionada ? 'bg-surface font-medium shadow-sm' : 'text-muted hover:text-foreground'}`}>
+                      <IconePlataforma plataforma={x.plataforma} className="size-3.5" />{x.plataforma === 'tiktok' ? 'TikTok' : 'Instagram'}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-              {!conta ? null : relatorio === null ? (
+              {verConjunta && grupo && (
+                <ComparativoMarca marcaId={grupo[0].marca_id!} contas={grupo} tarefas={tarefas}
+                  aoAnalisar={analisar} aoPedir={async () => setTarefas(await ia.tarefas())} />
+              )}
+
+              {!verConjunta && conta && tarefaDe(conta) && <Progresso t={tarefaDe(conta)!} />}
+
+              {!conta || verConjunta ? null : relatorio === null ? (
                 <div className="space-y-4"><div className="carregando h-48 rounded-3xl" /><div className="carregando h-64 rounded-3xl" /></div>
               ) : relatorio.relatorio ? (
                 <RelatorioPerfil r={relatorio.relatorio} />

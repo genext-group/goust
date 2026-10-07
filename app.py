@@ -95,9 +95,15 @@ def api_eu():
 # ---------------------------------------------------------------- contas
 
 def ler_contas():
-    """Contas que o usuário atual acompanha (as dele e as dos concorrentes)."""
-    return db.todos("""select c.plataforma, c.conta, coalesce(a.nome, c.nome, c.conta) as nome, a.papel, a.aspectos, a.nota
-                       from acompanhamentos a join contas c on c.id = a.conta_id
+    """Contas que o usuário atual acompanha (as dele e as dos concorrentes), com a marca de cada uma."""
+    from baixador import marcas
+    try:
+        marcas.sincronizar()
+    except Exception:
+        traceback.print_exc()
+    return db.todos("""select c.plataforma, c.conta, coalesce(a.nome, c.nome, c.conta) as nome, a.papel, a.aspectos, a.nota,
+                              a.marca_id, m.nome as marca
+                       from acompanhamentos a join contas c on c.id = a.conta_id left join marcas m on m.id = a.marca_id
                        where a.usuario_id = %s order by a.criado_em""", contexto.usuario())
 
 
@@ -194,13 +200,17 @@ def api_contexto_conta(plataforma, conta):
     Com reanalisar=true, a análise da IA é refeita já com esse contexto."""
     d = request.json or {}
     papel = d.get("papel") if d.get("papel") in ("concorrente", "referencia") else "concorrente"
+    from baixador import marcas
+    alvos = [{"plataforma": plataforma, "conta": conta}] + marcas.irmas(plataforma, conta)
     try:
-        tarefas.definir_contexto(plataforma, conta, papel, d.get("aspectos") or [], d.get("nota"))
+        for x in alvos:
+            tarefas.definir_contexto(x["plataforma"], x["conta"], papel, d.get("aspectos") or [], d.get("nota"))
     except tarefas.PerfilProprio as e:
         return jsonify(erro=str(e), codigo="perfil_proprio"), 409
     tarefa = None
     if d.get("reanalisar") and ia_cliente.configurada():
-        tarefa = ia_tarefas.enfileirar("perfil", plataforma, conta)
+        for x in alvos:
+            tarefa = ia_tarefas.enfileirar("perfil", x["plataforma"], x["conta"])
     return jsonify(contas=contas_completas(), tarefa=tarefa)
 
 
@@ -221,8 +231,10 @@ def api_papel_conta(plataforma, conta):
         tarefas.validar_papel(contexto.usuario(), plataforma, conta, papel)
     except tarefas.PerfilProprio as e:
         return jsonify(erro=str(e), codigo="perfil_proprio"), 409
-    db.executar("""update acompanhamentos set papel = %s where usuario_id = %s and conta_id =
-                   (select id from contas where plataforma = %s and conta = %s)""", papel, contexto.usuario(), plataforma, conta)
+    from baixador import marcas
+    for x in [{"plataforma": plataforma, "conta": conta}] + marcas.irmas(plataforma, conta):
+        db.executar("""update acompanhamentos set papel = %s where usuario_id = %s and conta_id =
+                       (select id from contas where plataforma = %s and conta = %s)""", papel, contexto.usuario(), x["plataforma"], x["conta"])
     if (atual and atual["papel"] == "proprio") != (papel == "proprio"):
         from baixador.inteligencia import insights
         insights.perfil_mudou()
@@ -237,9 +249,72 @@ def api_remover_conta(plataforma, conta):
     if era_proprio:
         from baixador.inteligencia import insights
         insights.perfil_mudou()
-    db.executar("""delete from acompanhamentos where usuario_id = %s and conta_id =
-                   (select id from contas where plataforma = %s and conta = %s)""", contexto.usuario(), plataforma, conta)
+    from baixador import marcas
+    alvos = [{"plataforma": plataforma, "conta": conta}] + (marcas.irmas(plataforma, conta) if request.args.get("marca") else [])
+    for x in alvos:
+        db.executar("""delete from acompanhamentos where usuario_id = %s and conta_id =
+                       (select id from contas where plataforma = %s and conta = %s)""", contexto.usuario(), x["plataforma"], x["conta"])
+    marcas._limpar_vazias(contexto.usuario())
     return jsonify(contas_completas())
+
+
+@app.post("/api/parecidos")
+@protegido
+def api_parecidos():
+    """Marcas parecidas com as que o usuário já acompanha (sementes escolhidas ou todos os concorrentes)."""
+    from baixador import busca_perfis
+    from baixador.inteligencia import parecidos
+    d = request.json or {}
+    try:
+        r = parecidos.buscar(d.get("chaves") or [], d.get("papel"), bool(d.get("forcar")))
+    except ValueError as e:
+        return jsonify(erro=str(e)), 400
+    for x in r["itens"]:
+        x["foto"] = busca_perfis._foto(x.get("foto")) if x.get("foto") and not str(x["foto"]).startswith("/") else x.get("foto")
+    eventos.registrar("ia:parecidos", {"sementes": len(d.get("chaves") or []), "achados": len(r["itens"])})
+    return jsonify(r)
+
+
+@app.post("/api/marcas/unir")
+@protegido
+def api_unir_marca():
+    from baixador import marcas
+    d = request.json or {}
+    try:
+        marcas.unir(d.get("contas") or [], d.get("nome"))
+    except ValueError as e:
+        return jsonify(erro=str(e)), 400
+    return jsonify(contas_completas())
+
+
+@app.post("/api/marcas/separar")
+@protegido
+def api_separar_marca():
+    from baixador import marcas
+    d = request.json or {}
+    marcas.separar(d.get("plataforma"), d.get("conta"))
+    return jsonify(contas_completas())
+
+
+@app.put("/api/marcas/<int:mid>")
+@protegido
+def api_renomear_marca(mid):
+    from baixador import marcas
+    marcas.renomear(mid, (request.json or {}).get("nome"))
+    return jsonify(contas_completas())
+
+
+@app.get("/api/marcas/<int:mid>/comparativo")
+@protegido
+def api_comparativo_marca(mid):
+    from baixador.ia import marca as ia_marca
+    return jsonify(ia_marca.obter(mid))
+
+
+@app.post("/api/marcas/<int:mid>/comparativo")
+@protegido
+def api_gerar_comparativo_marca(mid):
+    return jsonify(ia_tarefas.enfileirar("marca", params={"alvo": mid}))
 
 
 @app.get("/avatar/<plataforma>/<arquivo>")

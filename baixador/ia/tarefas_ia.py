@@ -33,7 +33,7 @@ def listar():
     return [{**r["dados"], "id": r["id"]} for r in linhas]
 
 
-UNICAS = ("perfil", "mercado", "estrategia", "calendario", "estilo", "roteiro", "inteligencia")  # não duplicam na fila
+UNICAS = ("perfil", "mercado", "estrategia", "calendario", "estilo", "roteiro", "inteligencia", "marca")  # não duplicam na fila
 
 
 def enfileirar(tipo, plataforma=None, conta=None, params=None):
@@ -86,6 +86,9 @@ def executar(tid, prazo=None):
         elif t["tipo"] == "inteligencia":
             from ..inteligencia import rotina
             t["resultado"] = rotina.rotina(progresso, em_lote=bool(t["params"].get("lote")))
+        elif t["tipo"] == "marca":
+            from . import marca
+            t["resultado"] = {"versao": marca.comparar(t["params"]["alvo"], progresso)["versao"]}
         elif t["tipo"] == "roteiro":
             conteudo.gerar_roteiro(t["params"]["alvo"], t["params"].get("pedido", ""), progresso)
         else:

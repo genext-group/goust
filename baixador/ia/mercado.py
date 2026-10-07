@@ -73,15 +73,15 @@ def obter(versao=None):
 def gerar(progresso=lambda etapa, feito, total: None):
     blocos, perfis = [], []
     vinculos = {f"{v['plataforma']}/{v['conta']}": v for v in db.todos(
-        """select c.plataforma, c.conta, a.papel, a.aspectos, a.nota from acompanhamentos a
-           join contas c on c.id = a.conta_id where a.usuario_id = %s""", ctx.usuario())}
+        """select c.plataforma, c.conta, a.papel, a.aspectos, a.nota, m.nome as marca from acompanhamentos a
+           join contas c on c.id = a.conta_id left join marcas m on m.id = a.marca_id where a.usuario_id = %s""", ctx.usuario())}
     for chave in perfil.resumo_todos():
         plataforma, conta = chave.split("/", 1)
         r = perfil.obter(plataforma, conta)
         rel = r["relatorio"]
         perfis.append(chave)
         blocos.append(json.dumps({
-            "perfil": chave, "papel": (vinculos.get(chave) or {}).get("papel", "concorrente"),
+            "perfil": chave, "marca": (vinculos.get(chave) or {}).get("marca"), "papel": (vinculos.get(chave) or {}).get("papel", "concorrente"),
             "contexto_do_usuario": {k: (vinculos.get(chave) or {}).get(k) for k in ("aspectos", "nota")},
             "metricas": r["metricas"], "gerado": r["gerado"][:10],
             **{k: rel[k] for k in ("resumo_executivo", "posicionamento", "mensagens_centrais", "dores_e_desejos",
@@ -95,7 +95,8 @@ def gerar(progresso=lambda etapa, feito, total: None):
                + "Cada um traz 'papel': 'concorrente' disputa o mesmo cliente (mapa competitivo, temas saturados e "
                "espaços em branco vêm SÓ dos concorrentes); 'referencia' é inspiração, talvez de outro mercado "
                "(use para recomendar o que adaptar, nunca como rival); 'proprio' é o usuário. "
-               "'contexto_do_usuario' diz o que o usuário vê em cada perfil.\n" + "\n\n".join(blocos))
+               "'contexto_do_usuario' diz o que o usuário vê em cada perfil. Perfis com o mesmo 'marca' são a MESMA marca "
+               "em plataformas diferentes: trate como um player só (não conte duas vezes).\n" + "\n\n".join(blocos))
     panorama = cliente.estruturado("relatorio", INSTRUCOES, entrada, Panorama, esforco="medium")
     agora = datetime.now()
     resultado = {

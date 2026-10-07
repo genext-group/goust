@@ -42,6 +42,7 @@ const NOME_IA: Record<TarefaIA['tipo'], (t: TarefaIA) => string> = {
   calendario: () => 'Montando o calendário',
   roteiro: () => 'Escrevendo o roteiro',
   inteligencia: () => 'Atualizando sua central',
+  marca: () => 'Comparando as plataformas da marca',
 }
 const PRONTO_IA: Record<TarefaIA['tipo'], (t: TarefaIA) => string> = {
   perfil: (t) => `Análise de @${t.conta} pronta`,
@@ -52,10 +53,11 @@ const PRONTO_IA: Record<TarefaIA['tipo'], (t: TarefaIA) => string> = {
   calendario: () => 'Calendário pronto',
   roteiro: () => 'Roteiro pronto',
   inteligencia: () => 'Central atualizada',
+  marca: () => 'Comparativo entre plataformas pronto',
 }
-const tipoIA = (t: TarefaIA): TipoProcesso => (['perfil', 'mercado', 'estilo'].includes(t.tipo) ? 'analise' : 'geracao')
+const tipoIA = (t: TarefaIA): TipoProcesso => (['perfil', 'mercado', 'estilo', 'marca'].includes(t.tipo) ? 'analise' : 'geracao')
 const destinoIA = (t: TarefaIA): Destino =>
-  t.tipo === 'perfil' || t.tipo === 'mercado' ? 'inteligencia' : t.tipo === 'estrategia' ? 'meuperfil' : 'criar'
+  t.tipo === 'perfil' || t.tipo === 'mercado' || t.tipo === 'marca' ? 'inteligencia' : t.tipo === 'estrategia' ? 'meuperfil' : 'criar'
 
 export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => void): Processo[] {
   const dl: Processo[] = downloads.filter((t) => t.opcoes.modo !== 'link').map((t) => {
