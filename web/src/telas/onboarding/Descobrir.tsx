@@ -1,11 +1,12 @@
-import { Button, Input, toast } from '@heroui/react'
-import { ArrowLeft, ArrowRight, ArrowsRotateRight, Check, Plus, TrashBin, Xmark } from '@gravity-ui/icons'
+import { Button, toast } from '@heroui/react'
+import { ArrowLeft, ArrowRight, ArrowsRotateRight, Check, TrashBin, Xmark } from '@gravity-ui/icons'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { COLETA_INICIAL, api, central, ia, marcas, type Conta, type Parecido, type Plataforma } from '../../api'
 import { aura } from '../../aura'
 import { fmtNum } from '../../formato'
 import { tocar } from '../../sons'
 import { Explosao } from '../../components/AnimProcessos'
+import { BuscaPerfis } from '../../components/BuscaPerfis'
 import { useAtividade } from '../../components/Atividade'
 import { Mascote } from '../../components/Goust'
 import { IconePlataforma } from '../../components/Plataforma'
@@ -62,9 +63,8 @@ const chave = (x: { plataforma: Plataforma; conta: string }) => `${x.plataforma}
 export function PassoConhecidos({ contas, setContas, aoSeguir, aoVoltar }: {
   contas: Conta[]; setContas: (c: Conta[]) => void; aoSeguir: () => void; aoVoltar: () => void
 }) {
-  const [texto, setTexto] = useState('')
   const [tipo, setTipo] = useState<Tipo>('concorrente')
-  const [adicionando, setAdicionando] = useState(false)
+  const { downloads } = useAtividade()
   const [local, setLocal] = useState<string | null>(null)
   const { confirmacao, confirmar } = useConfirmar()
   const conhecidos = contas.filter((c) => c.papel === 'concorrente' || c.papel === 'referencia')
@@ -73,20 +73,6 @@ export function PassoConhecidos({ contas, setContas, aoSeguir, aoVoltar }: {
     ia.marca().then((m) => setLocal(/local|cidade|regi/i.test(m.alcance || '') ? (m.cidade || 'sua cidade') : null)).catch(() => {})
   }, [])
 
-  const adicionar = async () => {
-    const bruto = texto.trim()
-    if (!bruto) return
-    const plataforma: Plataforma = /tiktok/i.test(bruto) ? 'tiktok' : 'instagram'
-    setAdicionando(true)
-    try {
-      setContas(await api.adicionarConta(bruto, plataforma, tipo))
-      tocar(tipo === 'concorrente' ? 'favorito' : 'pasta')
-      setTexto('')
-    } catch (e) {
-      tocar('erro')
-      toast.danger('Não deu para adicionar esse perfil', { description: (e as Error).message })
-    } finally { setAdicionando(false) }
-  }
   const trocar = async (c: Conta) => {
     tocar('clique')
     setContas(await api.papelConta(c, c.papel === 'concorrente' ? 'referencia' : 'concorrente'))
@@ -97,7 +83,8 @@ export function PassoConhecidos({ contas, setContas, aoSeguir, aoVoltar }: {
   }
   const seguir = () => {
     // a coleta dos que você informou começa já: a análise deles chega antes
-    const novos = conhecidos.filter((c) => !c.videos)
+    const comColeta = new Set(downloads.map((d) => chave(d)))
+    const novos = conhecidos.filter((c) => !c.videos && !comColeta.has(chave(c)))
     if (novos.length) api.baixar(novos, { modo: 'recentes', quantidade: COLETA_INICIAL, somente_reels: false, analisar_ao_fim: true }).catch(() => {})
     aoSeguir()
   }
@@ -132,13 +119,11 @@ export function PassoConhecidos({ contas, setContas, aoSeguir, aoVoltar }: {
         ))}
       </div>
 
-      <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); adicionar() }}>
-        <Input aria-label="Perfil" value={texto} onChange={(e) => setTexto(e.target.value)} className="flex-1"
-          placeholder={`@perfil ou link do ${GRUPO[tipo].curto.toLowerCase()} (Instagram ou TikTok)`} />
-        <Button type="submit" isPending={adicionando} isDisabled={!texto.trim()} className="text-black" style={{ background: GRUPO[tipo].cor }}>
-          <Plus /> Adicionar
-        </Button>
-      </form>
+      <div className="mt-3">
+        <BuscaPerfis key={tipo} papelPadrao={tipo} direto={{ rotulo: `+ ${GRUPO[tipo].curto}`, cor: GRUPO[tipo].cor }}
+          aoAdicionar={(lista) => { setContas(lista); tocar(tipo === 'concorrente' ? 'favorito' : 'pasta') }}
+          placeholder={`Busque o ${GRUPO[tipo].curto.toLowerCase()} pelo nome ou @, ou cole o link`} />
+      </div>
 
       <div className="mt-5 grid gap-2">
         {conhecidos.length === 0 ? (

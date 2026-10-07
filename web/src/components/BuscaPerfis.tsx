@@ -39,7 +39,7 @@ function Avatar({ p, tamanho = 40 }: { p: PerfilEncontrado; tamanho?: number }) 
 
 /** Busca de perfis com prévia (foto, nome, seguidores) para seguir como concorrente ou referência.
  *  Seguir já dispara a coleta e a análise. Links de vídeo continuam indo para `aoVideo`. */
-export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente', proprio = false, placeholder, emLinha = false }: {
+export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente', proprio = false, placeholder, emLinha = false, direto }: {
   aoAdicionar: (contas: Conta[]) => void
   aoVideo?: (url: string) => void
   papelPadrao?: Papel
@@ -48,6 +48,8 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
   placeholder?: string
   /** resultados no fluxo da página (dentro de cartões com overflow, como o assistente), em vez de flutuando */
   emLinha?: boolean
+  /** clicar no resultado já adiciona com o papel padrão (sem a janela de contexto), ex.: primeira configuração */
+  direto?: { rotulo: string; cor: string }
 }) {
   const [texto, setTexto] = useState('')
   const [resultados, setResultados] = useState<PerfilEncontrado[] | null>(null)
@@ -106,7 +108,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
     if (p.acompanha) { toast(`Você já acompanha @${p.conta}`); return }
     tocar('clique')
     // seu perfil dentro do assistente: um clique no resultado já conecta (o rodapé só tem "Continuar")
-    if (proprio && emLinha) { acompanhar(undefined, p); return }
+    if ((proprio && emLinha) || direto) { acompanhar(undefined, p); return }
     setEscolhido(p)
   }
   const acompanhar = async (ctx?: ContextoEscolhido, direto?: PerfilEncontrado) => {
@@ -201,6 +203,7 @@ export function BuscaPerfis({ aoAdicionar, aoVideo, papelPadrao = 'concorrente',
                         </span>
                       </span>
                       {conectando === `${p.plataforma}/${p.conta}` ? <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-accent"><span className="size-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />Conectando…</span>
+                        : direto && !p.acompanha && !p.proprio ? <span className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium opacity-70 transition-opacity group-hover/linha:opacity-100" style={{ color: direto.cor, background: `color-mix(in oklab, ${direto.cor} 15%, transparent)` }}>{direto.rotulo}</span>
                         : proprio && emLinha ? <span className="shrink-0 rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-medium text-accent opacity-0 transition-opacity group-hover/linha:opacity-100">É este · conectar</span>
                         : p.proprio && !proprio ? <span className="shrink-0 rounded-full bg-[var(--menta)]/15 px-2 py-0.5 text-[11px] text-[var(--menta)]">Seu perfil</span>
                         : p.acompanha ? <span className="shrink-0 rounded-full bg-surface-tertiary px-2 py-0.5 text-[11px] text-muted">Já acompanha</span>
