@@ -57,7 +57,6 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
     if (!await confirmar({ titulo: `Parar de acompanhar ${g.nome}?`, confirmar: 'Remover marca',
       texto: `As ${g.contas.length} contas (${g.contas.map((c) => '@' + c.conta).join(', ')}) saem da sua lista e das próximas análises. Os posts já coletados continuam na Biblioteca.` })) return
     setContas(await marcasApi.removerMarca(g.contas[0]))
-    tocar('clique')
   }
   const mudarPapel = async (c: Conta, p: 'proprio' | 'concorrente' | 'referencia') => {
     try {
@@ -92,7 +91,6 @@ export function TelaContas({ contas, setContas, aoBaixar }: Props) {
       confirmar: proprio ? 'Desconectar' : 'Remover',
     })) return
     setContas(await api.removerConta(c))
-    tocar('clique')
   }
 
   async function baixar(opcoes: Opcoes) {

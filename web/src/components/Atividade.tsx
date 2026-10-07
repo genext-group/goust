@@ -1,10 +1,11 @@
 import { Button } from '@heroui/react'
 import { ArrowRight, ChevronDown, Thunderbolt, Xmark } from '@gravity-ui/icons'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { api, type Tarefa, type TarefaIA } from '../api'
+import { api, type Plataforma, type Tarefa, type TarefaIA } from '../api'
 import { tocar } from '../sons'
 import { AnimProcesso, Explosao, type TipoProcesso } from './AnimProcessos'
 import { CheckDesenhado } from './Animacoes'
+import { IconePlataforma } from './Plataforma'
 
 export type Destino = 'inicio' | 'contas' | 'meuperfil' | 'biblioteca' | 'inteligencia' | 'criar' | 'downloads'
 
@@ -23,6 +24,7 @@ export interface Processo {
   filtro?: string
   /** terminou sem nada para mostrar (ex.: perfil sem posts públicos): sem comemoração */
   vazio?: boolean
+  plataforma?: Plataforma
   /** agrupa processos sobre a mesma coisa (ex.: várias coletas da mesma conta): só o mais recente aparece */
   assunto?: string
   /** concluído sem novidade para o usuário (coleta "em dia"): não ocupa a lista de recentes */
@@ -65,23 +67,33 @@ export function processos(downloads: Tarefa[], ia: TarefaIA[], aoMudar: () => vo
     const feitos = t.baixados + t.pulados
     const coment = t.status === 'comentários'
     const fim = t.status === 'concluído'
-    const semNada = fim && t.baixados === 0 && t.pulados === 0
-    const emDia = fim && t.baixados === 0 && t.pulados > 0
+    const automatica = t.opcoes.modo === 'novos'          // coleta diária / "verificar agora": só os novos
+    const listados = (t as Tarefa & { listados?: number }).listados
+    // perfil vazio só quando NADA foi listado (coleta "só novos" sem novidade não é perfil vazio)
+    const semNada = fim && (listados === 0 || (listados === undefined && !automatica && feitos === 0))
+    const emDia = fim && !semNada && t.baixados === 0
+    const rede = t.plataforma === 'tiktok' ? 'TikTok' : 'Instagram'
+    const q = Number(t.opcoes.quantidade) || 0
+    const buscando = automatica ? `Procurando posts novos de @${t.conta}` : q ? `Buscando os ${q} últimos posts de @${t.conta}` : `Buscando os últimos posts de @${t.conta}`
+    // cancelar só faz sentido no que VOCÊ pediu e enquanto falta bastante (automático e quase pronto: não)
+    const cancelavel = ativo && !automatica && !coment && (t.status !== 'baixando' || !t.total || feitos / t.total < 0.8)
     return {
-      chave: `d${t.id}`, tipo: coment ? 'comentarios' : 'coleta',
-      titulo: !ativo ? (semNada ? `@${t.conta} não tem posts públicos` : emDia ? `@${t.conta} já estava em dia`
-        : fim ? `@${t.conta}: ${t.baixados} ${t.baixados === 1 ? 'post novo' : 'posts novos'}` : `Coleta de @${t.conta}`)
-        : coment ? `Lendo comentários de @${t.conta}` : `Buscando posts de @${t.conta}`,
-      detalhe: t.status === 'na fila' ? 'Na fila' : t.status === 'listando' ? 'Listando o perfil…'
-        : coment ? `${t.comentarios ?? 0} comentários lidos` : t.status === 'baixando' ? `${feitos} de ${t.total} posts`
-          : t.status === 'erro' ? (t.logs.at(-1) ?? 'Erro') : t.status === 'cancelado' ? 'Cancelada'
-            : semNada ? 'Perfil vazio, privado ou ainda sem publicações' : emDia ? 'Nenhum post novo desde a última coleta'
-              : t.pulados ? `${t.pulados} já estavam na Biblioteca` : 'Já na sua Biblioteca',
+      chave: `d${t.id}`, tipo: coment ? 'comentarios' : 'coleta', plataforma: t.plataforma,
+      titulo: ativo
+        ? (t.status === 'na fila' ? `@${t.conta} na fila` : coment ? `Lendo comentários de @${t.conta}` : t.status === 'baixando' ? `Salvando posts de @${t.conta}` : buscando)
+        : semNada ? `@${t.conta} não tem posts públicos` : emDia ? `@${t.conta} está em dia`
+          : fim ? `${t.baixados} ${t.baixados === 1 ? 'post novo' : 'posts novos'} de @${t.conta}`
+            : t.status === 'cancelado' ? `Coleta de @${t.conta} cancelada` : `Coleta de @${t.conta} falhou`,
+      detalhe: t.status === 'na fila' ? `${rede} · aguardando a vez` : t.status === 'listando' ? `${rede} · lendo o perfil`
+        : coment ? `${rede} · ${t.comentarios ?? 0} comentários lidos` : t.status === 'baixando' ? `${rede} · ${feitos} de ${t.total}`
+          : t.status === 'erro' ? (t.logs.at(-1)?.replace(/^\d\d:\d\d:\d\d /, '') ?? 'Erro') : t.status === 'cancelado' ? rede
+            : semNada ? `${rede} · perfil vazio, privado ou sem publicações` : emDia ? `${rede} · nada novo desde a última verificação`
+              : `${rede}${t.pulados ? ` · ${t.pulados} já estavam na Biblioteca` : ''}`,
       progresso: t.status === 'baixando' && t.total ? feitos / t.total : null,
       ativo, estado: t.status === 'na fila' ? 'fila' : ativo ? 'rodando' : t.status === 'concluído' ? 'ok' : t.status === 'erro' ? 'erro' : 'cancelado',
       assunto: `conta:${t.plataforma}/${t.conta}`, rotineiro: emDia,
       fim: t.fim, destino: semNada ? 'contas' : 'biblioteca', filtro: semNada ? undefined : `${t.plataforma}/${t.conta}`, vazio: semNada,
-      cancelar: ativo ? () => { api.cancelar(t.id).then(aoMudar) } : undefined,
+      cancelar: cancelavel ? () => { tocar('cancelar'); api.cancelar(t.id).then(aoMudar) } : undefined,
     }
   })
   // a rotina da central roda em segundo plano, sem ocupar a central de atividade
@@ -180,7 +192,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
         {aberta && (
           <div className="vidro subir-dock absolute right-0 bottom-full mb-3 w-[min(92vw,26rem)] overflow-hidden rounded-3xl border linha-fina shadow-2xl">
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
-              <p className="titulo-display font-semibold">{ativos.length ? 'Trabalhando para você' : 'Feito recentemente'}</p>
+              <p className="text-sm font-medium">{ativos.length ? `Em andamento · ${ativos.length}` : 'Feito recentemente'}</p>
               <Button isIconOnly size="sm" variant="ghost" aria-label="Fechar" onPress={() => setAberta(false)}><ChevronDown /></Button>
             </div>
             <div data-rolavel="y" className="max-h-[60vh] space-y-1 overflow-y-auto px-2 pb-2">
@@ -188,7 +200,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
                 <p className="px-3 py-6 text-center text-sm text-muted">Nada rodando agora. Análises e criações da IA aparecem aqui.</p>
               )}
               {ativos.map((p) => <Linha key={p.chave} p={p} ir={ir} />)}
-              {recentes.length > 0 && <p className="px-3 pt-3 pb-1 text-xs text-muted">Recentes</p>}
+              {recentes.length > 0 && ativos.length > 0 && <p className="px-3 pt-3 pb-1 text-xs text-muted">Feito recentemente</p>}
               {recentes.map((p) => <Linha key={p.chave} p={p} ir={ir} />)}
             </div>
           </div>
@@ -206,7 +218,7 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
               <span className="block text-xs text-accent">{pronto.filtro ? `Ver posts de @${pronto.filtro.split('/')[1]}` : 'Ver agora'} <ArrowRight className="inline size-3" /></span>
             </span>
           </button>
-        ) : principal ? (
+        ) : principal && !aberta ? (
           <button onClick={() => setAberta((a) => !a)}
             className="vidro subir-dock flex max-w-[92vw] items-center gap-3 rounded-full border py-1.5 pr-5 pl-1.5 shadow-xl linha-fina">
             <span className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-secondary text-foreground">
@@ -223,8 +235,8 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
             </span>
             {ativos.length > 1 && <span className="num rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground">+{ativos.length - 1}</span>}
           </button>
-        ) : recentes.length > 0 ? (
-          <button onClick={() => setAberta((a) => !a)} aria-label="O que a IA fez por você"
+        ) : principal || recentes.length > 0 ? (
+          <button onClick={() => setAberta((a) => !a)} aria-label={aberta ? 'Fechar atividade' : 'O que a IA fez por você'}
             className="vidro grid size-11 place-items-center rounded-full border text-muted shadow-lg linha-fina hover:text-foreground">
             <Thunderbolt className="size-4" />
           </button>
@@ -236,12 +248,18 @@ export function CentralAtividade({ lista, irPara }: { lista: Processo[]; irPara:
 
 function Linha({ p, ir }: { p: Processo; ir: (d: Destino, filtro?: string) => void }) {
   return (
-    <div className={`flex items-center gap-3 rounded-2xl p-2.5 ${p.ativo ? 'bg-surface-secondary/70' : ''}`}>
-      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-secondary text-foreground">
-        {p.ativo ? <AnimProcesso tipo={p.tipo} tamanho={30} />
-          : p.vazio ? <span className="text-sm text-[var(--ambar)]">∅</span>
-          : p.estado === 'ok' ? <span className="text-[var(--menta)]"><CheckDesenhado tamanho={16} /></span>
-            : <Xmark className="size-4 text-danger" />}
+    <div className={`group flex items-center gap-3 rounded-2xl p-2.5 transition-colors ${p.ativo ? 'bg-surface-secondary/60' : 'hover:bg-surface-secondary/40'}`}>
+      <span className="relative grid size-9 shrink-0 place-items-center rounded-xl bg-surface-secondary text-foreground">
+        {p.ativo ? <AnimProcesso tipo={p.tipo} tamanho={26} />
+          : p.vazio ? <span className="text-sm text-muted">∅</span>
+          : p.estado === 'ok' ? <span className="text-[var(--menta)]"><CheckDesenhado tamanho={14} /></span>
+            : p.estado === 'cancelado' ? <span className="text-xs text-muted">—</span>
+              : <Xmark className="size-4 text-danger" />}
+        {p.plataforma && (
+          <span className="absolute -right-1 -bottom-1 grid size-4 place-items-center rounded-full bg-[var(--surface)] text-muted [&_svg]:size-2.5">
+            <IconePlataforma plataforma={p.plataforma} />
+          </span>
+        )}
       </span>
       <button onClick={() => ir(p.destino, p.filtro)} className="min-w-0 flex-1 text-left">
         <span className="block truncate text-sm font-medium">{p.titulo}</span>
@@ -252,7 +270,12 @@ function Linha({ p, ir }: { p: Processo; ir: (d: Destino, filtro?: string) => vo
           </span>
         )}
       </button>
-      {p.cancelar && <Button isIconOnly size="sm" variant="ghost" aria-label="Cancelar" onPress={p.cancelar}><Xmark /></Button>}
+      {p.cancelar && (
+        <button onClick={p.cancelar} aria-label="Cancelar coleta" title="Cancelar"
+          className="shrink-0 rounded-full px-2.5 py-1 text-xs text-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-secondary hover:text-foreground max-sm:opacity-100">
+          Cancelar
+        </button>
+      )}
     </div>
   )
 }

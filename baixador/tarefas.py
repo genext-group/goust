@@ -142,6 +142,7 @@ def _listar(t):
         itens = aplicar_filtro(listados, t["opcoes"])
         if novos:
             itens = [i for i in itens if str(i["id"]) not in conhecidos]
+        t["listados"] = len(listados)   # 0 = perfil vazio/privado; >0 com 0 selecionados = só não há novidade
         _log(t, f"{len(listados)} vídeos listados, {len(itens)} selecionados.")
     t["total"] = len(itens)
     t["status"] = "baixando"

@@ -10,6 +10,7 @@ export type Som =
   | 'analise' | 'neuronio' | 'analiseFim'
   | 'geracao' | 'geracaoFim'
   | 'favorito' | 'pasta'
+  | 'apagar' | 'cancelar'
 
 let ctx: AudioContext | null = null
 let mestre: GainNode | null = null
@@ -140,6 +141,14 @@ export function tocar(som: Som, progresso = 0) {
       case 'aviso':
         nota(ac, t, { f1: 1320, dur: 0.35, vol: 0.035 })
         nota(ac, t + 0.12, { f1: 1760, dur: 0.45, vol: 0.025 })
+        break
+      case 'apagar': // algo sai de cena: um "puf" curto que desce e some
+        nota(ac, t, { f1: 900, f2: 180, dur: 0.18, vol: 0.045, tipo: 'triangle' })
+        nota(ac, t + 0.05, { f1: 420, f2: 90, dur: 0.22, vol: 0.03 })
+        break
+      case 'cancelar': // processo interrompido: duas notas que descem, sem o peso do erro
+        nota(ac, t, { f1: 660, dur: 0.1, vol: 0.035 })
+        nota(ac, t + 0.09, { f1: 440, dur: 0.16, vol: 0.03 })
         break
       case 'erro':
         nota(ac, t, { f1: 220, f2: 140, dur: 0.22, vol: 0.06, tipo: 'triangle' })

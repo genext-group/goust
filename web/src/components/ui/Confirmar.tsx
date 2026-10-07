@@ -1,6 +1,7 @@
 import { Button, Modal } from '@heroui/react'
 import { TrashBin } from '@gravity-ui/icons'
 import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { tocar } from '../../sons'
 
 interface Pedido { titulo: string; texto?: ReactNode; confirmar?: string; perigo?: boolean }
 
@@ -12,7 +13,7 @@ export function useConfirmar() {
   const [pedido, setPedido] = useState<Pedido | null>(null)
   const resolver = useRef<((ok: boolean) => void) | null>(null)
   const confirmar = useCallback((p: Pedido) => new Promise<boolean>((res) => { resolver.current = res; setPedido(p) }), [])
-  const fechar = (ok: boolean) => { resolver.current?.(ok); resolver.current = null; setPedido(null) }
+  const fechar = (ok: boolean) => { if (ok && (pedido?.perigo ?? true)) tocar('apagar'); resolver.current?.(ok); resolver.current = null; setPedido(null) }
   const perigo = pedido?.perigo ?? true
 
   const confirmacao = (
