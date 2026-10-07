@@ -43,6 +43,8 @@ def quantos_listar(opcoes):
 def data_inicio_ts(opcoes):
     if opcoes.get("modo") == "periodo" and opcoes.get("data_inicio"):
         return datetime.strptime(opcoes["data_inicio"], "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
+    if opcoes.get("modo") == "novos" and opcoes.get("_desde_ts"):
+        return float(opcoes["_desde_ts"])   # "só novos": não desce além de ~2 semanas antes do último post conhecido
     return None
 
 

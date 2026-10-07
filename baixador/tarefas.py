@@ -132,7 +132,13 @@ def _listar(t):
             _log(t, msg)
             _gravar(t)
 
-        listados = mod.listar(t["conta"], t["opcoes"], log, lambda: _cancelado(t), conhecido)
+        opcoes = dict(t["opcoes"])
+        if novos:
+            r = db.um("""select max(p.publicado_em) as m from posts p join contas c on c.id = p.conta_id
+                         where c.plataforma = %s and c.conta = %s""", t["plataforma"], t["conta"])
+            if r and r["m"]:
+                opcoes["_desde_ts"] = r["m"].timestamp() - 14 * 86400
+        listados = mod.listar(t["conta"], opcoes, log, lambda: _cancelado(t), conhecido)
         itens = aplicar_filtro(listados, t["opcoes"])
         if novos:
             itens = [i for i in itens if str(i["id"]) not in conhecidos]
