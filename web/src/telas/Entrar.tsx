@@ -1,6 +1,6 @@
 import { SignIn } from '@clerk/react'
 import { ptBR } from '@clerk/localizations'
-import { ChartLine, Bulb, Eye, Flame, Sparkles, TargetDart } from '@gravity-ui/icons'
+import { ChartLine, Bulb, Eye, Flame, Sparkles } from '@gravity-ui/icons'
 import type { ReactNode } from 'react'
 import { LogoGoust, Mascote } from '../components/Goust'
 
@@ -57,64 +57,61 @@ function Sinal({ icone, titulo, texto, className, atraso }: { icone: ReactNode; 
   )
 }
 
-function Beneficio({ icone, titulo, texto }: { icone: ReactNode; titulo: string; texto: string }) {
+function Etiqueta({ icone, children }: { icone: ReactNode; children: ReactNode }) {
   return (
-    <li className="flex gap-3">
-      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl border text-foreground/80 linha-fina [&_svg]:size-4">{icone}</span>
-      <span><span className="block text-sm font-medium">{titulo}</span><span className="block text-sm leading-relaxed text-muted">{texto}</span></span>
+    <li className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-[13px] text-foreground/80 linha-fina [&_svg]:size-3.5 [&_svg]:text-[var(--sinal-b)]">
+      {icone}{children}
     </li>
   )
 }
 
-/** Login: o Goust se forma e voa entre os sinais do mercado; à direita, o acesso. */
+/** Login em uma tela só (sem rolagem no computador): o Goust e o que ele faz à esquerda, o acesso à direita. */
 export function TelaEntrar() {
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* atmosfera: brilhos azuis difusos e uma grade quase invisível */}
+    <div className="relative min-h-dvh overflow-x-hidden bg-[var(--background)] lg:h-dvh lg:overflow-hidden">
+      {/* fundo minimalista: preto, um único brilho azul difuso e uma linha de luz no topo */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 -left-40 size-[620px] rounded-full bg-[radial-gradient(circle,rgba(47,116,255,0.28),transparent_65%)]" />
-        <div className="absolute -right-40 -bottom-56 size-[560px] rounded-full bg-[radial-gradient(circle,rgba(143,208,255,0.16),transparent_65%)]" />
-        <div className="absolute inset-0 opacity-[0.035] [background-image:linear-gradient(var(--foreground)_1px,transparent_1px),linear-gradient(90deg,var(--foreground)_1px,transparent_1px)] [background-size:56px_56px]" />
+        <div className="absolute top-0 left-1/2 h-px w-[min(900px,80vw)] -translate-x-1/2 bg-gradient-to-r from-transparent via-[var(--sinal-b)]/50 to-transparent" />
+        <div className="absolute top-[-30%] left-1/2 h-[70%] w-[min(1100px,120vw)] -translate-x-1/2 rounded-[100%] bg-[radial-gradient(closest-side,rgba(47,116,255,0.16),transparent)]" />
       </div>
 
-      <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-5 py-10 lg:grid-cols-[1.15fr_1fr] lg:gap-16 lg:px-8">
-        <div className="surgir">
-          <LogoGoust tamanho={30} />
+      <header className="relative mx-auto flex max-w-6xl items-center px-6 pt-6 lg:absolute lg:inset-x-0 lg:top-0">
+        <LogoGoust tamanho={28} />
+      </header>
 
-          {/* o Goust e os sinais que ele traz */}
-          {/* cena: sinais em cima (esquerda e direita) e embaixo (centro); o Goust no meio, sem nada por cima */}
-          <div className="relative mx-auto mt-6 h-[330px] w-full max-w-[520px] lg:mx-0">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-              <div className="absolute inset-0 -z-10 m-auto size-40 rounded-full bg-[radial-gradient(circle,rgba(59,130,255,0.35),transparent_70%)] blur-2xl" />
-              <Mascote tamanho={150} animado voar formar />
+      <main className="relative mx-auto grid max-w-6xl items-center gap-10 px-6 py-8 lg:h-full lg:grid-cols-[1.1fr_1fr] lg:gap-16 lg:py-0">
+        <section className="surgir">
+          {/* cena compacta: sinais acima, o Goust no centro */}
+          <div className="relative h-[210px] w-full max-w-[480px]">
+            <div className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+              <div className="absolute inset-0 -z-10 m-auto size-32 rounded-full bg-[radial-gradient(circle,rgba(59,130,255,0.35),transparent_70%)] blur-2xl" />
+              <Mascote tamanho={118} animado voar formar />
             </div>
             <Sinal icone={<ChartLine />} titulo="@concorrente acelerou" texto="+83% de alcance este mês" className="top-0 left-0" atraso="1.4s" />
-            <Sinal icone={<Flame />} titulo="Post em alta no mercado" texto="15,5× a média da conta" className="top-0 right-0 max-sm:hidden" atraso="1.9s" />
-            <Sinal icone={<Bulb />} titulo="3 ideias para hoje" texto="com roteiro pronto para gravar" className="bottom-0 left-1/2 -translate-x-1/2 max-sm:left-auto max-sm:right-0 max-sm:translate-x-0" atraso="2.4s" />
+            <Sinal icone={<Flame />} titulo="Post em alta" texto="15,5× a média da conta" className="top-10 right-0 max-sm:hidden" atraso="1.9s" />
           </div>
 
-          <h1 className="titulo-display mt-6 text-[38px] leading-[1.05] font-semibold tracking-tight sm:text-[46px]">
+          <h1 className="titulo-display mt-6 text-[36px] leading-[1.05] font-semibold tracking-tight sm:text-[44px]">
             <span className="block [text-wrap:balance]">Veja o que o seu mercado faz.</span>
             <span className="block text-[var(--sinal-b)]">Sem ser visto.</span>
           </h1>
-          <p className="mt-4 max-w-xl text-[17px] leading-relaxed text-muted">
-            A Goust acompanha todos os dias os perfis que importam para você no Instagram e no TikTok, entende o que
-            está funcionando e transforma isso em ideias, roteiros e calendário.
+          <p className="mt-4 max-w-[30rem] text-base leading-relaxed text-muted">
+            A Goust acompanha os perfis que importam para você no Instagram e no TikTok e transforma o que funciona em ideias e roteiros.
           </p>
-          <ul className="mt-7 hidden max-w-xl gap-4 sm:grid">
-            <Beneficio icone={<Eye />} titulo="Concorrentes e referências no radar" texto="Posts novos, quem acelerou, o que está em alta e o que mudou desde a sua última visita." />
-            <Beneficio icone={<Sparkles />} titulo="IA que explica o porquê" texto="Gancho, formato e mensagem de cada post, e a diferença entre o TikTok e o Instagram de cada marca." />
-            <Beneficio icone={<TargetDart />} titulo="Do insight ao post" texto="Estratégia, caderno de ideias, calendário e roteiros pensados para o seu negócio." />
+          <ul className="mt-6 flex max-w-[34rem] flex-wrap gap-2">
+            <Etiqueta icone={<Eye />}>Concorrentes no radar todo dia</Etiqueta>
+            <Etiqueta icone={<Sparkles />}>IA que explica o porquê</Etiqueta>
+            <Etiqueta icone={<Bulb />}>Ideias e roteiros prontos</Etiqueta>
           </ul>
-        </div>
+        </section>
 
-        <div className="surgir flex flex-col items-center lg:items-end" style={{ animationDelay: '120ms' }}>
+        <section className="surgir flex flex-col items-center lg:items-end" style={{ animationDelay: '120ms' }}>
           <SignIn routing="hash" />
-          <p className="mt-4 max-w-sm text-center text-xs leading-relaxed text-muted lg:text-right">
-            Grátis para começar. Seus dados ficam só com você: a Goust observa perfis públicos e nunca publica nada em seu nome.
+          <p className="mt-3 max-w-[22rem] text-center text-xs leading-relaxed text-muted lg:text-right">
+            Grátis para começar. A Goust só observa perfis públicos e nunca publica nada em seu nome.
           </p>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   )
 }
