@@ -5,7 +5,7 @@ Interface em React + [HeroUI v3](https://heroui.com) e backend em Python (Flask 
 
 ## Versão online (Vercel)
 
-Publicada em https://referencias-flax-chi.vercel.app (projeto `referencias`, time GEROCKET), com deploy
+Publicada em https://referencias-flax-chi.vercel.app (projeto `referencias`, time genext-group), com deploy
 automático a cada push na `main`. O acesso é protegido pela senha da variável `APP_SENHA`.
 
 | | Local (`iniciar.bat`) | Online |
